@@ -250,8 +250,9 @@ async function handleSpeechTranscription(request, response) {
     return;
   }
 
+  const legacy = getLegacySpeechCredentials("ASR");
   const payload = {
-    user: { uid: process.env.ARK_ASR_UID || "qibu-child" },
+    user: { uid: process.env.ARK_ASR_UID || legacy.appId || "qibu-child" },
     audio: audioUrl ? { url: audioUrl } : { data: stripDataUrl(audioData) },
     request: {
       model_name: process.env.ARK_ASR_MODEL || "bigmodel",
