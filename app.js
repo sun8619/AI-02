@@ -877,6 +877,9 @@ function changeLesson(reason) {
   const lesson = lessons[nextIndex];
   state.lessonIndex = nextIndex;
   state.phase = "guiding";
+  state.recording = false;
+  state.voiceStatus = "idle";
+  state.showKeyboard = false;
   state.strategyIndex = 0;
   state.mastery = 60;
   state.completedSteps = 0;
@@ -1038,9 +1041,9 @@ function startBrowserSpeechRecognition() {
     recognitionSession = null;
     state.recording = false;
     state.voiceStatus = "idle";
+    state.showKeyboard = true;
     render();
-    toastMessage("浏览器语音识别失败，已改用模拟回答。");
-    handleChildInput(getSimulatedTranscript(), "voice");
+    toastMessage("浏览器语音识别没有成功，可以再试一次或用键盘输入。");
   };
 
   recognition.onend = () => {
@@ -1063,10 +1066,11 @@ async function startRecording() {
   const chunks = [];
   const options = getMediaRecorderOptions();
   const recorder = new MediaRecorder(stream, options);
+  const fallbackRecognition = startPassiveBrowserRecognition();
   const timeoutId = window.setTimeout(() => {
     if (recordingSession) stopRecording();
   }, MAX_RECORDING_MS);
-  recordingSession = { recorder, stream, chunks, timeoutId };
+  recordingSession = { recorder, stream, chunks, timeoutId, fallbackRecognition, fallbackTranscript: "" };
   recorder.addEventListener("dataavailable", (event) => {
     if (event.data?.size) chunks.push(event.data);
   });
@@ -1077,8 +1081,10 @@ async function startRecording() {
     render();
     stream.getTracks().forEach((track) => track.stop());
     const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+    const fallbackTranscript = recordingSession?.fallbackTranscript || "";
+    stopPassiveBrowserRecognition(recordingSession?.fallbackRecognition);
     recordingSession = null;
-    await transcribeRecording(blob);
+    await transcribeRecording(blob, fallbackTranscript);
   });
   state.recording = true;
   state.voiceStatus = "recording";
@@ -1088,6 +1094,9 @@ async function startRecording() {
 
 function getMediaRecorderOptions() {
   if (!window.MediaRecorder?.isTypeSupported) return {};
+  if (MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) {
+    return { mimeType: "audio/ogg;codecs=opus" };
+  }
   if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
     return { mimeType: "audio/webm;codecs=opus" };
   }
@@ -1102,15 +1111,48 @@ function stopRecording() {
   if (recordingSession.recorder.state !== "inactive") recordingSession.recorder.stop();
 }
 
-async function transcribeRecording(blob) {
+function startPassiveBrowserRecognition() {
+  const SpeechRecognition = getSpeechRecognitionCtor();
+  if (!SpeechRecognition || window.location.protocol === "file:") return null;
   try {
-    const audioData = await blobToDataUrl(blob);
+    const recognition = new SpeechRecognition();
+    recognition.lang = "zh-CN";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      let text = "";
+      for (let i = 0; i < event.results.length; i += 1) {
+        text += event.results[i][0]?.transcript || "";
+      }
+      if (recordingSession) recordingSession.fallbackTranscript = text.trim();
+    };
+    recognition.onerror = () => {};
+    recognition.start();
+    return recognition;
+  } catch {
+    return null;
+  }
+}
+
+function stopPassiveBrowserRecognition(recognition) {
+  if (!recognition) return;
+  try {
+    recognition.stop();
+  } catch {
+    // The browser may already have ended passive recognition.
+  }
+}
+
+async function transcribeRecording(blob, fallbackTranscript = "") {
+  try {
+    const { audioData, mimeType } = await buildSpeechPayload(blob);
     const response = await fetch("/api/speech/transcriptions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         audioData,
-        mimeType: blob.type,
+        mimeType,
       }),
     });
     const payload = await response.json().catch(() => ({}));
@@ -1121,8 +1163,80 @@ async function transcribeRecording(blob) {
     handleChildInput(payload.transcript, "voice");
   } catch {
     state.voiceStatus = "idle";
-    toastMessage("语音识别暂不可用，已用模拟回答继续。");
-    handleChildInput(getSimulatedTranscript(), "voice");
+    if (fallbackTranscript.trim()) {
+      toastMessage("火山语音识别不稳定，已用浏览器识别结果继续。");
+      handleChildInput(fallbackTranscript.trim(), "voice");
+      return;
+    }
+    state.showKeyboard = true;
+    render();
+    toastMessage("语音识别没有成功，请再说一次或用键盘输入。");
+  }
+}
+
+async function buildSpeechPayload(blob) {
+  const wavBlob = await convertBlobToWav(blob).catch(() => null);
+  const uploadBlob = wavBlob || blob;
+  return {
+    audioData: await blobToDataUrl(uploadBlob),
+    mimeType: uploadBlob.type || blob.type || "audio/wav",
+  };
+}
+
+async function convertBlobToWav(blob) {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) throw new Error("AudioContext unavailable");
+  const sourceBuffer = await blob.arrayBuffer();
+  const context = new AudioContext({ sampleRate: 16000 });
+  try {
+    const audioBuffer = await context.decodeAudioData(sourceBuffer.slice(0));
+    const wavBuffer = encodeWav(audioBuffer);
+    return new Blob([wavBuffer], { type: "audio/wav" });
+  } finally {
+    if (context.state !== "closed") await context.close();
+  }
+}
+
+function encodeWav(audioBuffer) {
+  const channelCount = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const sampleCount = audioBuffer.length;
+  const dataSize = sampleCount * 2;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, dataSize, true);
+
+  const channels = Array.from({ length: channelCount }, (_, index) => audioBuffer.getChannelData(index));
+  let offset = 44;
+  for (let i = 0; i < sampleCount; i += 1) {
+    let sample = 0;
+    for (let channel = 0; channel < channelCount; channel += 1) {
+      sample += channels[channel][i] || 0;
+    }
+    sample = Math.max(-1, Math.min(1, sample / channelCount));
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    offset += 2;
+  }
+
+  return buffer;
+}
+
+function writeAscii(view, offset, text) {
+  for (let i = 0; i < text.length; i += 1) {
+    view.setUint8(offset + i, text.charCodeAt(i));
   }
 }
 
@@ -1368,7 +1482,7 @@ async function speakCurrentMessage() {
     }
   }
 
-  if (!("speechSynthesis" in window)) return;
+  if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "zh-CN";
