@@ -416,6 +416,7 @@ function selectLearningModel(phase) {
 }
 
 function getSpeechApiKey(kind) {
+  if (hasLegacySpeechCredentials(kind)) return "legacy-speech-credentials";
   return (
     process.env[`ARK_${kind}_API_KEY`] ||
     process.env.ARK_SPEECH_API_KEY ||
@@ -429,9 +430,11 @@ function buildSpeechHeaders(kind, apiKey) {
     "Content-Type": "application/json",
     "X-Api-Request-Id": crypto.randomUUID(),
   };
-  if (process.env[`ARK_${kind}_APP_ID`] && process.env[`ARK_${kind}_ACCESS_KEY`]) {
-    headers["X-Api-App-Id"] = process.env[`ARK_${kind}_APP_ID`];
-    headers["X-Api-Access-Key"] = process.env[`ARK_${kind}_ACCESS_KEY`];
+  const legacy = getLegacySpeechCredentials(kind);
+  if (legacy.appId && legacy.accessKey) {
+    headers["X-Api-App-Id"] = legacy.appId;
+    headers["X-Api-App-Key"] = legacy.appId;
+    headers["X-Api-Access-Key"] = legacy.accessKey;
   } else {
     headers["X-Api-Key"] = apiKey;
   }
@@ -440,10 +443,21 @@ function buildSpeechHeaders(kind, apiKey) {
     headers["X-Api-Sequence"] = "-1";
   } else {
     headers["X-Api-Resource-Id"] = process.env.ARK_TTS_RESOURCE_ID || "seed-tts-2.0";
-    headers["X-Api-App-Key"] = process.env.ARK_TTS_APP_KEY || "aGjiRDfUWi";
     headers.Connection = "keep-alive";
   }
   return headers;
+}
+
+function getLegacySpeechCredentials(kind) {
+  return {
+    appId: process.env[`ARK_${kind}_APP_ID`] || process.env.ARK_SPEECH_APP_ID || "",
+    accessKey: process.env[`ARK_${kind}_ACCESS_KEY`] || process.env.ARK_SPEECH_ACCESS_KEY || "",
+  };
+}
+
+function hasLegacySpeechCredentials(kind) {
+  const legacy = getLegacySpeechCredentials(kind);
+  return Boolean(legacy.appId && legacy.accessKey);
 }
 
 function stripDataUrl(value) {

@@ -35,7 +35,9 @@ ARK_TUTOR_MODEL=讲解回复模型或接入点 ID
 ARK_REASONING_MODEL=思考/拆知识点模型或接入点 ID
 ARK_EVALUATION_MODEL=复述评估模型或接入点 ID
 ARK_SUMMARY_MODEL=总结模型或接入点 ID
-ARK_SPEECH_API_KEY=火山语音服务 API Key，如果和 Ark Key 相同可不填
+ARK_SPEECH_API_KEY=火山语音服务 API Key，新版控制台用这个
+ARK_SPEECH_APP_ID=火山语音 APP ID，旧版控制台用这个
+ARK_SPEECH_ACCESS_KEY=火山语音 Access Token，旧版控制台用这个
 ARK_ASR_MODEL=bigmodel
 ARK_ASR_RESOURCE_ID=volc.bigasr.auc_turbo
 ARK_TTS_RESOURCE_ID=seed-tts-2.0
@@ -66,6 +68,13 @@ ARK_IMAGE_MODEL=doubao-seedream-5-0-260128
 2. 浏览器自带朗读，TTS 没配好时兜底。
 
 语音自然度主要取决于 `ARK_TTS_SPEAKER` 对应的音色。代码会把数学符号改成口语读法，并使用稍慢语速；如果仍然机械，优先在火山里换一个更自然的 SeedTTS 音色，再把新的音色 ID 填到 Railway Variables。
+
+如果火山页面给你的是 APP ID、Access Token、Secret Key 三个值：
+
+- APP ID 填到 `ARK_SPEECH_APP_ID`
+- Access Token 填到 `ARK_SPEECH_ACCESS_KEY`
+- Secret Key 先不要填，本项目当前语音接口不用它
+- `ARK_SPEECH_API_KEY` 可以留空；如果你已经有新版 API Key，也可以只填 `ARK_SPEECH_API_KEY`
 
 如果你不知道怎么选，最简单是先把 `ARK_TEXT_MODEL`、`ARK_TUTOR_MODEL`、`ARK_REASONING_MODEL`、`ARK_EVALUATION_MODEL`、`ARK_SUMMARY_MODEL` 都填成同一个 Ark 文本模型/接入点 ID，先跑通；以后再拆成不同模型。
 
