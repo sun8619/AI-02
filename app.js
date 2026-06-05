@@ -93,6 +93,7 @@ let state = {
 };
 
 let recordingSession = null;
+let recognitionSession = null;
 
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
@@ -175,6 +176,8 @@ function renderChildView() {
               )
               .join("")}
           </div>
+
+          ${renderVoiceDock()}
         </div>
 
         <aside class="scene-right">
@@ -200,33 +203,26 @@ function renderChildView() {
           </div>
 
           ${state.showVisual ? renderLearningVisual() : ""}
-
-          <div class="practice-panel">
-            <div>
-              <span>今天第 ${state.todayQuestion} 题</span>
-              <strong>已完成 ${state.completedSteps} 个小台阶</strong>
-            </div>
-            <div class="mastery-ring" style="--value:${state.mastery}%">
-              <b>${state.mastery}%</b>
-              <small>掌握</small>
-            </div>
-          </div>
         </aside>
       </section>
-
-      <section class="voice-dock" aria-label="语音输入区">
-        ${state.showKeyboard ? renderKeyboardComposer() : ""}
-        <div class="dock-actions">
-          <button class="dock-mini" data-action="camera">${icon("camera")}拍照</button>
-          <button class="voice-button ${state.recording ? "is-recording" : ""}" data-action="voice">
-            ${icon("mic")}
-            <span>${state.recording ? "点我结束" : state.phase === "teachback" ? "讲给我听" : "按住说"}</span>
-          </button>
-          <button class="dock-mini" data-action="toggle-keyboard">${icon("keyboard")}键盘输入</button>
-        </div>
-        <p class="dock-note">${renderDockNote()}</p>
-      </section>
     </main>
+  `;
+}
+
+function renderVoiceDock() {
+  return `
+    <section class="voice-dock" aria-label="语音输入区">
+      ${state.showKeyboard ? renderKeyboardComposer() : ""}
+      <div class="dock-actions">
+        <button class="dock-mini" data-action="camera">${icon("camera")}拍照</button>
+        <button class="voice-button ${state.recording ? "is-recording" : ""}" data-action="voice" aria-label="按住说话，松开结束">
+          ${icon("mic")}
+          <span>${state.recording ? "松开结束" : state.phase === "teachback" ? "讲给我听" : "按住说"}</span>
+        </button>
+        <button class="dock-mini" data-action="toggle-keyboard">${icon("keyboard")}键盘输入</button>
+      </div>
+      <p class="dock-note">${renderDockNote()}</p>
+    </section>
   `;
 }
 
@@ -241,7 +237,7 @@ function renderDockNote() {
   if (state.phase === "teachback") return "像小老师一样讲：为什么不能直接比？要怎么变？";
   if (state.phase === "repair") return "可以看着图说，不用一次讲完整。";
   if (state.phase === "summary") return "已经完成这一题，可以去家长页看学习记录。";
-  return "部署后会优先用火山语音识别和语音合成；没有配置时自动回退模拟。";
+  return "按住说话，松开结束。语音识别不可用时会自动用键盘或模拟兜底。";
 }
 
 function renderKeyboardComposer() {
@@ -272,7 +268,7 @@ function renderLearningVisual() {
       <div class="ai-visual-card">
         <div>
           <strong>AI 生活图</strong>
-          <p>如果孩子还是没懂，可以让 AI 画一个“同样大的饼干切成小份”的例子。</p>
+          <p>需要时再画“饼干切小份”的例子。</p>
         </div>
         <button class="btn btn-primary" data-action="generate-story-image" ${state.imageJob.status === "loading" ? "disabled" : ""}>
           ${icon("image")}${state.imageJob.status === "loading" ? "正在画" : "AI 画生活例子"}
@@ -479,7 +475,20 @@ function renderMascotFace() {
 
 function bindEvents() {
   document.querySelectorAll("[data-action]").forEach((node) => {
+    if (node.dataset.action === "voice") return;
     node.addEventListener("click", handleAction);
+  });
+  document.querySelectorAll("[data-action='voice']").forEach((node) => {
+    node.addEventListener("pointerdown", startHoldVoice);
+    node.addEventListener("pointerup", stopHoldVoice);
+    node.addEventListener("pointercancel", stopHoldVoice);
+    node.addEventListener("pointerleave", stopHoldVoice);
+    node.addEventListener("keydown", (event) => {
+      if (event.key === " " || event.key === "Enter") startHoldVoice(event);
+    });
+    node.addEventListener("keyup", (event) => {
+      if (event.key === " " || event.key === "Enter") stopHoldVoice(event);
+    });
   });
   document.querySelectorAll("[data-form='typed-answer']").forEach((form) => {
     form.addEventListener("submit", (event) => {
@@ -488,6 +497,22 @@ function bindEvents() {
       handleChildInput(String(value || "").trim(), "typed");
     });
   });
+}
+
+async function startHoldVoice(event) {
+  event.preventDefault();
+  if (state.recording) return;
+  window.addEventListener("pointerup", stopHoldVoice, { once: true });
+  window.addEventListener("pointercancel", stopHoldVoice, { once: true });
+  await handleVoiceButton();
+}
+
+function stopHoldVoice(event) {
+  event.preventDefault();
+  window.removeEventListener("pointerup", stopHoldVoice);
+  window.removeEventListener("pointercancel", stopHoldVoice);
+  if (!state.recording) return;
+  stopVoiceInput();
 }
 
 async function handleAction(event) {
@@ -508,11 +533,6 @@ async function handleAction(event) {
   if (action === "summary-view") {
     state.view = "summary";
     render();
-    return;
-  }
-
-  if (action === "voice") {
-    await handleVoiceButton();
     return;
   }
 
@@ -630,9 +650,18 @@ function extractImageUrl(payload) {
 }
 
 async function handleVoiceButton() {
-  if (state.recording && recordingSession) {
-    stopRecording();
+  if (state.recording) {
+    stopVoiceInput();
     return;
+  }
+
+  if (window.location.protocol !== "file:" && getSpeechRecognitionCtor()) {
+    try {
+      startBrowserSpeechRecognition();
+      return;
+    } catch {
+      toastMessage("浏览器语音识别没有启动，改用录音识别。");
+    }
   }
 
   if (window.location.protocol !== "file:" && navigator.mediaDevices?.getUserMedia && window.MediaRecorder) {
@@ -645,6 +674,68 @@ async function handleVoiceButton() {
   }
 
   simulateVoiceInput();
+}
+
+function stopVoiceInput() {
+  if (recognitionSession) {
+    recognitionSession.stop();
+    return;
+  }
+  if (recordingSession) {
+    stopRecording();
+    return;
+  }
+  state.recording = false;
+  render();
+}
+
+function getSpeechRecognitionCtor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition;
+}
+
+function startBrowserSpeechRecognition() {
+  const SpeechRecognition = getSpeechRecognitionCtor();
+  if (!SpeechRecognition) throw new Error("SpeechRecognition unavailable");
+  const recognition = new SpeechRecognition();
+  let finalText = "";
+  recognition.lang = "zh-CN";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  recognitionSession = recognition;
+  state.recording = true;
+  render();
+
+  recognition.onresult = (event) => {
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      const text = event.results[i][0]?.transcript || "";
+      if (event.results[i].isFinal) finalText += text;
+      else interim += text;
+    }
+    state.transcript = `${finalText}${interim}`.trim();
+  };
+
+  recognition.onerror = () => {
+    recognitionSession = null;
+    state.recording = false;
+    render();
+    toastMessage("浏览器语音识别失败，已改用模拟回答。");
+    handleChildInput(getSimulatedTranscript(), "voice");
+  };
+
+  recognition.onend = () => {
+    const text = state.transcript.trim();
+    recognitionSession = null;
+    state.recording = false;
+    render();
+    if (text) handleChildInput(text, "voice");
+    else {
+      toastMessage("没有听清楚，可以再按住说一次。");
+    }
+  };
+
+  recognition.start();
 }
 
 async function startRecording() {
@@ -894,7 +985,7 @@ function switchExplanation(reason) {
 }
 
 async function speakCurrentMessage() {
-  const text = `${state.aiContext} ${state.aiMessage}`.trim();
+  const text = toSpokenText(`${state.aiContext} ${state.aiMessage}`.trim());
   if (window.location.protocol !== "file:") {
     try {
       const response = await fetch("/api/speech/synthesis", {
@@ -917,9 +1008,23 @@ async function speakCurrentMessage() {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "zh-CN";
-  utterance.rate = 0.92;
-  utterance.pitch = 1.08;
+  utterance.rate = 0.86;
+  utterance.pitch = 1.03;
   window.speechSynthesis.speak(utterance);
+}
+
+function toSpokenText(text) {
+  return String(text || "")
+    .replace(/2\/3/g, "三分之二")
+    .replace(/3\/4/g, "四分之三")
+    .replace(/8\/12/g, "十二分之八")
+    .replace(/9\/12/g, "十二分之九")
+    .replace(/AI/g, "小学伴")
+    .replace(/L2/g, "第二级提示")
+    .replace(/[：:]/g, "，")
+    .replace(/[“”"]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function addEvidence(signal, text, strategy) {

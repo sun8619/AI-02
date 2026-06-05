@@ -52,6 +52,17 @@ ARK_IMAGE_MODEL=doubao-seedream-5-0-260128
 - `ARK_TTS_RESOURCE_ID` / `ARK_TTS_SPEAKER`：把 AI 回复合成语音。
 - `ARK_IMAGE_MODEL`：生成生活类比图。
 
+语音输入优先级：
+
+1. 浏览器自带中文语音识别，适合先把网页用起来。
+2. 火山 ASR，浏览器识别不可用时使用。
+3. 模拟回答，接口或权限失败时兜底。
+
+语音输出优先级：
+
+1. 火山 TTS，使用自然口语化文本和稍慢语速。
+2. 浏览器自带朗读，TTS 没配好时兜底。
+
 如果你不知道怎么选，最简单是先把 `ARK_TEXT_MODEL`、`ARK_TUTOR_MODEL`、`ARK_REASONING_MODEL`、`ARK_EVALUATION_MODEL`、`ARK_SUMMARY_MODEL` 都填成同一个 Ark 文本模型/接入点 ID，先跑通；以后再拆成不同模型。
 
 `ARK_TEXT_MODEL` 是默认兜底。
@@ -63,6 +74,9 @@ ARK_IMAGE_MODEL=doubao-seedream-5-0-260128
 ARK_TEXT_MODEL=你的文本模型名
 ARK_ASR_MODEL=你的语音识别模型名
 ARK_TTS_MODEL=你的语音合成模型名
+ARK_TTS_SPEECH_RATE=-4
+ARK_TTS_LOUDNESS_RATE=2
+ARK_TTS_STYLE=请用温和、自然、像真人老师一样的语气说给低年级孩子听。
 ```
 
 Railway 会自动提供 `PORT`，不要手动设置 `PORT`。

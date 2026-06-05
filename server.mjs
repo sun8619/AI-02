@@ -278,7 +278,7 @@ async function handleSpeechTranscription(request, response) {
 
 async function handleSpeechSynthesis(request, response) {
   const input = await readJsonBody(request);
-  const text = String(input.text || "").trim();
+  const text = naturalizeSpeechText(String(input.text || "").trim());
   const apiKey = getSpeechApiKey("TTS");
   if (!apiKey) {
     sendJson(response, 200, {
@@ -301,12 +301,17 @@ async function handleSpeechSynthesis(request, response) {
       audio_params: {
         format,
         sample_rate: Number(process.env.ARK_TTS_SAMPLE_RATE || 24000),
+        speech_rate: Number(process.env.ARK_TTS_SPEECH_RATE || -4),
+        loudness_rate: Number(process.env.ARK_TTS_LOUDNESS_RATE || 2),
       },
       additions: JSON.stringify({
         explicit_language: "zh",
         disable_markdown_filter: true,
         disable_emoji_filter: true,
-        context_texts: [process.env.ARK_TTS_STYLE || "请用温和、清楚、低年级孩子容易听懂的语气说。"],
+        context_texts: [
+          process.env.ARK_TTS_STYLE ||
+            "你是一位低年级孩子的陪练老师。请像真人老师一样自然说话，语速稍慢，停顿清楚，语气温和，不要播音腔，不要读得像说明书。",
+        ],
       }),
     },
   };
@@ -574,6 +579,22 @@ function summarizeUpstreamError(payload) {
 
 function sanitizeMessage(error) {
   return String(error?.message || error || "Unknown error").replace(/Bearer\s+[\w.-]+/g, "Bearer [hidden]");
+}
+
+function naturalizeSpeechText(text) {
+  return String(text || "")
+    .replace(/2\/3/g, "三分之二")
+    .replace(/3\/4/g, "四分之三")
+    .replace(/8\/12/g, "十二分之八")
+    .replace(/9\/12/g, "十二分之九")
+    .replace(/AI/g, "小学伴")
+    .replace(/L2/g, "第二级提示")
+    .replace(/[“”"]/g, "")
+    .replace(/[：:]/g, "，")
+    .replace(/。/g, "。 ")
+    .replace(/，/g, "， ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractJsonObject(content) {
