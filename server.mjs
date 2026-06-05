@@ -35,15 +35,26 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/speech/transcriptions") {
+      await handleSpeechTranscription(request, response);
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/speech/synthesis") {
+      await handleSpeechSynthesis(request, response);
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/models/config") {
+      sendJson(response, 200, getPublicModelConfig());
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/api/health") {
       sendJson(response, 200, {
         ok: true,
         app: "qibu-ai-learning-companion",
-        arkBaseUrl: process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
-        textModel: process.env.ARK_TEXT_MODEL || "",
-        asrModel: process.env.ARK_ASR_MODEL || "",
-        ttsModel: process.env.ARK_TTS_MODEL || "",
-        imageModel: process.env.ARK_IMAGE_MODEL || "doubao-seedream-5-0-260128",
+        ...getPublicModelConfig(),
         hasApiKey: Boolean(process.env.ARK_API_KEY),
       });
       return;
@@ -119,19 +130,19 @@ async function handleImageGeneration(request, response) {
 
 async function handleLearningTurn(request, response) {
   const apiKey = process.env.ARK_API_KEY;
-  const model = process.env.ARK_TEXT_MODEL;
+  const input = await readJsonBody(request);
+  const phase = String(input.phase || "guiding");
+  const model = selectLearningModel(phase);
   if (!apiKey || !model) {
     sendJson(response, 200, {
       mode: "mock",
-      message: "本地模拟 AI 已接管。部署后配置 ARK_API_KEY 和 ARK_TEXT_MODEL，就会使用火山 Ark 真实模型。",
+      message: "本地模拟 AI 已接管。部署后配置 ARK_API_KEY 和对应教学模型，就会使用火山 Ark 真实模型。",
       nextPhase: "mock",
     });
     return;
   }
 
-  const input = await readJsonBody(request);
   const userText = String(input.text || "").trim();
-  const phase = String(input.phase || "guiding");
   const context = String(input.context || "");
   const step = String(input.step || "");
 
@@ -141,7 +152,7 @@ async function handleLearningTurn(request, response) {
   }
 
   const payload = {
-    model,
+    model: selectLearningModel(phase),
     messages: [
       {
         role: "system",
@@ -208,6 +219,278 @@ async function handleLearningTurn(request, response) {
     mode: "ark",
     ...parsed,
   });
+}
+
+async function handleSpeechTranscription(request, response) {
+  const input = await readJsonBody(request);
+  const audioData = String(input.audioData || "").trim();
+  const audioUrl = String(input.audioUrl || "").trim();
+  const apiKey = getSpeechApiKey("ASR");
+
+  if (!apiKey) {
+    sendJson(response, 200, {
+      mode: "mock",
+      transcript: "",
+      message: "未配置语音识别 Key，前端会回退到模拟输入。",
+    });
+    return;
+  }
+
+  if (!audioData && !audioUrl) {
+    sendJson(response, 400, { error: "Missing audioData or audioUrl" });
+    return;
+  }
+
+  const payload = {
+    user: { uid: process.env.ARK_ASR_UID || "qibu-child" },
+    audio: audioUrl ? { url: audioUrl } : { data: stripDataUrl(audioData) },
+    request: {
+      model_name: process.env.ARK_ASR_MODEL || "bigmodel",
+      enable_itn: true,
+      enable_punc: true,
+    },
+  };
+
+  const upstream = await fetch(process.env.ARK_ASR_URL || "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash", {
+    method: "POST",
+    headers: buildSpeechHeaders("ASR", apiKey),
+    body: JSON.stringify(payload),
+  });
+
+  const upstreamPayload = await upstream.json().catch(async () => ({ message: await upstream.text().catch(() => "") }));
+  const statusCode = upstream.headers.get("X-Api-Status-Code");
+  if (!upstream.ok || (statusCode && statusCode !== "20000000")) {
+    sendJson(response, 502, {
+      error: "ASR failed",
+      detail: upstream.headers.get("X-Api-Message") || summarizeUpstreamError(upstreamPayload),
+      logId: upstream.headers.get("X-Tt-Logid") || "",
+    });
+    return;
+  }
+
+  sendJson(response, 200, {
+    mode: "ark-asr",
+    transcript: upstreamPayload?.result?.text || "",
+    utterances: upstreamPayload?.result?.utterances || [],
+    duration: upstreamPayload?.audio_info?.duration || 0,
+  });
+}
+
+async function handleSpeechSynthesis(request, response) {
+  const input = await readJsonBody(request);
+  const text = String(input.text || "").trim();
+  const apiKey = getSpeechApiKey("TTS");
+  if (!apiKey) {
+    sendJson(response, 200, {
+      mode: "browser-fallback",
+      message: "未配置语音合成 Key，前端会回退到浏览器朗读。",
+    });
+    return;
+  }
+  if (!text) {
+    sendJson(response, 400, { error: "Missing text" });
+    return;
+  }
+
+  const format = process.env.ARK_TTS_FORMAT || "mp3";
+  const payload = {
+    user: { uid: process.env.ARK_TTS_UID || "qibu-child" },
+    req_params: {
+      text: text.slice(0, 500),
+      speaker: process.env.ARK_TTS_SPEAKER || "zh_female_vv_uranus_bigtts",
+      audio_params: {
+        format,
+        sample_rate: Number(process.env.ARK_TTS_SAMPLE_RATE || 24000),
+      },
+      additions: JSON.stringify({
+        explicit_language: "zh",
+        disable_markdown_filter: true,
+        disable_emoji_filter: true,
+        context_texts: [process.env.ARK_TTS_STYLE || "请用温和、清楚、低年级孩子容易听懂的语气说。"],
+      }),
+    },
+  };
+
+  const upstream = await fetch(process.env.ARK_TTS_URL || "https://openspeech.bytedance.com/api/v3/tts/unidirectional", {
+    method: "POST",
+    headers: buildSpeechHeaders("TTS", apiKey),
+    body: JSON.stringify(payload),
+  });
+
+  const raw = await upstream.text();
+  if (!upstream.ok) {
+    sendJson(response, 502, {
+      error: "TTS failed",
+      detail: raw.slice(0, 500),
+      logId: upstream.headers.get("X-Tt-Logid") || "",
+    });
+    return;
+  }
+
+  const chunks = parseConcatenatedJson(raw)
+    .map((item) => item?.data)
+    .filter((item) => typeof item === "string" && item.length > 0);
+
+  if (!chunks.length) {
+    sendJson(response, 502, {
+      error: "TTS returned no audio",
+      detail: raw.slice(0, 500),
+      logId: upstream.headers.get("X-Tt-Logid") || "",
+    });
+    return;
+  }
+
+  sendJson(response, 200, {
+    mode: "ark-tts",
+    format,
+    audioBase64: chunks.join(""),
+    audioDataUrl: `data:audio/${format};base64,${chunks.join("")}`,
+    logId: upstream.headers.get("X-Tt-Logid") || "",
+  });
+}
+
+function getModelConfig() {
+  return {
+    arkBaseUrl: process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
+    tutorModel: process.env.ARK_TUTOR_MODEL || process.env.ARK_TEXT_MODEL || "",
+    reasoningModel: process.env.ARK_REASONING_MODEL || process.env.ARK_TUTOR_MODEL || process.env.ARK_TEXT_MODEL || "",
+    evaluationModel: process.env.ARK_EVALUATION_MODEL || process.env.ARK_REASONING_MODEL || process.env.ARK_TUTOR_MODEL || process.env.ARK_TEXT_MODEL || "",
+    summaryModel: process.env.ARK_SUMMARY_MODEL || process.env.ARK_TUTOR_MODEL || process.env.ARK_TEXT_MODEL || "",
+    asrModel: process.env.ARK_ASR_MODEL || "bigmodel",
+    asrResourceId: process.env.ARK_ASR_RESOURCE_ID || "volc.bigasr.auc_turbo",
+    ttsResourceId: process.env.ARK_TTS_RESOURCE_ID || "seed-tts-2.0",
+    ttsSpeaker: process.env.ARK_TTS_SPEAKER || "zh_female_vv_uranus_bigtts",
+    imageModel: process.env.ARK_IMAGE_MODEL || "doubao-seedream-5-0-260128",
+  };
+}
+
+function getPublicModelConfig() {
+  const config = getModelConfig();
+  return {
+    arkBaseUrl: config.arkBaseUrl,
+    modelRoles: {
+      tutor: config.tutorModel,
+      reasoning: config.reasoningModel,
+      evaluation: config.evaluationModel,
+      summary: config.summaryModel,
+      asr: config.asrModel,
+      tts: config.ttsResourceId,
+      image: config.imageModel,
+    },
+    voice: {
+      asrResourceId: config.asrResourceId,
+      ttsResourceId: config.ttsResourceId,
+      ttsSpeaker: config.ttsSpeaker,
+    },
+    configured: {
+      arkApiKey: Boolean(process.env.ARK_API_KEY),
+      speechApiKey: Boolean(getSpeechApiKey("ASR") || getSpeechApiKey("TTS")),
+      tutor: Boolean(config.tutorModel),
+      reasoning: Boolean(config.reasoningModel),
+      evaluation: Boolean(config.evaluationModel),
+      asr: Boolean(getSpeechApiKey("ASR")),
+      tts: Boolean(getSpeechApiKey("TTS")),
+      image: Boolean(config.imageModel && process.env.ARK_API_KEY),
+    },
+  };
+}
+
+function selectLearningModel(phase) {
+  const config = getModelConfig();
+  if (phase === "teachback" || phase === "repair") return config.evaluationModel;
+  return config.reasoningModel || config.tutorModel;
+}
+
+function getSpeechApiKey(kind) {
+  return (
+    process.env[`ARK_${kind}_API_KEY`] ||
+    process.env.ARK_SPEECH_API_KEY ||
+    process.env.ARK_API_KEY ||
+    ""
+  );
+}
+
+function buildSpeechHeaders(kind, apiKey) {
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Api-Request-Id": crypto.randomUUID(),
+  };
+  if (process.env[`ARK_${kind}_APP_ID`] && process.env[`ARK_${kind}_ACCESS_KEY`]) {
+    headers["X-Api-App-Id"] = process.env[`ARK_${kind}_APP_ID`];
+    headers["X-Api-Access-Key"] = process.env[`ARK_${kind}_ACCESS_KEY`];
+  } else {
+    headers["X-Api-Key"] = apiKey;
+  }
+  if (kind === "ASR") {
+    headers["X-Api-Resource-Id"] = process.env.ARK_ASR_RESOURCE_ID || "volc.bigasr.auc_turbo";
+    headers["X-Api-Sequence"] = "-1";
+  } else {
+    headers["X-Api-Resource-Id"] = process.env.ARK_TTS_RESOURCE_ID || "seed-tts-2.0";
+    headers["X-Api-App-Key"] = process.env.ARK_TTS_APP_KEY || "aGjiRDfUWi";
+    headers.Connection = "keep-alive";
+  }
+  return headers;
+}
+
+function stripDataUrl(value) {
+  const text = String(value || "");
+  const index = text.indexOf(",");
+  return text.startsWith("data:") && index >= 0 ? text.slice(index + 1) : text;
+}
+
+function parseConcatenatedJson(raw) {
+  const decoder = new JsonStreamDecoder(raw);
+  return decoder.parse();
+}
+
+class JsonStreamDecoder {
+  constructor(raw) {
+    this.raw = String(raw || "");
+    this.index = 0;
+  }
+
+  parse() {
+    const items = [];
+    while (this.index < this.raw.length) {
+      this.skipWhitespace();
+      if (this.index >= this.raw.length) break;
+      const start = this.index;
+      try {
+        const end = this.findObjectEnd(start);
+        items.push(JSON.parse(this.raw.slice(start, end)));
+        this.index = end;
+      } catch {
+        break;
+      }
+    }
+    return items;
+  }
+
+  skipWhitespace() {
+    while (/\s/.test(this.raw[this.index] || "")) this.index += 1;
+  }
+
+  findObjectEnd(start) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < this.raw.length; i += 1) {
+      const char = this.raw[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') inString = true;
+      else if (char === "{") depth += 1;
+      else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) return i + 1;
+      }
+    }
+    throw new Error("Incomplete JSON object");
+  }
 }
 
 async function serveStatic(pathname, response, headOnly) {

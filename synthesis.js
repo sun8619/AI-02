@@ -1,0 +1,140 @@
+export default async function handler(request, response) {
+  if (request.method !== "POST") {
+    response.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const apiKey = getSpeechApiKey("TTS");
+  if (!apiKey) {
+    response.status(200).json({
+      mode: "browser-fallback",
+      message: "未配置语音合成 Key，前端会回退到浏览器朗读。",
+    });
+    return;
+  }
+
+  const text = String((request.body || {}).text || "").trim();
+  if (!text) {
+    response.status(400).json({ error: "Missing text" });
+    return;
+  }
+
+  const format = process.env.ARK_TTS_FORMAT || "mp3";
+  const payload = {
+    user: { uid: process.env.ARK_TTS_UID || "qibu-child" },
+    req_params: {
+      text: text.slice(0, 500),
+      speaker: process.env.ARK_TTS_SPEAKER || "zh_female_vv_uranus_bigtts",
+      audio_params: {
+        format,
+        sample_rate: Number(process.env.ARK_TTS_SAMPLE_RATE || 24000),
+      },
+      additions: JSON.stringify({
+        explicit_language: "zh",
+        disable_markdown_filter: true,
+        disable_emoji_filter: true,
+        context_texts: [process.env.ARK_TTS_STYLE || "请用温和、清楚、低年级孩子容易听懂的语气说。"],
+      }),
+    },
+  };
+
+  try {
+    const upstream = await fetch(process.env.ARK_TTS_URL || "https://openspeech.bytedance.com/api/v3/tts/unidirectional", {
+      method: "POST",
+      headers: buildSpeechHeaders("TTS", apiKey),
+      body: JSON.stringify(payload),
+    });
+    const raw = await upstream.text();
+    if (!upstream.ok) {
+      response.status(502).json({
+        error: "TTS failed",
+        detail: raw.slice(0, 500),
+        logId: upstream.headers.get("X-Tt-Logid") || "",
+      });
+      return;
+    }
+    const chunks = parseConcatenatedJson(raw).map((item) => item?.data).filter(Boolean);
+    if (!chunks.length) {
+      response.status(502).json({
+        error: "TTS returned no audio",
+        detail: raw.slice(0, 500),
+        logId: upstream.headers.get("X-Tt-Logid") || "",
+      });
+      return;
+    }
+    response.status(200).json({
+      mode: "ark-tts",
+      format,
+      audioBase64: chunks.join(""),
+      audioDataUrl: `data:audio/${format};base64,${chunks.join("")}`,
+      logId: upstream.headers.get("X-Tt-Logid") || "",
+    });
+  } catch (error) {
+    response.status(500).json({ error: "TTS request failed", detail: sanitizeMessage(error) });
+  }
+}
+
+function getSpeechApiKey(kind) {
+  return process.env[`ARK_${kind}_API_KEY`] || process.env.ARK_SPEECH_API_KEY || process.env.ARK_API_KEY || "";
+}
+
+function buildSpeechHeaders(kind, apiKey) {
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Api-Request-Id": crypto.randomUUID(),
+  };
+  if (process.env[`ARK_${kind}_APP_ID`] && process.env[`ARK_${kind}_ACCESS_KEY`]) {
+    headers["X-Api-App-Id"] = process.env[`ARK_${kind}_APP_ID`];
+    headers["X-Api-Access-Key"] = process.env[`ARK_${kind}_ACCESS_KEY`];
+  } else {
+    headers["X-Api-Key"] = apiKey;
+  }
+  headers["X-Api-Resource-Id"] = process.env.ARK_TTS_RESOURCE_ID || "seed-tts-2.0";
+  headers["X-Api-App-Key"] = process.env.ARK_TTS_APP_KEY || "aGjiRDfUWi";
+  headers.Connection = "keep-alive";
+  return headers;
+}
+
+function parseConcatenatedJson(raw) {
+  const items = [];
+  let index = 0;
+  const text = String(raw || "");
+  while (index < text.length) {
+    while (/\s/.test(text[index] || "")) index += 1;
+    if (index >= text.length) break;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let end = -1;
+    for (let i = index; i < text.length; i += 1) {
+      const char = text[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') inString = true;
+      else if (char === "{") depth += 1;
+      else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    if (end < 0) break;
+    try {
+      items.push(JSON.parse(text.slice(index, end)));
+    } catch {
+      break;
+    }
+    index = end;
+  }
+  return items;
+}
+
+function sanitizeMessage(error) {
+  return String(error?.message || error || "Unknown error").replace(/Bearer\s+[\w.-]+/g, "Bearer [hidden]");
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/images/generations",
+      "destination": "/api/images/generations"
+    },
+    {
+      "source": "/api/learning/turn",
+      "destination": "/api/learning/turn"
+    },
+    {
+      "source": "/api/speech/transcriptions",
+      "destination": "/api/speech/transcriptions"
+    },
+    {
+      "source": "/api/speech/synthesis",
+      "destination": "/api/speech/synthesis"
+    },
+    {
+      "source": "/api/models/config",
+      "destination": "/api/models/config"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/health"
+    }
+  ]
+}

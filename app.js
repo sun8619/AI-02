@@ -92,6 +92,8 @@ let state = {
   ],
 };
 
+let recordingSession = null;
+
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
 
@@ -218,7 +220,7 @@ function renderChildView() {
           <button class="dock-mini" data-action="camera">${icon("camera")}拍照</button>
           <button class="voice-button ${state.recording ? "is-recording" : ""}" data-action="voice">
             ${icon("mic")}
-            <span>${state.recording ? "正在听" : state.phase === "teachback" ? "讲给我听" : "按住说"}</span>
+            <span>${state.recording ? "点我结束" : state.phase === "teachback" ? "讲给我听" : "按住说"}</span>
           </button>
           <button class="dock-mini" data-action="toggle-keyboard">${icon("keyboard")}键盘输入</button>
         </div>
@@ -239,7 +241,7 @@ function renderDockNote() {
   if (state.phase === "teachback") return "像小老师一样讲：为什么不能直接比？要怎么变？";
   if (state.phase === "repair") return "可以看着图说，不用一次讲完整。";
   if (state.phase === "summary") return "已经完成这一题，可以去家长页看学习记录。";
-  return "这里是模拟语音体验。接入火山 Ark 后，会真正听孩子说话并用语音回答。";
+  return "部署后会优先用火山语音识别和语音合成；没有配置时自动回退模拟。";
 }
 
 function renderKeyboardComposer() {
@@ -510,7 +512,7 @@ async function handleAction(event) {
   }
 
   if (action === "voice") {
-    simulateVoiceInput();
+    await handleVoiceButton();
     return;
   }
 
@@ -625,6 +627,81 @@ function extractImageUrl(payload) {
     payload?.image_url ||
     ""
   );
+}
+
+async function handleVoiceButton() {
+  if (state.recording && recordingSession) {
+    stopRecording();
+    return;
+  }
+
+  if (window.location.protocol !== "file:" && navigator.mediaDevices?.getUserMedia && window.MediaRecorder) {
+    try {
+      await startRecording();
+      return;
+    } catch {
+      toastMessage("没有拿到麦克风权限，先用模拟语音体验。");
+    }
+  }
+
+  simulateVoiceInput();
+}
+
+async function startRecording() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const chunks = [];
+  const recorder = new MediaRecorder(stream);
+  recordingSession = { recorder, stream, chunks };
+  recorder.addEventListener("dataavailable", (event) => {
+    if (event.data?.size) chunks.push(event.data);
+  });
+  recorder.addEventListener("stop", async () => {
+    state.recording = false;
+    render();
+    stream.getTracks().forEach((track) => track.stop());
+    const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+    recordingSession = null;
+    await transcribeRecording(blob);
+  });
+  state.recording = true;
+  recorder.start();
+  render();
+}
+
+function stopRecording() {
+  if (!recordingSession) return;
+  recordingSession.recorder.stop();
+}
+
+async function transcribeRecording(blob) {
+  try {
+    const audioData = await blobToDataUrl(blob);
+    const response = await fetch("/api/speech/transcriptions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        audioData,
+        mimeType: blob.type,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.mode === "mock" || !payload.transcript) {
+      throw new Error(payload.detail || payload.message || "语音识别暂不可用");
+    }
+    handleChildInput(payload.transcript, "voice");
+  } catch {
+    toastMessage("语音识别暂不可用，已用模拟回答继续。");
+    handleChildInput(getSimulatedTranscript(), "voice");
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 function simulateVoiceInput() {
@@ -816,10 +893,29 @@ function switchExplanation(reason) {
   render();
 }
 
-function speakCurrentMessage() {
+async function speakCurrentMessage() {
+  const text = `${state.aiContext} ${state.aiMessage}`.trim();
+  if (window.location.protocol !== "file:") {
+    try {
+      const response = await fetch("/api/speech/synthesis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload.audioDataUrl) {
+        const audio = new Audio(payload.audioDataUrl);
+        await audio.play();
+        return;
+      }
+    } catch {
+      // Browser speech is a safe fallback for local demos and missing TTS setup.
+    }
+  }
+
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(`${state.aiContext} ${state.aiMessage}`);
+  const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "zh-CN";
   utterance.rate = 0.92;
   utterance.pitch = 1.08;
