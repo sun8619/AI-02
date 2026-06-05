@@ -248,6 +248,83 @@ const lessons = [
       repair: "看时间线，从二十分走到四十五分，就是走了二十五分钟。",
     },
   },
+  {
+    id: "renminbi-conversion",
+    subject: "数学",
+    edition: "人教版",
+    grade: "一年级下册",
+    unit: "认识人民币",
+    lesson: "人民币换算",
+    node: "元角分换算",
+    problem: "3 元 5 角等于多少角？",
+    initialContext: "先记住一个规则：1 元等于 10 角。",
+    initialMessage: "我们先只看 3 元。1 元是 10 角，3 元可以换成多少角？",
+    initialStep: "小台阶 1：先换整元",
+    stepHint: "遇到元和角在一起，先把几元换成几十角，再加上原来的几角。",
+    teachbackPrompt: "你来当小老师讲一遍：为什么 3 元 5 角是 35 角？",
+    repairPrompt: "看着图慢慢说：1 元是 10 角，3 张 1 元就是几个 10 角？",
+    doneMessage: "讲清楚了。你说出了先把元换成角，再把角加上。",
+    prerequisites: ["认识 1 元和 1 角", "知道 10 个 1 角是 1 元", "会做 30+5"],
+    microSteps: ["记住 1 元=10 角", "把 3 元换成 30 角", "再加 5 角得到 35 角"],
+    commonGaps: ["把 3 元直接当 3 角", "忘记 1 元等于 10 角", "会写答案但讲不清先换再加"],
+    strategies: [
+      {
+        key: "step",
+        label: "拆步骤",
+        childLabel: "小台阶讲法",
+        message: "先不急着算 3 元 5 角。只看 3 元：1 元是 10 角，3 元就是 30 角。",
+        guidance: "3 元换成 30 角以后，再加上几角？",
+      },
+      {
+        key: "visual",
+        label: "画图",
+        childLabel: "看钱讲法",
+        message: "看图：一张 1 元能换 10 个 1 角。3 张 1 元就是 30 个 1 角，再加 5 角。",
+        guidance: "30 角再加 5 角，一共是多少角？",
+      },
+      {
+        key: "story",
+        label: "生活类比",
+        childLabel: "买东西讲法",
+        message: "想象买文具时，把 1 元都换成 1 角硬币。3 元换成 30 个 1 角，再放进 5 个 1 角。",
+        guidance: "篮子里一共有多少个 1 角？",
+      },
+      {
+        key: "example",
+        label: "换例子",
+        childLabel: "换个例子",
+        message: "换成 2 元 4 角：2 元先换成 20 角，再加 4 角。",
+        guidance: "20 角加 4 角是多少角？",
+      },
+    ],
+    answer: {
+      attemptKeywords: ["35", "三十五", "30", "三十", "1元10角", "一元十角", "换成角"],
+      answerKeywords: ["35", "三十五", "35角", "三十五角"],
+      conceptKeywords: ["1元", "一元", "10角", "十角", "元", "角"],
+      whyKeywords: ["1元等于10角", "一元等于十角", "3元是30角", "三元是三十角", "再加5角"],
+      ownWordsKeywords: ["换钱", "硬币", "买东西", "先换", "再加"],
+      resultKeywords: ["35", "三十五", "三十五角"],
+    },
+    visualType: "money",
+    visualLabel: "程序精准绘制",
+    visualTitle: "先把元换成角，再相加",
+    visualCardTitle: "AI 生活图",
+    visualCardHint: "需要时可以画“买文具换零钱”的生活例子。",
+    imagePrompt: [
+      "为低年级小学生生成一张帮助理解人民币元角换算的生活情景图。",
+      "画面：孩子在文具店买铅笔，把 3 元 5 角换成很多 1 角硬币来数。",
+      "要求：儿童教育插图风格，干净清楚，不要复杂小字，不要真实品牌，不要真实货币细节。",
+    ],
+    generatedCaption: "这张图帮助孩子把人民币换算放进生活场景，具体换算以上面的程序图为准。",
+    summary: "1 元等于 10 角，所以 3 元等于 30 角。3 元 5 角就是 30 角加 5 角，等于 35 角。",
+    explainSummary: "孩子已经能说出先把元换成角，再把已有的角加上。",
+    nextSuggestion: "下次练 2 元 8 角、4 元 6 角这类题，让孩子继续讲换算过程。",
+    simulated: {
+      guiding: "一元等于十角，三元就是三十角，再加五角，所以是三十五角。",
+      teachback: "因为一元可以换成十角，三元就是三十角。三十角再加五角，一共是三十五角。",
+      repair: "先把三元换成三个十角，也就是三十角，再数上五角。",
+    },
+  },
 ];
 
 let state = {
@@ -496,6 +573,7 @@ function renderLearningVisual() {
 }
 
 function renderLessonSvg(lesson) {
+  if (lesson.visualType === "money") return renderMoneySvg(lesson);
   if (lesson.visualType === "perimeter") return renderPerimeterSvg(lesson);
   if (lesson.visualType === "time") return renderTimeSvg(lesson);
   return renderFractionSvg(lesson);
@@ -544,6 +622,44 @@ function renderTimeSvg(lesson) {
       <text x="210" y="80" class="svg-note">+25 分钟</text>
       <text x="130" y="168" class="svg-win">20 + 25 = 45，没有跨过 4 点</text>
     </svg>
+  `;
+}
+
+function renderMoneySvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="把三元五角换成三十五角">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <g transform="translate(44 58)">
+        ${moneyNote(0, 0, "1 元", "#65d6ad")}
+        ${moneyNote(118, 0, "1 元", "#65d6ad")}
+        ${moneyNote(236, 0, "1 元", "#65d6ad")}
+        <text x="22" y="94" class="svg-note">3 张 1 元 = 30 角</text>
+      </g>
+      <path d="M120 144h235" fill="none" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
+      <text x="362" y="150" class="svg-note">再加 5 角</text>
+      <g transform="translate(146 128)">
+        ${moneyCoin(0)}
+        ${moneyCoin(34)}
+        ${moneyCoin(68)}
+        ${moneyCoin(102)}
+        ${moneyCoin(136)}
+      </g>
+      <text x="118" y="202" class="svg-win">30 角 + 5 角 = 35 角</text>
+    </svg>
+  `;
+}
+
+function moneyNote(x, y, label, color) {
+  return `
+    <rect x="${x}" y="${y}" width="88" height="48" rx="10" fill="${color}" stroke="#244056" stroke-width="3"/>
+    <text x="${x + 22}" y="${y + 31}" class="svg-label">${label}</text>
+  `;
+}
+
+function moneyCoin(x) {
+  return `
+    <circle cx="${x}" cy="16" r="15" fill="#ffd36a" stroke="#244056" stroke-width="2"/>
+    <text x="${x - 11}" y="22" class="svg-label">1角</text>
   `;
 }
 
@@ -872,8 +988,11 @@ async function handleAction(event) {
   }
 }
 
-function changeLesson(reason) {
-  const nextIndex = (state.lessonIndex + 1) % lessons.length;
+function changeLesson(reason, targetIndex = null) {
+  const nextIndex =
+    Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex < lessons.length
+      ? targetIndex
+      : (state.lessonIndex + 1) % lessons.length;
   const lesson = lessons[nextIndex];
   state.lessonIndex = nextIndex;
   state.phase = "guiding";
@@ -1161,10 +1280,11 @@ async function transcribeRecording(blob, fallbackTranscript = "") {
     }
     state.voiceStatus = "idle";
     handleChildInput(payload.transcript, "voice");
-  } catch {
+  } catch (error) {
+    console.warn("Speech recognition gateway fell back to browser transcript.", error);
     state.voiceStatus = "idle";
     if (fallbackTranscript.trim()) {
-      toastMessage("火山语音识别不稳定，已用浏览器识别结果继续。");
+      toastMessage("已听清，老师继续。");
       handleChildInput(fallbackTranscript.trim(), "voice");
       return;
     }
@@ -1277,8 +1397,9 @@ function handleChildInput(text, inputType) {
   state.transcript = text;
   state.lastStudentText = text;
 
-  if (wantsLessonChange(text)) {
-    changeLesson("孩子主动说想换知识点。");
+  const requestedLessonIndex = findRequestedLessonIndex(text);
+  if (requestedLessonIndex >= 0) {
+    changeLesson("孩子主动说想换知识点。", requestedLessonIndex);
     return;
   }
 
@@ -1524,11 +1645,42 @@ function addEvidence(signal, text, strategy) {
   state.evidence = state.evidence.slice(0, 8);
 }
 
-function wantsLessonChange(text) {
+function findRequestedLessonIndex(text) {
   const normalized = normalizeText(text);
-  return ["换知识点", "换个知识点", "换一个知识点", "换一题", "换题", "换别的", "不想学这个"].some(
-    (keyword) => normalized.includes(keyword),
-  );
+  const explicitTopic = [
+    { id: "fraction-compare", keywords: ["分数", "分数比较", "三分之二", "四分之三"] },
+    { id: "rectangle-perimeter", keywords: ["周长", "长方形", "正方形", "一圈"] },
+    { id: "elapsed-time", keywords: ["时间", "钟表", "经过时间", "几点", "分钟"] },
+    { id: "renminbi-conversion", keywords: ["人民币", "元角分", "元和角", "换算", "钱", "买东西"] },
+  ].find((entry) => entry.keywords.some((keyword) => normalized.includes(normalizeText(keyword))));
+
+  const hasGenericSwitchIntent = [
+    "换知识点",
+    "换个知识点",
+    "换一个知识点",
+    "换一题",
+    "换题",
+    "换别的",
+    "不想学这个",
+    "换内容",
+    "换课程",
+    "换课",
+  ].some((keyword) => normalized.includes(normalizeText(keyword)));
+
+  const hasTopicSwitchIntent = [
+    "换成",
+    "想学",
+    "学一下",
+    "讲一下",
+    "讲讲",
+  ].some((keyword) => normalized.includes(normalizeText(keyword)));
+
+  if (explicitTopic && (hasGenericSwitchIntent || hasTopicSwitchIntent)) {
+    const index = lessons.findIndex((lesson) => lesson.id === explicitTopic.id);
+    return index;
+  }
+
+  return hasGenericSwitchIntent ? (state.lessonIndex + 1) % lessons.length : -1;
 }
 
 function includesAny(normalizedText, keywords) {
