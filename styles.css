@@ -67,7 +67,7 @@ button {
 
 .topbar {
   display: flex;
-  height: 58px;
+  height: 54px;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(217, 231, 239, 0.82);
@@ -178,25 +178,25 @@ button {
 
 .child-stage {
   display: grid;
-  min-height: calc(100vh - 58px);
-  padding: 18px 20px;
+  min-height: calc(100vh - 54px);
+  padding: 14px 18px;
 }
 
 .learning-scene {
   display: grid;
-  max-width: 1320px;
+  max-width: 1180px;
   width: 100%;
-  grid-template-columns: minmax(0, 0.98fr) minmax(420px, 1.02fr);
-  align-self: center;
+  grid-template-columns: minmax(0, 0.95fr) minmax(390px, 0.95fr);
+  align-self: start;
   justify-self: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .scene-left,
 .scene-right {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 10px;
 }
 
 .problem-strip,
@@ -217,7 +217,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 16px;
+  padding: 10px 14px;
 }
 
 .problem-strip span,
@@ -238,12 +238,12 @@ button {
 }
 
 .problem-strip strong {
-  font-size: 23px;
+  font-size: 21px;
   line-height: 1.2;
 }
 
 .tutor-wrap {
-  min-height: 290px;
+  min-height: 220px;
   display: grid;
   place-items: center;
 }
@@ -251,26 +251,26 @@ button {
 .tutor-card {
   display: grid;
   width: 100%;
-  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-columns: 176px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
 }
 
 .mascot {
   position: relative;
-  width: 210px;
-  height: 245px;
+  width: 176px;
+  height: 202px;
   margin: 0 auto;
 }
 
 .mascot-antenna {
   position: absolute;
-  top: 8px;
+  top: 6px;
   left: 50%;
-  width: 64px;
-  height: 42px;
-  border-top: 6px solid var(--amber);
-  border-left: 6px solid var(--amber);
+  width: 54px;
+  height: 34px;
+  border-top: 5px solid var(--amber);
+  border-left: 5px solid var(--amber);
   border-radius: 30px 0 0 0;
   transform: translateX(-20%);
 }
@@ -288,61 +288,110 @@ button {
 
 .mascot-head {
   position: absolute;
-  top: 44px;
-  left: 22px;
+  top: 36px;
+  left: 18px;
   display: grid;
-  width: 166px;
-  height: 134px;
+  width: 140px;
+  height: 112px;
   grid-template-columns: 1fr 1fr;
   place-items: center;
-  border: 5px solid #244056;
-  border-radius: 36px;
+  border: 4px solid #244056;
+  border-radius: 30px;
   background: linear-gradient(180deg, #e9fff6, #c7f5e2);
   box-shadow: 0 18px 0 rgba(36, 64, 86, 0.08);
 }
 
 .mascot-eye {
-  width: 29px;
-  height: 36px;
+  width: 25px;
+  height: 31px;
   border-radius: 999px;
   background: #244056;
 }
 
 .mascot-smile {
   position: absolute;
-  bottom: 32px;
+  bottom: 25px;
   left: 50%;
-  width: 56px;
-  height: 26px;
-  border-bottom: 5px solid #244056;
+  width: 50px;
+  height: 22px;
+  border-bottom: 4px solid #244056;
   border-radius: 0 0 999px 999px;
   transform: translateX(-50%);
 }
 
 .mascot-body {
   position: absolute;
-  bottom: 12px;
-  left: 45px;
+  bottom: 10px;
+  left: 37px;
   display: flex;
-  width: 120px;
-  height: 78px;
+  width: 102px;
+  height: 66px;
   align-items: center;
   justify-content: center;
   gap: 14px;
-  border: 5px solid #244056;
-  border-radius: 32px 32px 26px 26px;
+  border: 4px solid #244056;
+  border-radius: 28px 28px 22px 22px;
   background: linear-gradient(135deg, var(--blue), var(--lavender));
 }
 
 .mascot-body span {
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
   background: #fff;
 }
 
 .speech-card {
-  padding: 20px;
+  padding: 16px;
+}
+
+.dialogue-card {
+  display: grid;
+  gap: 10px;
+}
+
+.dialogue-line {
+  display: grid;
+  gap: 6px;
+}
+
+.dialogue-line span {
+  width: fit-content;
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 13px;
+  font-weight: 880;
+}
+
+.teacher-line span {
+  background: #e8fbf3;
+  color: var(--mint-dark);
+}
+
+.student-line {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.student-line span {
+  background: #eef8ff;
+  color: var(--blue-dark);
+}
+
+.dialogue-line strong {
+  display: block;
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.18;
+}
+
+.dialogue-line p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 760;
+  line-height: 1.45;
 }
 
 .context-line {
@@ -355,7 +404,7 @@ button {
 
 .speech-card h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 880;
   line-height: 1.16;
 }
@@ -385,7 +434,7 @@ button {
 
 .help-button {
   display: inline-flex;
-  min-height: 54px;
+  min-height: 48px;
   align-items: center;
   justify-content: center;
   gap: 9px;
@@ -394,8 +443,8 @@ button {
   background: #fff;
   color: var(--ink);
   cursor: pointer;
-  padding: 10px 16px;
-  font-size: 16px;
+  padding: 9px 14px;
+  font-size: 15px;
   font-weight: 830;
   box-shadow: 0 8px 20px rgba(45, 91, 124, 0.08);
 }
@@ -415,7 +464,7 @@ button {
 .step-panel,
 .visual-panel,
 .practice-panel {
-  padding: 14px;
+  padding: 12px;
 }
 
 .panel-head {
@@ -434,8 +483,8 @@ button {
 }
 
 .step-panel h2 {
-  margin: 12px 0 6px;
-  font-size: 23px;
+  margin: 10px 0 5px;
+  font-size: 21px;
   line-height: 1.2;
 }
 
@@ -448,8 +497,8 @@ button {
 
 .step-ladder {
   display: grid;
-  gap: 7px;
-  margin-top: 11px;
+  gap: 6px;
+  margin-top: 9px;
 }
 
 .ladder-step {
@@ -459,7 +508,7 @@ button {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: #fff;
-  padding: 8px;
+  padding: 7px;
 }
 
 .ladder-step span {
@@ -499,10 +548,11 @@ button {
   background: #f1f8ff;
 }
 
+.lesson-svg,
 .fraction-svg {
   display: block;
   width: 100%;
-  height: 190px;
+  height: 176px;
   min-height: 0;
 }
 
@@ -512,8 +562,8 @@ button {
   justify-content: space-between;
   gap: 14px;
   border-top: 1px solid var(--line);
-  margin-top: 8px;
-  padding-top: 9px;
+  margin-top: 7px;
+  padding-top: 8px;
 }
 
 .ai-visual-card strong {
@@ -539,7 +589,7 @@ button {
 .generated-visual img {
   display: block;
   width: 100%;
-  max-height: 170px;
+  max-height: 138px;
   object-fit: cover;
   border-radius: var(--radius-sm);
   background: #edf4f8;
@@ -615,7 +665,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
 }
 
 .practice-panel span {
@@ -627,14 +677,14 @@ button {
 
 .practice-panel strong {
   display: block;
-  margin-top: 6px;
-  font-size: 21px;
+  margin-top: 5px;
+  font-size: 19px;
 }
 
 .mastery-ring {
   display: grid;
-  width: 82px;
-  height: 82px;
+  width: 70px;
+  height: 70px;
   place-items: center;
   border-radius: 50%;
   background:
@@ -650,7 +700,7 @@ button {
 
 .mastery-ring b {
   transform: translateY(-7px);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 900;
 }
 
@@ -669,7 +719,7 @@ button {
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow);
-  padding: 12px;
+  padding: 10px;
 }
 
 .dock-actions {
@@ -678,8 +728,8 @@ button {
 
 .dock-mini {
   display: inline-flex;
-  min-width: 112px;
-  min-height: 48px;
+  min-width: 108px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -693,8 +743,8 @@ button {
 
 .voice-button {
   display: inline-flex;
-  min-width: 230px;
-  min-height: 64px;
+  min-width: 205px;
+  min-height: 58px;
   align-items: center;
   justify-content: center;
   gap: 12px;
@@ -702,14 +752,14 @@ button {
   background: linear-gradient(135deg, var(--mint), #8df0ce);
   color: #123c2e;
   cursor: pointer;
-  font-size: 25px;
+  font-size: 22px;
   font-weight: 950;
   box-shadow: 0 18px 34px rgba(22, 150, 108, 0.22);
 }
 
 .voice-button svg {
-  width: 27px;
-  height: 27px;
+  width: 25px;
+  height: 25px;
 }
 
 .voice-button.is-recording {

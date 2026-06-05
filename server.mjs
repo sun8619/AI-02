@@ -145,6 +145,10 @@ async function handleLearningTurn(request, response) {
   const userText = String(input.text || "").trim();
   const context = String(input.context || "");
   const step = String(input.step || "");
+  const lesson = input.lesson && typeof input.lesson === "object" ? input.lesson : {};
+  const lessonProblem = String(lesson.problem || "比较 2/3 和 3/4 哪个大？");
+  const lessonTextbook = String(lesson.textbook || "人教版 三年级上册 分数的初步认识");
+  const lessonNode = String(lesson.node || "异分母分数比较");
 
   if (!userText) {
     sendJson(response, 400, { error: "Missing text" });
@@ -161,6 +165,8 @@ async function handleLearningTurn(request, response) {
           "你使用启发式教学，不直接代答；每次只推进一个很小的台阶。",
           "如果孩子已经答对，要邀请孩子当小老师讲一遍。",
           "如果孩子讲不清，不批评，换一种讲法：画图、生活类比、举例或更小步骤。",
+          "aiMessage 必须只写老师会对孩子说的话，不要展示内部思考过程、评分标准或分析日志。",
+          "aiContext 只给系统记录使用，前端不会展示给孩子。",
           "你必须只输出一段合法 JSON，不要使用 Markdown。",
           "JSON 字段为 aiContext, aiMessage, nextPhase, feynmanStatus, evidenceSignal, evidenceText, bestStrategy。",
         ].join("\n"),
@@ -168,8 +174,11 @@ async function handleLearningTurn(request, response) {
       {
         role: "user",
         content: JSON.stringify({
-          problem: "比较 2/3 和 3/4 哪个大？",
-          textbook: "人教版 三年级上册 分数的初步认识",
+          problem: lessonProblem,
+          textbook: lessonTextbook,
+          knowledgeNode: lessonNode,
+          microSteps: Array.isArray(lesson.microSteps) ? lesson.microSteps : [],
+          commonGaps: Array.isArray(lesson.commonGaps) ? lesson.commonGaps : [],
           currentPhase: phase,
           currentContext: context,
           currentStep: step,
@@ -587,6 +596,9 @@ function naturalizeSpeechText(text) {
     .replace(/3\/4/g, "四分之三")
     .replace(/8\/12/g, "十二分之八")
     .replace(/9\/12/g, "十二分之九")
+    .replace(/3:20/g, "三点二十")
+    .replace(/3:45/g, "三点四十五")
+    .replace(/\b5\s*\+\s*3\s*\+\s*5\s*\+\s*3\b/g, "五加三加五加三")
     .replace(/AI/g, "小学伴")
     .replace(/L2/g, "第二级提示")
     .replace(/[“”"]/g, "")

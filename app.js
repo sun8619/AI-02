@@ -12,71 +12,265 @@ const icons = {
   arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
 };
 
-const textbookMap = {
-  subject: "数学",
-  edition: "人教版",
-  grade: "三年级上册",
-  unit: "分数的初步认识",
-  lesson: "分数大小比较",
-  node: "异分母分数比较",
-  prerequisites: ["认识分数", "知道分母表示平均分成几份", "同分母分数比较"],
-  microSteps: [
-    "先看分母",
-    "想办法变成能比较的样子",
-    "说出为什么 3/4 更大",
-  ],
-  commonGaps: ["直接比分子", "不知道为什么要通分", "会算但讲不清"],
-};
+const USE_BROWSER_SPEECH_RECOGNITION = false;
+const MAX_RECORDING_MS = 9000;
 
-const strategies = [
+const lessons = [
   {
-    key: "step",
-    label: "拆步骤",
-    childLabel: "小台阶讲法",
-    message: "我们只做一步：先看分母。分母不一样，就不能直接比分子。",
-    guidance: "下一步，只看一件事：要不要通分？",
+    id: "fraction-compare",
+    subject: "数学",
+    edition: "人教版",
+    grade: "三年级上册",
+    unit: "分数的初步认识",
+    lesson: "分数大小比较",
+    node: "异分母分数比较",
+    problem: "比较 2/3 和 3/4 哪个大？",
+    initialContext: "分母不一样，先不要急着比分子。",
+    initialMessage: "我们只看一件事：要不要把它们变成同样的小份？",
+    initialStep: "小台阶 1：先看分母",
+    stepHint: "分母不一样时，先不要急着比分子，要想办法让它们能比较。",
+    teachbackPrompt: "这次换你当小老师，讲给我听：为什么 3/4 比 2/3 大？",
+    repairPrompt: "我们看着图慢慢说：为什么 9 小格比 8 小格多？",
+    doneMessage: "你讲清楚了。你不是只说答案，还说出了为什么。",
+    prerequisites: ["认识分数", "知道分母表示平均分成几份", "同分母分数比较"],
+    microSteps: ["先看分母", "变成能比较的样子", "说出为什么 3/4 更大"],
+    commonGaps: ["直接比分子", "不知道为什么要通分", "会算但讲不清"],
+    strategies: [
+      {
+        key: "step",
+        label: "拆步骤",
+        childLabel: "小台阶讲法",
+        message: "我们只做一步：先看分母。分母不一样，就不能直接比分子。",
+        guidance: "下一步，只看一件事：要不要把它们变成同样的小份？",
+      },
+      {
+        key: "visual",
+        label: "画图",
+        childLabel: "看图讲法",
+        message: "看图说：三分之二是 8 小格，四分之三是 9 小格。9 小格更多。",
+        guidance: "看一看，8 小格和 9 小格，谁更多？",
+      },
+      {
+        key: "story",
+        label: "生活类比",
+        childLabel: "饼干讲法",
+        message: "想成两块一样大的饼干。要比较吃了多少，就先切成一样细的小份。",
+        guidance: "切成一样细之后，谁拿到的小份更多？",
+      },
+      {
+        key: "example",
+        label: "换例子",
+        childLabel: "换个例子",
+        message: "换个更小的例子：比较 1/2 和 2/3，也要先让每一小份一样大。",
+        guidance: "如果都切成 6 小份，1/2 是几份？2/3 是几份？",
+      },
+    ],
+    answer: {
+      attemptKeywords: ["通分", "十二", "12", "一样", "同样", "小格"],
+      answerKeywords: ["3/4", "四分之三", "三分之四"],
+      conceptKeywords: ["分母", "不同", "不一样"],
+      whyKeywords: ["不能直接", "一样大", "同样", "能比较", "通分"],
+      ownWordsKeywords: ["小格", "涂", "切", "饼干"],
+      resultKeywords: ["9", "九", "更多", "更大", "四分之三", "3/4"],
+    },
+    visualType: "fraction",
+    visualLabel: "程序精准绘制",
+    visualTitle: "把它们都变成 12 小格",
+    visualCardTitle: "AI 生活图",
+    visualCardHint: "需要时再画“饼干切小份”的例子。",
+    imagePrompt: [
+      "为低年级小学生生成一张帮助理解分数比较的生活情景图。",
+      "画面：两块一样大的圆形饼干或蛋糕放在浅色桌面上，左边切成 3 份并涂 2 份，右边切成 4 份并涂 3 份。",
+      "目的：帮助孩子理解 2/3 和 3/4 的大小比较。",
+      "要求：儿童教育插图风格，画面干净，主体清楚，不要复杂小字，不要真实品牌，不要错误数学符号。",
+    ],
+    generatedCaption: "这张图用于生活类比；真正的分数比例以上面的程序图为准。",
+    summary: "比较 2/3 和 3/4 时，分母不一样，不能直接比分子。可以先变成同样的小份，再比较谁更多。",
+    explainSummary: "孩子已经能说出“分母不同要先通分，再比较 8/12 和 9/12”。",
+    nextSuggestion: "明天再练 1 道分母不同的分数比较题，并让孩子继续当小老师讲一遍。",
+    simulated: {
+      guiding: "要通分，三分之二是十二分之八，四分之三是十二分之九，所以四分之三大。",
+      teachback: "分母不一样，不能直接比分子。先都变成十二小格，三分之二是八个小格，四分之三是九个小格，所以四分之三更大。",
+      repair: "要先让每一小份一样大，再看谁涂的小格更多。四分之三是九格，比八格多。",
+    },
   },
   {
-    key: "visual",
-    label: "画图",
-    childLabel: "看图讲法",
-    message: "你看图：三分之二是把同样长的条分成 3 份涂 2 份，四分之三是分成 4 份涂 3 份。换成 12 小格后就好比了。",
-    guidance: "看一看，8 小格和 9 小格，谁更多？",
+    id: "rectangle-perimeter",
+    subject: "数学",
+    edition: "人教版",
+    grade: "三年级上册",
+    unit: "长方形和正方形",
+    lesson: "周长",
+    node: "长方形周长",
+    problem: "长方形长 5 米、宽 3 米，周长是多少？",
+    initialContext: "周长就是沿着边走一整圈。",
+    initialMessage: "我们先找一找：这个长方形一圈有几条边？",
+    initialStep: "小台阶 1：找到一圈",
+    stepHint: "周长不是只加长和宽，而是把外面一整圈的边都加起来。",
+    teachbackPrompt: "你当小老师讲一遍：为什么要算 5+3+5+3？",
+    repairPrompt: "看着图沿外边走一圈：哪两条是 5 米？哪两条是 3 米？",
+    doneMessage: "讲得清楚。你说出了周长是一整圈，所以四条边都要算。",
+    prerequisites: ["认识长方形", "会做两位数以内加法", "理解一圈的意思"],
+    microSteps: ["找到长和宽", "沿外边走一圈", "把四条边相加"],
+    commonGaps: ["只算 5+3", "忘记有两条长和两条宽", "会算但说不出周长是一圈"],
+    strategies: [
+      {
+        key: "step",
+        label: "拆步骤",
+        childLabel: "小台阶讲法",
+        message: "先不算式子。用手指沿着外边走一圈，这一圈才叫周长。",
+        guidance: "这一圈里，有几条边要算进去？",
+      },
+      {
+        key: "visual",
+        label: "画图",
+        childLabel: "看图讲法",
+        message: "看图：上边 5 米，下边也是 5 米；左边 3 米，右边也是 3 米。",
+        guidance: "四条边合起来，是不是 5+3+5+3？",
+      },
+      {
+        key: "story",
+        label: "生活类比",
+        childLabel: "跑步讲法",
+        message: "想象你绕操场边线跑一整圈，不是只跑一条长边和一条短边。",
+        guidance: "一整圈要经过几条边？",
+      },
+      {
+        key: "example",
+        label: "换例子",
+        childLabel: "换个例子",
+        message: "换成更小的长方形：长 4 米、宽 2 米，也要算四条边。",
+        guidance: "4+2+4+2 等于多少？",
+      },
+    ],
+    answer: {
+      attemptKeywords: ["16", "十六", "5+3+5+3", "两条长", "两条宽", "一圈", "四条边"],
+      answerKeywords: ["16", "十六", "十六米"],
+      conceptKeywords: ["周长", "一圈", "四条边", "外边"],
+      whyKeywords: ["两条长", "两条宽", "四条", "都要算", "绕一圈", "一整圈"],
+      ownWordsKeywords: ["走一圈", "绕一圈", "外面", "边线"],
+      resultKeywords: ["16", "十六", "十六米"],
+    },
+    visualType: "perimeter",
+    visualLabel: "程序精准绘制",
+    visualTitle: "沿外边走一整圈",
+    visualCardTitle: "AI 情景图",
+    visualCardHint: "需要时可以画“绕小花园走一圈”的例子。",
+    imagePrompt: [
+      "为低年级小学生生成一张帮助理解长方形周长的生活情景图。",
+      "画面：一个长方形小花园，孩子沿着外边走一整圈，长边标 5 米，短边标 3 米。",
+      "要求：儿童教育插图风格，干净清楚，不要复杂小字，不要品牌。",
+    ],
+    generatedCaption: "这张图帮助孩子理解“周长是一整圈”，具体算式以程序图为准。",
+    summary: "长方形周长是外面一整圈的长度。长 5 米、宽 3 米，要算 5+3+5+3，所以是 16 米。",
+    explainSummary: "孩子已经能说出周长是一整圈，长和宽都各有两条。",
+    nextSuggestion: "下次换一个长方形尺寸，让孩子先沿图说一圈，再写算式。",
+    simulated: {
+      guiding: "周长是一圈，所以要算四条边，五加三加五加三等于十六米。",
+      teachback: "因为周长是沿着外边走一整圈。长方形有两条长边、两条宽边，所以是五加三加五加三，等于十六米。",
+      repair: "不是只算长和宽，要把外面一整圈都算上，所以四条边都要加。",
+    },
   },
   {
-    key: "story",
-    label: "生活类比",
-    childLabel: "饼干讲法",
-    message: "想成两块一样大的饼干。一个吃了三份里的两份，另一个吃了四份里的三份。要比较多少，就先切成一样细的小份。",
-    guidance: "切成一样细之后，谁吃到的小份更多？",
-  },
-  {
-    key: "example",
-    label: "换例子",
-    childLabel: "换个例子",
-    message: "换个更小的例子：比较 1/2 和 2/3，也要先想办法让每一小份一样大。",
-    guidance: "如果都切成 6 小份，1/2 是几份？2/3 是几份？",
+    id: "elapsed-time",
+    subject: "数学",
+    edition: "人教版",
+    grade: "三年级上册",
+    unit: "时、分、秒",
+    lesson: "经过时间",
+    node: "开始时间加经过时间",
+    problem: "3:20 开始读书，读了 25 分钟，结束是几点？",
+    initialContext: "先找开始时间，再往后数经过的分钟。",
+    initialMessage: "我们先从 3:20 出发，往后走 25 分钟。会走到几点？",
+    initialStep: "小台阶 1：找到开始时间",
+    stepHint: "先看从几点开始，再把经过的分钟加上去；没有跨过整点时，分钟直接相加。",
+    teachbackPrompt: "你来当小老师讲一遍：为什么 3:20 加 25 分钟是 3:45？",
+    repairPrompt: "看着时间线说：从 20 分往后数 25 分，会到 45 分。",
+    doneMessage: "讲清楚了。你说出了从开始时间往后数，不是随便猜一个时间。",
+    prerequisites: ["会读钟面", "知道 1 小时等于 60 分钟", "会做 20+25"],
+    microSteps: ["找到 3:20", "往后加 25 分钟", "确认没有跨过 4 点"],
+    commonGaps: ["把开始时间和经过时间混在一起", "忘记分钟满 60 才进 1 小时", "只报答案讲不出过程"],
+    strategies: [
+      {
+        key: "step",
+        label: "拆步骤",
+        childLabel: "小台阶讲法",
+        message: "先不看答案，只看开始时间：现在是 3 点 20 分。",
+        guidance: "20 分再往后数 25 分，会到几分？",
+      },
+      {
+        key: "visual",
+        label: "画图",
+        childLabel: "时间线讲法",
+        message: "看时间线：从 3:20 往右走 25 分钟，停在 3:45。",
+        guidance: "从 20 分走到 45 分，中间走了多少分钟？",
+      },
+      {
+        key: "story",
+        label: "生活类比",
+        childLabel: "读书讲法",
+        message: "想象你 3:20 开始读书，读了 25 分钟，就是钟面上的分针往前走 25 小格。",
+        guidance: "分针从 20 走 25 小格，会到 45。",
+      },
+      {
+        key: "example",
+        label: "换例子",
+        childLabel: "换个例子",
+        message: "换成 2:10 开始，读 15 分钟，就是 10 分往后加 15 分。",
+        guidance: "10+15 是多少？结束是几点？",
+      },
+    ],
+    answer: {
+      attemptKeywords: ["3:45", "三点四十五", "45", "四十五", "25分钟", "往后"],
+      answerKeywords: ["3:45", "三点四十五", "三点45", "45分"],
+      conceptKeywords: ["开始", "往后", "经过", "加"],
+      whyKeywords: ["20加25", "二十加二十五", "没有跨过", "不到60", "往后数"],
+      ownWordsKeywords: ["时间线", "分针", "走", "读书"],
+      resultKeywords: ["3:45", "三点四十五", "45", "四十五"],
+    },
+    visualType: "time",
+    visualLabel: "程序精准绘制",
+    visualTitle: "从 3:20 往后走 25 分钟",
+    visualCardTitle: "AI 情景图",
+    visualCardHint: "需要时可以画“读书计时”的生活例子。",
+    imagePrompt: [
+      "为低年级小学生生成一张帮助理解经过时间的生活情景图。",
+      "画面：孩子 3:20 开始读书，旁边有小钟表和 25 分钟计时提示，结束指向 3:45。",
+      "要求：儿童教育插图风格，干净清楚，不要复杂小字，不要品牌。",
+    ],
+    generatedCaption: "这张图帮助孩子把时间题放进生活场景，具体计算以时间线为准。",
+    summary: "从 3:20 开始，往后加 25 分钟。20+25=45，没有到 60 分，所以结束时间是 3:45。",
+    explainSummary: "孩子已经能说出从开始时间往后数 25 分钟，并说明没有跨过整点。",
+    nextSuggestion: "下次练一个会跨过整点的经过时间题，让孩子继续讲过程。",
+    simulated: {
+      guiding: "从三点二十往后加二十五分钟，二十加二十五等于四十五，所以是三点四十五。",
+      teachback: "因为开始时间是三点二十，要往后数二十五分钟。二十加二十五是四十五，没有到六十，所以结束是三点四十五。",
+      repair: "看时间线，从二十分走到四十五分，就是走了二十五分钟。",
+    },
   },
 ];
 
 let state = {
   view: "child",
+  lessonIndex: 0,
   phase: "guiding",
   recording: false,
+  voiceStatus: "idle",
   showKeyboard: false,
   showVisual: true,
   strategyIndex: 0,
   mastery: 64,
-  completedSteps: 1,
+  completedSteps: 0,
   todayQuestion: 2,
   transcript: "",
-  aiContext: "我记得你刚才说：分母不一样。",
-  aiMessage: "下一步，只看一件事：要不要通分？",
-  currentStep: "小台阶 1：先看分母",
+  lastStudentText: "",
+  aiContext: lessons[0].initialContext,
+  aiMessage: lessons[0].initialMessage,
+  currentStep: lessons[0].initialStep,
   feynmanStatus: "还没开始讲",
   canExplainWhy: false,
   canUseOwnWords: false,
-  bestStrategy: "拆步骤",
+  bestStrategy: lessons[0].strategies[0].label,
   imageJob: {
     status: "idle",
     url: "",
@@ -85,8 +279,8 @@ let state = {
   evidence: [
     {
       type: "attempt",
-      text: "孩子能说出分母不一样。",
-      signal: "部分正确",
+      text: "孩子正在学习“分母不同先变成能比较的样子”。",
+      signal: "开始学习",
       strategy: "拆步骤",
     },
   ],
@@ -94,12 +288,22 @@ let state = {
 
 let recordingSession = null;
 let recognitionSession = null;
+let currentAudio = null;
 
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
 
 function icon(name) {
   return icons[name] || "";
+}
+
+function currentLesson() {
+  return lessons[state.lessonIndex] || lessons[0];
+}
+
+function lessonStrategy(index = state.strategyIndex) {
+  const lesson = currentLesson();
+  return lesson.strategies[index] || lesson.strategies[0];
 }
 
 function render() {
@@ -131,6 +335,7 @@ function renderTopbar() {
 }
 
 function renderChildView() {
+  const lesson = currentLesson();
   const actionButtons =
     state.phase === "teachback" || state.phase === "repair"
       ? [
@@ -141,7 +346,7 @@ function renderChildView() {
       : [
           ["dont-understand", "我没懂", "light"],
           ["repeat", "再说一遍", "repeat"],
-          ["new-example", "换个例子", "book"],
+          ["change-lesson", "换知识点", "book"],
         ];
 
   return `
@@ -150,16 +355,24 @@ function renderChildView() {
         <div class="scene-left">
           <div class="problem-strip">
             <span>${icon("book")}当前题目</span>
-            <strong>比较 2/3 和 3/4 哪个大？</strong>
+            <strong>${escapeText(lesson.problem)}</strong>
           </div>
 
           <div class="tutor-wrap">
             <div class="tutor-card">
               ${renderMascot()}
               <div class="speech-card">
-                <p class="context-line">${state.aiContext}</p>
-                <h1>${state.aiMessage}</h1>
-                <div class="strategy-chip">${icon("light")}${strategies[state.strategyIndex].childLabel}</div>
+                <div class="dialogue-card">
+                  <div class="dialogue-line teacher-line">
+                    <span>老师</span>
+                    <strong>${escapeText(state.aiMessage)}</strong>
+                  </div>
+                  ${
+                    state.lastStudentText
+                      ? `<div class="dialogue-line student-line"><span>学生</span><p>${escapeText(state.lastStudentText)}</p></div>`
+                      : ""
+                  }
+                </div>
               </div>
             </div>
           </div>
@@ -184,17 +397,17 @@ function renderChildView() {
           <div class="step-panel">
             <div class="panel-head">
               <span>${icon("star")}小台阶</span>
-              <strong>提示 L2</strong>
+              <strong>${escapeText(lesson.unit)}</strong>
             </div>
-            <h2>${state.currentStep}</h2>
-            <p>${renderStepHint()}</p>
+            <h2>${escapeText(state.currentStep)}</h2>
+            <p>${escapeText(renderStepHint())}</p>
             <div class="step-ladder" aria-label="学习小台阶">
-              ${textbookMap.microSteps
+              ${lesson.microSteps
                 .map(
                   (step, index) => `
                     <div class="ladder-step ${index < state.completedSteps ? "is-done" : ""} ${index === state.completedSteps ? "is-now" : ""}">
                       <span>${index < state.completedSteps ? icon("check") : index + 1}</span>
-                      <em>${step}</em>
+                      <em>${escapeText(step)}</em>
                     </div>
                   `,
                 )
@@ -203,6 +416,7 @@ function renderChildView() {
           </div>
 
           ${state.showVisual ? renderLearningVisual() : ""}
+          ${renderPracticePanel()}
         </aside>
       </section>
     </main>
@@ -217,58 +431,60 @@ function renderVoiceDock() {
         <button class="dock-mini" data-action="camera">${icon("camera")}拍照</button>
         <button class="voice-button ${state.recording ? "is-recording" : ""}" data-action="voice" aria-label="按住说话，松开结束">
           ${icon("mic")}
-          <span>${state.recording ? "松开结束" : state.phase === "teachback" ? "讲给我听" : "按住说"}</span>
+          <span>${renderVoiceButtonLabel()}</span>
         </button>
         <button class="dock-mini" data-action="toggle-keyboard">${icon("keyboard")}键盘输入</button>
       </div>
-      <p class="dock-note">${renderDockNote()}</p>
+      <p class="dock-note">${escapeText(renderDockNote())}</p>
     </section>
   `;
 }
 
+function renderVoiceButtonLabel() {
+  if (state.voiceStatus === "processing") return "正在听";
+  if (state.recording) return "松开结束";
+  if (state.phase === "teachback") return "讲给老师听";
+  return "按住说";
+}
+
 function renderStepHint() {
-  if (state.phase === "teachback") return "你已经会做这一步了。现在试着用自己的话讲给 AI 听。";
+  const lesson = currentLesson();
+  if (state.phase === "teachback") return "你已经会做这一步了。现在试着用自己的话讲给老师听。";
   if (state.phase === "repair") return "没关系，我们换一种讲法。先看图，再慢慢说。";
   if (state.phase === "summary") return "你能说出为什么，这个知识点就更稳了。";
-  return "分母不一样时，先不要急着比分子，要想办法让它们能比较。";
+  return lesson.stepHint;
 }
 
 function renderDockNote() {
-  if (state.phase === "teachback") return "像小老师一样讲：为什么不能直接比？要怎么变？";
+  if (state.voiceStatus === "processing") return "我正在把你说的话变成文字。";
+  if (state.phase === "teachback") return "像小老师一样讲给老师听，说不完整也没关系。";
   if (state.phase === "repair") return "可以看着图说，不用一次讲完整。";
-  if (state.phase === "summary") return "已经完成这一题，可以去家长页看学习记录。";
-  return "按住说话，松开结束。语音识别不可用时会自动用键盘或模拟兜底。";
+  if (state.phase === "summary") return "这一题已经完成，可以换知识点或去家长页看记录。";
+  return "按住说话，松开后老师会接着讲。也可以直接说“换知识点”。";
 }
 
 function renderKeyboardComposer() {
   return `
     <form class="keyboard-composer" data-form="typed-answer">
-      <input name="answer" value="${escapeAttr(state.transcript)}" placeholder="也可以打字模拟孩子说的话，例如：要通分，3/4 大" />
+      <input name="answer" value="${escapeAttr(state.transcript)}" placeholder="也可以打字，例如：我想换知识点" />
       <button class="btn btn-primary" type="submit">发送</button>
     </form>
   `;
 }
 
 function renderLearningVisual() {
+  const lesson = currentLesson();
   return `
     <div class="visual-panel">
       <div class="panel-head">
         <span>${icon("image")}看图想一想</span>
-        <strong>程序精准绘制</strong>
+        <strong>${escapeText(lesson.visualLabel)}</strong>
       </div>
-      <svg class="fraction-svg" viewBox="0 0 520 240" role="img" aria-label="把三分之二和四分之三都变成十二小格比较">
-        <text x="26" y="32" class="svg-title">把它们都变成 12 小格</text>
-        ${fractionBar(36, 58, 3, 2, "#5cc7a4", "2/3 = 8/12")}
-        ${fractionBar(36, 140, 4, 3, "#4da3ff", "3/4 = 9/12")}
-        <text x="370" y="98" class="svg-note">8 小格</text>
-        <text x="370" y="180" class="svg-note">9 小格，更多</text>
-        <path d="M432 150c28 0 42 9 42 24s-14 24-42 24" fill="none" stroke="#ffb72b" stroke-width="5" stroke-linecap="round"/>
-        <text x="396" y="224" class="svg-win">所以 3/4 更大</text>
-      </svg>
+      ${renderLessonSvg(lesson)}
       <div class="ai-visual-card">
         <div>
-          <strong>AI 生活图</strong>
-          <p>需要时再画“饼干切小份”的例子。</p>
+          <strong>${escapeText(lesson.visualCardTitle)}</strong>
+          <p>${escapeText(lesson.visualCardHint)}</p>
         </div>
         <button class="btn btn-primary" data-action="generate-story-image" ${state.imageJob.status === "loading" ? "disabled" : ""}>
           ${icon("image")}${state.imageJob.status === "loading" ? "正在画" : "AI 画生活例子"}
@@ -279,13 +495,81 @@ function renderLearningVisual() {
   `;
 }
 
+function renderLessonSvg(lesson) {
+  if (lesson.visualType === "perimeter") return renderPerimeterSvg(lesson);
+  if (lesson.visualType === "time") return renderTimeSvg(lesson);
+  return renderFractionSvg(lesson);
+}
+
+function renderFractionSvg(lesson) {
+  return `
+    <svg class="lesson-svg fraction-svg" viewBox="0 0 520 214" role="img" aria-label="把三分之二和四分之三都变成十二小格比较">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      ${fractionBar(36, 54, 3, 2, "#5cc7a4", "2/3 = 8/12")}
+      ${fractionBar(36, 132, 4, 3, "#4da3ff", "3/4 = 9/12")}
+      <text x="370" y="92" class="svg-note">8 小格</text>
+      <text x="370" y="170" class="svg-note">9 小格，更多</text>
+      <path d="M432 140c28 0 42 9 42 24s-14 24-42 24" fill="none" stroke="#ffb72b" stroke-width="5" stroke-linecap="round"/>
+      <text x="396" y="204" class="svg-win">所以 3/4 更大</text>
+    </svg>
+  `;
+}
+
+function renderPerimeterSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="长方形四条边组成周长">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <rect x="118" y="58" width="260" height="105" rx="8" fill="#eaf8f1" stroke="#244056" stroke-width="4"/>
+      <path d="M130 54h238M382 70v82M368 168H130M112 152V70" fill="none" stroke="#ffb72b" stroke-width="7" stroke-linecap="round"/>
+      <text x="220" y="52" class="svg-label">5 米</text>
+      <text x="222" y="190" class="svg-label">5 米</text>
+      <text x="64" y="116" class="svg-label">3 米</text>
+      <text x="402" y="116" class="svg-label">3 米</text>
+      <text x="118" y="204" class="svg-win">5 + 3 + 5 + 3 = 16 米</text>
+    </svg>
+  `;
+}
+
+function renderTimeSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="从三点二十往后走二十五分钟到三点四十五">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <line x1="70" y1="116" x2="450" y2="116" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="120" cy="116" r="12" fill="#65d6ad" stroke="#244056" stroke-width="3"/>
+      <circle cx="360" cy="116" r="12" fill="#4da3ff" stroke="#244056" stroke-width="3"/>
+      <path d="M146 96c58-42 138-42 190 0" fill="none" stroke="#ffb72b" stroke-width="6" stroke-linecap="round"/>
+      <path d="m340 88 18 10-20 8" fill="none" stroke="#ffb72b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="86" y="84" class="svg-label">3:20</text>
+      <text x="324" y="84" class="svg-label">3:45</text>
+      <text x="210" y="80" class="svg-note">+25 分钟</text>
+      <text x="130" y="168" class="svg-win">20 + 25 = 45，没有跨过 4 点</text>
+    </svg>
+  `;
+}
+
+function renderPracticePanel() {
+  return `
+    <div class="practice-panel">
+      <div>
+        <span>今天第 ${state.todayQuestion} 题</span>
+        <strong>${state.phase === "summary" ? "已讲清楚 1 个知识点" : `掌握度 ${state.mastery}%`}</strong>
+      </div>
+      <div class="mastery-ring" style="--value: ${state.mastery}%">
+        <b>${state.mastery}%</b>
+        <small>掌握</small>
+      </div>
+    </div>
+  `;
+}
+
 function renderGeneratedImage() {
+  const lesson = currentLesson();
   if (state.imageJob.status === "idle") return "";
   if (state.imageJob.status === "loading") {
     return `
       <div class="generated-visual is-loading">
         <span class="loading-dot" aria-hidden="true"></span>
-        <p>AI 正在画生活例子。数学比例图已经在上面，生活图只帮助孩子想象。</p>
+        <p>AI 正在画生活例子。上面的图会保留精确关系，生活图只帮助孩子想象。</p>
       </div>
     `;
   }
@@ -293,21 +577,21 @@ function renderGeneratedImage() {
     return `
       <div class="generated-visual is-error">
         <strong>AI 图片暂时没画出来</strong>
-        <p>${state.imageJob.message || "请检查 Ark 图片服务配置。"}</p>
+        <p>${escapeText(state.imageJob.message || "请检查 Ark 图片服务配置。")}</p>
       </div>
     `;
   }
   return `
     <div class="generated-visual">
-      <img src="${escapeAttr(state.imageJob.url)}" alt="AI 生成的分饼干理解图" loading="lazy" />
-      <p>这张图用于生活类比；真正的分数比例以上面的程序图为准。</p>
+      <img src="${escapeAttr(state.imageJob.url)}" alt="AI 生成的理解图" loading="lazy" />
+      <p>${escapeText(lesson.generatedCaption)}</p>
     </div>
   `;
 }
 
 function fractionBar(x, y, denominator, numerator, color, label) {
   const width = 300;
-  const height = 38;
+  const height = 34;
   const piece = width / denominator;
   let parts = "";
   for (let i = 0; i < denominator; i += 1) {
@@ -315,19 +599,20 @@ function fractionBar(x, y, denominator, numerator, color, label) {
     parts += `<rect x="${x + i * piece}" y="${y}" width="${piece}" height="${height}" fill="${filled ? color : "#fff"}" stroke="#244056" stroke-width="2"/>`;
   }
   return `
-    <text x="${x}" y="${y - 12}" class="svg-label">${label}</text>
+    <text x="${x}" y="${y - 10}" class="svg-label">${label}</text>
     <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="7" fill="none" stroke="#244056" stroke-width="2"/>
     ${parts}
   `;
 }
 
 function renderParentView() {
+  const lesson = currentLesson();
   return `
     <main class="parent-page">
       <section class="parent-hero">
         <div>
           <h1>给家长看的进展</h1>
-          <p>孩子端只保留语音陪练；这里记录知识点拆分、换讲法、看图辅助和“讲给 AI 听”的结果。</p>
+          <p>孩子端只保留师生对话；这里记录知识点拆分、换讲法、看图辅助和“讲给老师听”的结果。</p>
         </div>
         <button class="btn btn-primary" data-action="summary-view">${icon("book")}查看本题总结</button>
       </section>
@@ -336,23 +621,23 @@ function renderParentView() {
         <article class="parent-card wide">
           <div class="panel-head">
             <span>${icon("book")}人教版知识点拆分</span>
-            <strong>${textbookMap.edition}</strong>
+            <strong>${escapeText(lesson.edition)}</strong>
           </div>
           <div class="knowledge-path">
-            <span>${textbookMap.subject}</span>
-            <span>${textbookMap.grade}</span>
-            <span>${textbookMap.unit}</span>
-            <span>${textbookMap.lesson}</span>
+            <span>${escapeText(lesson.subject)}</span>
+            <span>${escapeText(lesson.grade)}</span>
+            <span>${escapeText(lesson.unit)}</span>
+            <span>${escapeText(lesson.lesson)}</span>
           </div>
-          <h2>${textbookMap.node}</h2>
+          <h2>${escapeText(lesson.node)}</h2>
           <div class="knowledge-columns">
             <div>
               <h3>前置知识</h3>
-              <ul>${textbookMap.prerequisites.map((item) => `<li>${item}</li>`).join("")}</ul>
+              <ul>${lesson.prerequisites.map((item) => `<li>${escapeText(item)}</li>`).join("")}</ul>
             </div>
             <div>
               <h3>常见卡点</h3>
-              <ul>${textbookMap.commonGaps.map((item) => `<li>${item}</li>`).join("")}</ul>
+              <ul>${lesson.commonGaps.map((item) => `<li>${escapeText(item)}</li>`).join("")}</ul>
             </div>
           </div>
         </article>
@@ -367,8 +652,8 @@ function renderParentView() {
 
         <article class="parent-card">
           <div class="metric-large">
-            <span>讲给 AI 听</span>
-            <strong>${state.feynmanStatus}</strong>
+            <span>讲给老师听</span>
+            <strong>${escapeText(state.feynmanStatus)}</strong>
             <p>记录孩子是否真的理解，而不是只会报答案。</p>
           </div>
         </article>
@@ -378,12 +663,12 @@ function renderParentView() {
             <span>${icon("repeat")}换过的讲法</span>
           </div>
           <div class="strategy-list">
-            ${strategies
+            ${lesson.strategies
               .slice(0, Math.max(1, state.strategyIndex + 1))
               .map(
                 (strategy) => `
                   <div class="strategy-row ${strategy.label === state.bestStrategy ? "is-best" : ""}">
-                    <strong>${strategy.label}</strong>
+                    <strong>${escapeText(strategy.label)}</strong>
                     <span>${strategy.label === state.bestStrategy ? "目前最有效" : "已尝试"}</span>
                   </div>
                 `,
@@ -396,7 +681,7 @@ function renderParentView() {
           <div class="panel-head">
             <span>${icon("image")}理解图片</span>
           </div>
-          <p class="plain-text">分数条、数轴、几何图会优先用程序精准绘制，避免 AI 图片把比例画错。生活情景图以后可接入 Ark 图片生成。</p>
+          <p class="plain-text">分数条、时间线、几何图会优先用程序精准绘制，避免 AI 图片把关系画错。生活情景图再交给 Ark 图片生成。</p>
         </article>
 
         <article class="parent-card wide">
@@ -408,9 +693,9 @@ function renderParentView() {
               .map(
                 (item) => `
                   <div class="evidence-row">
-                    <strong>${item.signal}</strong>
-                    <p>${item.text}</p>
-                    <span>${item.strategy}</span>
+                    <strong>${escapeText(item.signal)}</strong>
+                    <p>${escapeText(item.text)}</p>
+                    <span>${escapeText(item.strategy)}</span>
                   </div>
                 `,
               )
@@ -423,6 +708,7 @@ function renderParentView() {
 }
 
 function renderSummaryView() {
+  const lesson = currentLesson();
   return `
     <main class="summary-page">
       <section class="summary-sheet">
@@ -430,15 +716,15 @@ function renderSummaryView() {
         <h1>本题学习总结</h1>
         <div class="summary-block">
           <h2>孩子学到什么</h2>
-          <p>比较 2/3 和 3/4 时，分母不一样，不能直接比分子。可以先变成同样的小份，再比较谁更多。</p>
+          <p>${escapeText(lesson.summary)}</p>
         </div>
         <div class="summary-block">
           <h2>是否能讲出来</h2>
-          <p>${state.canExplainWhy ? "孩子已经能说出“分母不同要先通分，再比较 8/12 和 9/12”。" : "孩子目前还需要看图和提示才能讲清楚原因。"}</p>
+          <p>${state.canExplainWhy ? escapeText(lesson.explainSummary) : "孩子目前还需要看图和提示才能讲清楚原因。"}</p>
         </div>
         <div class="summary-block">
           <h2>下次建议</h2>
-          <p>明天再练 1 道分母不同的分数比较题，并让孩子继续当小老师讲一遍。</p>
+          <p>${escapeText(lesson.nextSuggestion)}</p>
         </div>
       </section>
     </main>
@@ -501,7 +787,7 @@ function bindEvents() {
 
 async function startHoldVoice(event) {
   event.preventDefault();
-  if (state.recording) return;
+  if (state.recording || state.voiceStatus === "processing") return;
   window.addEventListener("pointerup", stopHoldVoice, { once: true });
   window.addEventListener("pointercancel", stopHoldVoice, { once: true });
   await handleVoiceButton();
@@ -554,28 +840,25 @@ async function handleAction(event) {
 
   if (action === "repeat") {
     speakCurrentMessage();
-    toastMessage("已模拟 AI 语音再说一遍");
+    toastMessage("老师再说一遍");
     return;
   }
 
-  if (action === "new-example") {
-    state.strategyIndex = Math.min(strategies.length - 1, 3);
-    state.aiContext = "我们换一个更小的例子。";
-    state.aiMessage = strategies[state.strategyIndex].guidance;
-    state.bestStrategy = strategies[state.strategyIndex].label;
-    addEvidence("换例子", "AI 改用更小的分数例子帮助理解。", "换讲法");
-    render();
+  if (action === "change-lesson" || action === "new-example") {
+    changeLesson("孩子想换一个知识点。");
     return;
   }
 
   if (action === "show-visual") {
     state.showVisual = true;
     state.strategyIndex = Math.max(state.strategyIndex, 1);
+    const strategy = lessonStrategy(1);
     state.aiContext = "我们看图再说一遍。";
-    state.aiMessage = strategies[1].guidance;
-    state.bestStrategy = "画图";
-    addEvidence("看图辅助", "孩子请求再看图，AI 切换到分数条讲法。", "画图");
+    state.aiMessage = strategy.guidance;
+    state.bestStrategy = strategy.label;
+    addEvidence("看图辅助", "孩子请求再看图，AI 切换到图示讲法。", "画图");
     render();
+    speakCurrentMessage();
     return;
   }
 
@@ -585,25 +868,54 @@ async function handleAction(event) {
   }
 
   if (action === "teach") {
-    state.phase = "teachback";
-    state.aiContext = "轮到你当小老师了。";
-    state.aiMessage = "讲给我听：为什么 3/4 比 2/3 大？";
-    state.currentStep = "小台阶 3：用自己的话讲";
-    state.feynmanStatus = "等待孩子讲";
-    render();
+    startTeachback();
   }
 }
 
+function changeLesson(reason) {
+  const nextIndex = (state.lessonIndex + 1) % lessons.length;
+  const lesson = lessons[nextIndex];
+  state.lessonIndex = nextIndex;
+  state.phase = "guiding";
+  state.strategyIndex = 0;
+  state.mastery = 60;
+  state.completedSteps = 0;
+  state.transcript = "";
+  state.lastStudentText = "";
+  state.aiContext = reason || lesson.initialContext;
+  state.aiMessage = `好，我们换一个知识点。${lesson.initialMessage}`;
+  state.currentStep = lesson.initialStep;
+  state.feynmanStatus = "还没开始讲";
+  state.canExplainWhy = false;
+  state.canUseOwnWords = false;
+  state.bestStrategy = lesson.strategies[0].label;
+  state.showVisual = true;
+  state.imageJob = { status: "idle", url: "", message: "" };
+  addEvidence("换知识点", `切换到「${lesson.node}」：${lesson.problem}`, "课程切换");
+  render();
+  speakCurrentMessage();
+}
+
+function startTeachback() {
+  const lesson = currentLesson();
+  state.phase = "teachback";
+  state.aiContext = "轮到你当小老师了。";
+  state.aiMessage = lesson.teachbackPrompt;
+  state.currentStep = "小台阶 3：用自己的话讲";
+  state.feynmanStatus = "等待孩子讲";
+  render();
+  speakCurrentMessage();
+}
+
 async function generateStoryImage() {
+  const lesson = currentLesson();
   state.imageJob = { status: "loading", url: "", message: "" };
   render();
 
   const prompt = [
-    "为低年级小学生生成一张帮助理解分数比较的生活情景图。",
-    "画面：两块一样大的圆形饼干或蛋糕放在浅色桌面上，左边切成 3 份并涂/拿走 2 份，右边切成 4 份并涂/拿走 3 份。",
-    "目的：帮助孩子理解 2/3 和 3/4 的大小比较。",
-    "要求：儿童教育插图风格，画面干净，主体清楚，不要复杂小字，不要真实品牌，不要夸张卡通，不要错误数学符号。",
-    "注意：这只是生活类比图，精确比例会由页面上的程序分数条呈现。",
+    ...lesson.imagePrompt,
+    `当前题目：${lesson.problem}`,
+    "注意：这只是生活类比图，精确数学关系会由页面上的程序图呈现。",
   ].join("");
 
   try {
@@ -624,8 +936,8 @@ async function generateStoryImage() {
     if (!url) throw new Error("图片服务没有返回图片地址");
     state.imageJob = { status: "done", url, message: "" };
     state.strategyIndex = Math.max(state.strategyIndex, 2);
-    state.bestStrategy = "生活类比";
-    addEvidence("AI 生成理解图片", "AI 生成生活情景图，帮助孩子把通分理解成切成一样细的小份。", "生活类比图");
+    state.bestStrategy = lesson.strategies[2]?.label || "生活类比";
+    addEvidence("AI 生成理解图片", "AI 生成生活情景图，帮助孩子把知识点放进真实场景。", "生活类比图");
     toastMessage("AI 生活图已生成");
   } catch (error) {
     state.imageJob = {
@@ -655,12 +967,16 @@ async function handleVoiceButton() {
     return;
   }
 
-  if (window.location.protocol !== "file:" && getSpeechRecognitionCtor()) {
+  if (
+    USE_BROWSER_SPEECH_RECOGNITION &&
+    window.location.protocol !== "file:" &&
+    getSpeechRecognitionCtor()
+  ) {
     try {
       startBrowserSpeechRecognition();
       return;
     } catch {
-      toastMessage("浏览器语音识别没有启动，改用录音识别。");
+      toastMessage("浏览器语音识别没有启动，改用短录音识别。");
     }
   }
 
@@ -686,6 +1002,7 @@ function stopVoiceInput() {
     return;
   }
   state.recording = false;
+  state.voiceStatus = "idle";
   render();
 }
 
@@ -699,11 +1016,12 @@ function startBrowserSpeechRecognition() {
   const recognition = new SpeechRecognition();
   let finalText = "";
   recognition.lang = "zh-CN";
-  recognition.continuous = true;
+  recognition.continuous = false;
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
   recognitionSession = recognition;
   state.recording = true;
+  state.voiceStatus = "recording";
   render();
 
   recognition.onresult = (event) => {
@@ -719,6 +1037,7 @@ function startBrowserSpeechRecognition() {
   recognition.onerror = () => {
     recognitionSession = null;
     state.recording = false;
+    state.voiceStatus = "idle";
     render();
     toastMessage("浏览器语音识别失败，已改用模拟回答。");
     handleChildInput(getSimulatedTranscript(), "voice");
@@ -728,6 +1047,7 @@ function startBrowserSpeechRecognition() {
     const text = state.transcript.trim();
     recognitionSession = null;
     state.recording = false;
+    state.voiceStatus = "idle";
     render();
     if (text) handleChildInput(text, "voice");
     else {
@@ -741,13 +1061,19 @@ function startBrowserSpeechRecognition() {
 async function startRecording() {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const chunks = [];
-  const recorder = new MediaRecorder(stream);
-  recordingSession = { recorder, stream, chunks };
+  const options = getMediaRecorderOptions();
+  const recorder = new MediaRecorder(stream, options);
+  const timeoutId = window.setTimeout(() => {
+    if (recordingSession) stopRecording();
+  }, MAX_RECORDING_MS);
+  recordingSession = { recorder, stream, chunks, timeoutId };
   recorder.addEventListener("dataavailable", (event) => {
     if (event.data?.size) chunks.push(event.data);
   });
   recorder.addEventListener("stop", async () => {
+    window.clearTimeout(timeoutId);
     state.recording = false;
+    state.voiceStatus = "processing";
     render();
     stream.getTracks().forEach((track) => track.stop());
     const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
@@ -755,13 +1081,25 @@ async function startRecording() {
     await transcribeRecording(blob);
   });
   state.recording = true;
-  recorder.start();
+  state.voiceStatus = "recording";
+  recorder.start(250);
   render();
+}
+
+function getMediaRecorderOptions() {
+  if (!window.MediaRecorder?.isTypeSupported) return {};
+  if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+    return { mimeType: "audio/webm;codecs=opus" };
+  }
+  if (MediaRecorder.isTypeSupported("audio/mp4")) {
+    return { mimeType: "audio/mp4" };
+  }
+  return {};
 }
 
 function stopRecording() {
   if (!recordingSession) return;
-  recordingSession.recorder.stop();
+  if (recordingSession.recorder.state !== "inactive") recordingSession.recorder.stop();
 }
 
 async function transcribeRecording(blob) {
@@ -779,8 +1117,10 @@ async function transcribeRecording(blob) {
     if (!response.ok || payload.mode === "mock" || !payload.transcript) {
       throw new Error(payload.detail || payload.message || "语音识别暂不可用");
     }
+    state.voiceStatus = "idle";
     handleChildInput(payload.transcript, "voice");
   } catch {
+    state.voiceStatus = "idle";
     toastMessage("语音识别暂不可用，已用模拟回答继续。");
     handleChildInput(getSimulatedTranscript(), "voice");
   }
@@ -797,22 +1137,21 @@ function blobToDataUrl(blob) {
 
 function simulateVoiceInput() {
   state.recording = true;
+  state.voiceStatus = "recording";
   render();
   window.setTimeout(() => {
     const transcript = getSimulatedTranscript();
     state.recording = false;
+    state.voiceStatus = "idle";
     handleChildInput(transcript, "voice");
-  }, 520);
+  }, 420);
 }
 
 function getSimulatedTranscript() {
-  if (state.phase === "teachback") {
-    return "分母不一样，不能直接比分子。先都变成十二小格，二分之三不对，是三分之二变成八个小格，四分之三变成九个小格，所以四分之三更大。";
-  }
-  if (state.phase === "repair") {
-    return "要先让每一小份一样大，再看谁涂的小格更多。四分之三是九格，比八格多。";
-  }
-  return "要通分，三分之二是八分不对，是十二分之八，四分之三是十二分之九，所以四分之三大。";
+  const lesson = currentLesson();
+  if (state.phase === "teachback") return lesson.simulated.teachback;
+  if (state.phase === "repair") return lesson.simulated.repair;
+  return lesson.simulated.guiding;
 }
 
 function handleChildInput(text, inputType) {
@@ -822,11 +1161,18 @@ function handleChildInput(text, inputType) {
   }
 
   state.transcript = text;
+  state.lastStudentText = text;
+
+  if (wantsLessonChange(text)) {
+    changeLesson("孩子主动说想换知识点。");
+    return;
+  }
 
   askGatewayTutor(text, inputType);
 }
 
 async function askGatewayTutor(text, inputType) {
+  const lesson = currentLesson();
   if (window.location.protocol === "file:") {
     evaluateLocally(text, inputType);
     render();
@@ -842,6 +1188,13 @@ async function askGatewayTutor(text, inputType) {
         phase: state.phase,
         context: state.aiContext,
         step: state.currentStep,
+        lesson: {
+          problem: lesson.problem,
+          textbook: `${lesson.edition} ${lesson.grade} ${lesson.unit}`,
+          node: lesson.node,
+          microSteps: lesson.microSteps,
+          commonGaps: lesson.commonGaps,
+        },
       }),
     });
     const payload = await response.json().catch(() => ({}));
@@ -860,6 +1213,7 @@ function applyGatewayTutor(payload, inputType) {
   const nextPhase = ["guiding", "teachback", "repair", "summary"].includes(payload.nextPhase)
     ? payload.nextPhase
     : state.phase;
+  const lesson = currentLesson();
 
   state.phase = nextPhase;
   state.aiContext = payload.aiContext || state.aiContext;
@@ -870,7 +1224,7 @@ function applyGatewayTutor(payload, inputType) {
   if (nextPhase === "teachback") {
     state.completedSteps = Math.max(state.completedSteps, 2);
     state.mastery = Math.max(state.mastery, 74);
-    state.currentStep = "小台阶 3：讲给 AI 听";
+    state.currentStep = "小台阶 3：讲给老师听";
   }
 
   if (nextPhase === "repair") {
@@ -878,14 +1232,16 @@ function applyGatewayTutor(payload, inputType) {
     state.strategyIndex = Math.max(state.strategyIndex, 1);
     state.currentStep = "小台阶 3：再讲一次";
     state.mastery = Math.max(state.mastery, 68);
+    if (!payload.aiMessage) state.aiMessage = lesson.repairPrompt;
   }
 
   if (nextPhase === "summary") {
-    state.completedSteps = 3;
+    state.completedSteps = lesson.microSteps.length;
     state.mastery = Math.max(state.mastery, 86);
     state.currentStep = "完成：能讲清楚原因";
     state.canExplainWhy = true;
     state.canUseOwnWords = true;
+    if (!payload.aiMessage) state.aiMessage = lesson.doneMessage;
   }
 
   addEvidence(
@@ -897,7 +1253,6 @@ function applyGatewayTutor(payload, inputType) {
 }
 
 function evaluateLocally(text, inputType) {
-
   if (state.phase === "teachback" || state.phase === "repair") {
     evaluateTeachback(text, inputType);
   } else {
@@ -906,19 +1261,20 @@ function evaluateLocally(text, inputType) {
 }
 
 function evaluateAttempt(text, inputType) {
+  const lesson = currentLesson();
   const normalized = normalizeText(text);
-  const knowsCommonDenominator = normalized.includes("通分") || normalized.includes("十二") || normalized.includes("12");
-  const picksAnswer = normalized.includes("3/4") || normalized.includes("四分之三") || normalized.includes("三分之四");
+  const knowsProcess = includesAny(normalized, lesson.answer.attemptKeywords);
+  const picksAnswer = includesAny(normalized, lesson.answer.answerKeywords);
 
-  if (knowsCommonDenominator && picksAnswer) {
+  if (knowsProcess && picksAnswer) {
     state.phase = "teachback";
     state.mastery = Math.max(state.mastery, 74);
-    state.completedSteps = 2;
-    state.currentStep = "小台阶 3：讲给 AI 听";
+    state.completedSteps = Math.max(2, Math.min(lesson.microSteps.length - 1, 2));
+    state.currentStep = "小台阶 3：讲给老师听";
     state.aiContext = "你已经会做这一步了。";
     state.aiMessage = "这次换你当小老师，讲给我听一遍。";
     state.feynmanStatus = "等待孩子讲";
-    addEvidence("答对并进入复述", "孩子能说出要通分，并判断 3/4 更大。", inputType === "voice" ? "语音回答" : "键盘回答");
+    addEvidence("答对并进入复述", `孩子能做出「${lesson.node}」，开始进入讲给老师听。`, inputType === "voice" ? "语音回答" : "键盘回答");
     speakCurrentMessage();
     return;
   }
@@ -926,33 +1282,35 @@ function evaluateAttempt(text, inputType) {
   state.phase = "repair";
   state.mastery = Math.max(52, state.mastery - 2);
   state.aiContext = "你已经说出了一部分，我们换个方法。";
-  state.aiMessage = "先看图：如果都切成 12 小格，谁涂得更多？";
-  state.currentStep = "小台阶 2：看图比较";
+  state.aiMessage = lesson.repairPrompt;
+  state.currentStep = "小台阶 2：看图再想";
   state.showVisual = true;
   state.strategyIndex = 1;
-  state.bestStrategy = "画图";
-  addEvidence("需要换讲法", "孩子回答还没有说清楚通分或大小比较，AI 切到看图讲法。", "画图");
+  state.bestStrategy = lesson.strategies[1]?.label || "画图";
+  addEvidence("需要换讲法", "孩子回答还没有说清楚过程或答案，AI 切到看图讲法。", "画图");
+  speakCurrentMessage();
 }
 
 function evaluateTeachback(text, inputType) {
+  const lesson = currentLesson();
   const normalized = normalizeText(text);
-  const mentionsConcept = normalized.includes("分母") && (normalized.includes("不一样") || normalized.includes("不同"));
-  const explainsWhy = normalized.includes("不能直接") || normalized.includes("一样大") || normalized.includes("能比较");
-  const usesOwnWords = normalized.includes("小格") || normalized.includes("涂") || normalized.includes("切");
-  const comparesResult = normalized.includes("9") || normalized.includes("九") || normalized.includes("更多") || normalized.includes("更大");
+  const mentionsConcept = includesAny(normalized, lesson.answer.conceptKeywords);
+  const explainsWhy = includesAny(normalized, lesson.answer.whyKeywords);
+  const usesOwnWords = includesAny(normalized, lesson.answer.ownWordsKeywords);
+  const comparesResult = includesAny(normalized, lesson.answer.resultKeywords);
 
   if (mentionsConcept && explainsWhy && comparesResult) {
     state.phase = "summary";
     state.mastery = 86;
-    state.completedSteps = 3;
+    state.completedSteps = lesson.microSteps.length;
     state.currentStep = "完成：能讲清楚原因";
     state.aiContext = "你讲清楚了关键原因。";
-    state.aiMessage = "很好，你不是只说答案，你说出了为什么。";
+    state.aiMessage = lesson.doneMessage;
     state.feynmanStatus = "能讲清楚";
     state.canExplainWhy = true;
     state.canUseOwnWords = usesOwnWords;
-    state.bestStrategy = usesOwnWords ? "画图" : state.bestStrategy;
-    addEvidence("能用自己的话解释", "孩子复述时说出分母不同、不能直接比较，并说明 3/4 更大。", inputType === "voice" ? "讲给 AI 听" : "打字复述");
+    state.bestStrategy = usesOwnWords ? lesson.strategies[1]?.label || state.bestStrategy : state.bestStrategy;
+    addEvidence("能用自己的话解释", `孩子复述时能说出「${lesson.node}」的关键原因。`, inputType === "voice" ? "讲给老师听" : "打字复述");
     speakCurrentMessage();
     return;
   }
@@ -960,20 +1318,20 @@ function evaluateTeachback(text, inputType) {
   state.phase = "repair";
   state.mastery = Math.max(state.mastery, 68);
   state.currentStep = "小台阶 3：再讲一次";
-  state.aiContext = "你已经说出答案了，还差一点原因。";
-  state.aiMessage = "我们换成看图说：为什么 9 小格比 8 小格多？";
+  state.aiContext = "你已经说出了一部分，还差一点原因。";
+  state.aiMessage = lesson.repairPrompt;
   state.feynmanStatus = "会做但讲不清";
   state.showVisual = true;
   state.strategyIndex = 1;
-  state.bestStrategy = "画图";
+  state.bestStrategy = lesson.strategies[1]?.label || "画图";
   addEvidence("会做但讲不清", "孩子复述不完整，AI 没有判错，而是换成看图追问。", "画图");
   speakCurrentMessage();
 }
 
 function switchExplanation(reason) {
   state.phase = state.phase === "teachback" ? "repair" : state.phase;
-  state.strategyIndex = Math.min(strategies.length - 1, state.strategyIndex + 1);
-  const strategy = strategies[state.strategyIndex];
+  state.strategyIndex = Math.min(currentLesson().strategies.length - 1, state.strategyIndex + 1);
+  const strategy = lessonStrategy();
   state.aiContext = reason;
   state.aiMessage = strategy.message;
   state.showVisual = state.showVisual || strategy.key === "visual" || state.phase === "repair";
@@ -985,7 +1343,13 @@ function switchExplanation(reason) {
 }
 
 async function speakCurrentMessage() {
-  const text = toSpokenText(`${state.aiContext} ${state.aiMessage}`.trim());
+  const text = toSpokenText(state.aiMessage.trim());
+  if (!text) return;
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+
   if (window.location.protocol !== "file:") {
     try {
       const response = await fetch("/api/speech/synthesis", {
@@ -995,8 +1359,8 @@ async function speakCurrentMessage() {
       });
       const payload = await response.json().catch(() => ({}));
       if (response.ok && payload.audioDataUrl) {
-        const audio = new Audio(payload.audioDataUrl);
-        await audio.play();
+        currentAudio = new Audio(payload.audioDataUrl);
+        await currentAudio.play();
         return;
       }
     } catch {
@@ -1008,9 +1372,20 @@ async function speakCurrentMessage() {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "zh-CN";
-  utterance.rate = 0.86;
-  utterance.pitch = 1.03;
+  const preferredVoice = pickChineseVoice();
+  if (preferredVoice) utterance.voice = preferredVoice;
+  utterance.rate = 0.88;
+  utterance.pitch = 1.04;
   window.speechSynthesis.speak(utterance);
+}
+
+function pickChineseVoice() {
+  const voices = window.speechSynthesis?.getVoices?.() || [];
+  return (
+    voices.find((voice) => /zh|Chinese|Mandarin|中文|普通话/i.test(`${voice.lang} ${voice.name}`)) ||
+    voices.find((voice) => /Ting|Mei|Sin|Li|Yu/i.test(voice.name)) ||
+    null
+  );
 }
 
 function toSpokenText(text) {
@@ -1019,7 +1394,10 @@ function toSpokenText(text) {
     .replace(/3\/4/g, "四分之三")
     .replace(/8\/12/g, "十二分之八")
     .replace(/9\/12/g, "十二分之九")
-    .replace(/AI/g, "小学伴")
+    .replace(/3:20/g, "三点二十")
+    .replace(/3:45/g, "三点四十五")
+    .replace(/\b5\s*\+\s*3\s*\+\s*5\s*\+\s*3\b/g, "五加三加五加三")
+    .replace(/AI/g, "老师")
     .replace(/L2/g, "第二级提示")
     .replace(/[：:]/g, "，")
     .replace(/[“”"]/g, "")
@@ -1030,6 +1408,17 @@ function toSpokenText(text) {
 function addEvidence(signal, text, strategy) {
   state.evidence.unshift({ signal, text, strategy, type: "learning" });
   state.evidence = state.evidence.slice(0, 8);
+}
+
+function wantsLessonChange(text) {
+  const normalized = normalizeText(text);
+  return ["换知识点", "换个知识点", "换一个知识点", "换一题", "换题", "换别的", "不想学这个"].some(
+    (keyword) => normalized.includes(keyword),
+  );
+}
+
+function includesAny(normalizedText, keywords) {
+  return keywords.some((keyword) => normalizedText.includes(normalizeText(keyword)));
 }
 
 function normalizeText(text) {
@@ -1045,12 +1434,15 @@ function toastMessage(message) {
   }, 2400);
 }
 
-function escapeAttr(value) {
+function escapeText(value) {
   return String(value)
     .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function escapeAttr(value) {
+  return escapeText(value).replace(/"/g, "&quot;");
 }
 
 render();

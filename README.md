@@ -5,8 +5,9 @@
 - 孩子端平板横屏学习页
 - 人教版知识点拆分示例
 - 分步脚手架提示
-- “讲给 AI 听”的复述环节
-- 换讲法与精准分数图
+- “讲给老师听”的复述环节
+- 换讲法与程序精准绘图
+- 说“换知识点”后自动切换题目、步骤和右侧图示
 - Ark 图片生成入口
 - 家长进展页
 
@@ -46,7 +47,7 @@ ARK_IMAGE_MODEL=doubao-seedream-5-0-260128
 
 - `ARK_REASONING_MODEL`：思考、拆知识点、判断下一步。
 - `ARK_TUTOR_MODEL`：生成给孩子听的讲解。
-- `ARK_EVALUATION_MODEL`：判断孩子“讲给 AI 听”是否讲明白。
+- `ARK_EVALUATION_MODEL`：判断孩子“讲给老师听”是否讲明白。
 - `ARK_SUMMARY_MODEL`：生成家长总结。
 - `ARK_ASR_MODEL` / `ARK_ASR_RESOURCE_ID`：把孩子语音转成文字。
 - `ARK_TTS_RESOURCE_ID` / `ARK_TTS_SPEAKER`：把 AI 回复合成语音。
@@ -54,14 +55,17 @@ ARK_IMAGE_MODEL=doubao-seedream-5-0-260128
 
 语音输入优先级：
 
-1. 浏览器自带中文语音识别，适合先把网页用起来。
-2. 火山 ASR，浏览器识别不可用时使用。
-3. 模拟回答，接口或权限失败时兜底。
+1. 短录音上传到火山 ASR，松开按钮后识别。
+2. 模拟回答，接口、权限或网络失败时兜底。
+
+浏览器自带实时语音识别默认关闭，因为在部分环境里会明显卡顿。
 
 语音输出优先级：
 
-1. 火山 TTS，使用自然口语化文本和稍慢语速。
+1. 火山 TTS，只朗读老师对孩子说的话，不朗读内部判断和上下文。
 2. 浏览器自带朗读，TTS 没配好时兜底。
+
+语音自然度主要取决于 `ARK_TTS_SPEAKER` 对应的音色。代码会把数学符号改成口语读法，并使用稍慢语速；如果仍然机械，优先在火山里换一个更自然的 SeedTTS 音色，再把新的音色 ID 填到 Railway Variables。
 
 如果你不知道怎么选，最简单是先把 `ARK_TEXT_MODEL`、`ARK_TUTOR_MODEL`、`ARK_REASONING_MODEL`、`ARK_EVALUATION_MODEL`、`ARK_SUMMARY_MODEL` 都填成同一个 Ark 文本模型/接入点 ID，先跑通；以后再拆成不同模型。
 
