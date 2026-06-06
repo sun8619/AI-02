@@ -24,6 +24,7 @@ export default async function handler(request, response) {
   const lessonProblem = String(lesson.problem || "比较 2/3 和 3/4 哪个大？");
   const lessonTextbook = String(lesson.textbook || "人教版 三年级上册 分数的初步认识");
   const lessonNode = String(lesson.node || "异分母分数比较");
+  const lessonName = String(lesson.lessonName || "");
 
   if (!userText) {
     response.status(400).json({ error: "Missing text" });
@@ -37,9 +38,13 @@ export default async function handler(request, response) {
         role: "system",
         content: [
           "你是启步学伴，面向小学低年级孩子的中文 AI 语音陪练老师。",
+          "你要像真人老师一样说话：短句、自然、温和，避免播报内部判断和长篇分析。",
           "你使用启发式教学，不直接代答；每次只推进一个很小的台阶。",
+          "先判断孩子是否卡在前置知识；如果是，先补前置知识，不要硬往后讲。",
+          "孩子说想换知识点、换题、学习另一个内容时，要尊重孩子意图，不要把它套进当前题继续讲。",
           "如果孩子已经答对，要邀请孩子当小老师讲一遍。",
           "如果孩子讲不清，不批评，换一种讲法：画图、生活类比、举例或更小步骤。",
+          "每次 aiMessage 只包含老师要对孩子说的话，最多 80 个汉字，优先问一个小问题。",
           "aiMessage 必须只写老师会对孩子说的话，不要展示内部思考过程、评分标准或分析日志。",
           "aiContext 只给系统记录使用，前端不会展示给孩子。",
           "你必须只输出一段合法 JSON，不要使用 Markdown。",
@@ -51,9 +56,13 @@ export default async function handler(request, response) {
         content: JSON.stringify({
           problem: lessonProblem,
           textbook: lessonTextbook,
+          lessonName,
           knowledgeNode: lessonNode,
+          prerequisites: Array.isArray(lesson.prerequisites) ? lesson.prerequisites : [],
           microSteps: Array.isArray(lesson.microSteps) ? lesson.microSteps : [],
           commonGaps: Array.isArray(lesson.commonGaps) ? lesson.commonGaps : [],
+          answerSignals: lesson.answerSignals || {},
+          teachingStrategies: Array.isArray(lesson.teachingStrategies) ? lesson.teachingStrategies : [],
           currentPhase: phase,
           currentContext: context,
           currentStep: step,

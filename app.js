@@ -15,7 +15,7 @@ const icons = {
 const USE_BROWSER_SPEECH_RECOGNITION = false;
 const MAX_RECORDING_MS = 9000;
 
-const lessons = [
+const customLessons = [
   {
     id: "fraction-compare",
     subject: "数学",
@@ -327,6 +327,855 @@ const lessons = [
   },
 ];
 
+const curriculumBlueprints = [
+  {
+    id: "g1a-count-objects",
+    grade: "一年级上册",
+    unit: "准备课",
+    lesson: "数一数",
+    node: "按顺序点数物体",
+    problem: "图上有 6 个苹果，应该怎样数才不漏也不重复？",
+    microSteps: ["一个一个指着数", "每数一个就做记号", "说出最后一个数就是总数"],
+    commonGaps: ["跳着数漏掉物体", "重复数同一个物体", "不知道最后一个数表示总数"],
+    keywords: ["数一数", "点数", "总数", "几个", "不漏", "不重复", "苹果"],
+    visualType: "count",
+    answerKeywords: ["6", "六", "一个一个", "指着数"],
+  },
+  {
+    id: "g1a-compare-quantity",
+    grade: "一年级上册",
+    unit: "准备课",
+    lesson: "比多少",
+    node: "一一对应比较多少",
+    problem: "5 只小兔和 4 根胡萝卜，谁多谁少？",
+    microSteps: ["把小兔和胡萝卜一一配对", "看谁剩下", "说出谁多谁少"],
+    commonGaps: ["只看摆得长短", "不会一一配对", "把多和少说反"],
+    keywords: ["比多少", "多", "少", "一一对应", "小兔", "胡萝卜"],
+    visualType: "compare",
+    answerKeywords: ["小兔多", "胡萝卜少", "5", "4"],
+  },
+  {
+    id: "g1a-position",
+    grade: "一年级上册",
+    unit: "位置",
+    lesson: "上下前后左右",
+    node: "用方位词描述位置",
+    problem: "小熊在小猫的左边，小狗在小猫的右边，谁在中间？",
+    microSteps: ["先找到参照物", "分清左和右", "用一句完整的话说位置"],
+    commonGaps: ["没有先找参照物", "左右混淆", "只说物体不说位置关系"],
+    keywords: ["位置", "上下", "前后", "左右", "左边", "右边", "中间"],
+    visualType: "position",
+    answerKeywords: ["小猫", "中间"],
+  },
+  {
+    id: "g1a-numbers-1-5",
+    grade: "一年级上册",
+    unit: "1-5 的认识和加减法",
+    lesson: "1-5 的认识",
+    node: "1-5 的数数、读写和大小",
+    problem: "3 和 5 比，哪个数更大？",
+    microSteps: ["按顺序数 1 到 5", "在数线上找到 3 和 5", "越往后数越大"],
+    commonGaps: ["只记形状不理解数量", "数序不稳", "比较大小时看数字形状"],
+    keywords: ["1-5", "一到五", "比大小", "数序", "3", "5"],
+    visualType: "number-line",
+    answerKeywords: ["5", "五", "更大", "后面"],
+  },
+  {
+    id: "g1a-ordinal",
+    grade: "一年级上册",
+    unit: "1-5 的认识和加减法",
+    lesson: "几和第几",
+    node: "区分数量几和顺序第几",
+    problem: "一排有 5 个小朋友，从左数第 3 个是什么意思？",
+    microSteps: ["先确定从哪边开始", "按顺序数到第 3 个", "区分一共有几个和第几个"],
+    commonGaps: ["把第 3 个理解成 3 个", "忘记从哪边开始数", "左右方向改变后答案不变"],
+    keywords: ["几和第几", "第几", "第3", "顺序", "从左数", "从右数"],
+    visualType: "position",
+    answerKeywords: ["第三个", "第3个", "一个人", "不是三个"],
+  },
+  {
+    id: "g1a-decompose-5",
+    grade: "一年级上册",
+    unit: "1-5 的认识和加减法",
+    lesson: "分与合",
+    node: "5 以内数的组成",
+    problem: "5 可以分成 2 和几？",
+    microSteps: ["先摆出 5 个圆片", "拿走 2 个", "数剩下几个"],
+    commonGaps: ["只背分合不理解数量", "漏掉互换关系", "分成后总数变了"],
+    keywords: ["分与合", "组成", "分成", "5可以分成", "合起来"],
+    visualType: "ten-frame",
+    answerKeywords: ["3", "三", "2和3"],
+  },
+  {
+    id: "g1a-add-within-5",
+    grade: "一年级上册",
+    unit: "1-5 的认识和加减法",
+    lesson: "5 以内加法",
+    node: "用合起来理解加法",
+    problem: "2 个红圆片和 3 个蓝圆片合起来是几个？",
+    microSteps: ["看清两部分", "把两部分合起来", "用加法式子表示"],
+    commonGaps: ["不知道加法表示合起来", "漏数其中一部分", "只写答案不说过程"],
+    keywords: ["5以内加法", "加法", "合起来", "一共", "2+3"],
+    visualType: "ten-frame",
+    answerKeywords: ["5", "五", "2+3", "合起来"],
+  },
+  {
+    id: "g1a-subtract-within-5",
+    grade: "一年级上册",
+    unit: "1-5 的认识和加减法",
+    lesson: "5 以内减法",
+    node: "用拿走理解减法",
+    problem: "5 个圆片拿走 2 个，还剩几个？",
+    microSteps: ["先摆出 5 个", "拿走 2 个", "数剩下几个"],
+    commonGaps: ["把减法看成合起来", "拿走后还数原来的总数", "不会用剩下说减法"],
+    keywords: ["5以内减法", "减法", "拿走", "还剩", "5-2"],
+    visualType: "ten-frame",
+    answerKeywords: ["3", "三", "5-2", "还剩"],
+  },
+  {
+    id: "g1a-zero",
+    grade: "一年级上册",
+    unit: "1-5 的认识和加减法",
+    lesson: "0 的认识",
+    node: "0 表示没有和有关计算",
+    problem: "盘子里有 3 个桃，吃掉 3 个，还剩几个？",
+    microSteps: ["先看原来有几个", "再看拿走几个", "没有剩下就是 0"],
+    commonGaps: ["不知道 0 可以做答案", "把 0 当成空白", "3-3 误算成 3"],
+    keywords: ["0", "零", "没有", "一个也没有", "3-3"],
+    visualType: "ten-frame",
+    answerKeywords: ["0", "零", "没有"],
+  },
+  {
+    id: "g1a-solid-shapes",
+    grade: "一年级上册",
+    unit: "认识图形（一）",
+    lesson: "立体图形",
+    node: "认识长方体、正方体、圆柱和球",
+    problem: "足球更像球，铅笔盒更像什么图形？",
+    microSteps: ["先看物体外形", "和学过的立体图形比较", "说出像哪一种"],
+    commonGaps: ["把平面图形和立体图形混淆", "只看颜色不看形状", "不会举生活例子"],
+    keywords: ["长方体", "正方体", "圆柱", "球", "立体图形", "图形一"],
+    visualType: "shape",
+    answerKeywords: ["长方体", "铅笔盒"],
+  },
+  {
+    id: "g1a-numbers-6-10",
+    grade: "一年级上册",
+    unit: "6-10 的认识和加减法",
+    lesson: "6-10 的认识",
+    node: "6-10 的数数、顺序和大小",
+    problem: "8 和 10 比，哪个更大？",
+    microSteps: ["按顺序数到 10", "在数线上找 8 和 10", "越往后数越大"],
+    commonGaps: ["8、9、10 顺序不稳", "不会从任意数接着数", "比较大小靠猜"],
+    keywords: ["6-10", "六到十", "数序", "比大小", "8", "10"],
+    visualType: "number-line",
+    answerKeywords: ["10", "十", "更大", "后面"],
+  },
+  {
+    id: "g1a-add-subtract-10",
+    grade: "一年级上册",
+    unit: "6-10 的认识和加减法",
+    lesson: "10 以内加减法",
+    node: "10 以内加法和减法",
+    problem: "7 + 2 等于几？可以怎样想？",
+    microSteps: ["先找到 7", "往后数 2 个", "停在哪个数就是答案"],
+    commonGaps: ["数手指时多一或少一", "加减号看错", "不会说出用数数或分合来想"],
+    keywords: ["10以内", "加减法", "7+2", "往后数", "分合"],
+    visualType: "number-line",
+    answerKeywords: ["9", "九", "往后数"],
+  },
+  {
+    id: "g1a-continuous-add-subtract",
+    grade: "一年级上册",
+    unit: "6-10 的认识和加减法",
+    lesson: "连加连减和加减混合",
+    node: "按顺序计算连加连减",
+    problem: "3 + 2 + 4 应该先算哪一步？",
+    microSteps: ["从左到右看算式", "先算 3+2", "把结果再和 4 相加"],
+    commonGaps: ["跳着算后面的数", "忘记中间结果", "看到三个数就乱加或乱减"],
+    keywords: ["连加", "连减", "加减混合", "从左到右", "3+2+4"],
+    visualType: "arithmetic",
+    answerKeywords: ["先算3+2", "先算三加二", "5", "再加4"],
+  },
+  {
+    id: "g1a-numbers-11-20",
+    grade: "一年级上册",
+    unit: "11-20 各数的认识",
+    lesson: "11-20 的认识",
+    node: "十和几个一组成十几",
+    problem: "15 里面有几个十和几个一？",
+    microSteps: ["先看十位上的 1", "再看个位上的 5", "说成 1 个十和 5 个一"],
+    commonGaps: ["把 15 读写成 51", "不知道十位和个位", "不会用十和一解释"],
+    keywords: ["11-20", "十几", "十位", "个位", "1个十", "几个一"],
+    visualType: "place-value",
+    answerKeywords: ["1个十", "一个十", "5个一", "五个一"],
+  },
+  {
+    id: "g1a-teen-add-subtract",
+    grade: "一年级上册",
+    unit: "11-20 各数的认识",
+    lesson: "十几加几和相应减法",
+    node: "十几加几、十几减几",
+    problem: "13 + 2 等于几？",
+    microSteps: ["13 里面有 1 个十和 3 个一", "只把个位 3 加 2", "十位不变得到 15"],
+    commonGaps: ["十位和个位混加", "不会把十几拆成十和几", "加完个位忘记十"],
+    keywords: ["十几加几", "十几减几", "13+2", "个位", "十位"],
+    visualType: "place-value",
+    answerKeywords: ["15", "十五", "3加2"],
+  },
+  {
+    id: "g1a-clock-hour",
+    grade: "一年级上册",
+    unit: "认识钟表",
+    lesson: "认识整时",
+    node: "看钟面读整时",
+    problem: "分针指着 12，时针指着 7，是几时？",
+    microSteps: ["先看分针是不是指 12", "再看时针指向几", "说成几时"],
+    commonGaps: ["先看错时针和分针", "分针指 12 仍读成 12 时", "不会用生活时间说"],
+    keywords: ["认识钟表", "整时", "几时", "分针", "时针", "钟表"],
+    visualType: "clock",
+    answerKeywords: ["7时", "七时", "7点", "七点"],
+  },
+  {
+    id: "g1a-carry-add-20",
+    grade: "一年级上册",
+    unit: "20 以内的进位加法",
+    lesson: "进位加法",
+    node: "凑十法计算 20 以内进位加法",
+    problem: "9 + 4 怎样算更快？",
+    microSteps: ["先把 9 凑成 10", "从 4 里拿出 1", "10 再加剩下的 3"],
+    commonGaps: ["不会拆第二个数", "忘记凑十后还剩几个", "只背答案不理解进位"],
+    keywords: ["20以内进位加法", "进位加法", "凑十", "9加几", "9+4"],
+    visualType: "ten-frame",
+    answerKeywords: ["13", "十三", "凑十", "10加3"],
+  },
+  {
+    id: "g1b-plane-shapes",
+    grade: "一年级下册",
+    unit: "认识图形（二）",
+    lesson: "平面图形",
+    node: "认识长方形、正方形、三角形、圆和平行四边形",
+    problem: "硬币的面更像什么图形？",
+    microSteps: ["看物体的一个面", "和学过的平面图形比较", "说出图形名称"],
+    commonGaps: ["把立体物体和一个面混在一起", "正方形和长方形混淆", "只看大小不看形状"],
+    keywords: ["认识图形二", "平面图形", "长方形", "正方形", "三角形", "圆"],
+    visualType: "shape",
+    answerKeywords: ["圆", "圆形"],
+  },
+  {
+    id: "g1b-plane-shape-compose",
+    grade: "一年级下册",
+    unit: "认识图形（二）",
+    lesson: "图形拼组",
+    node: "用平面图形拼组新图形",
+    problem: "两个一样的三角形可以拼成什么图形？",
+    microSteps: ["先看两个三角形是否一样", "试着把边贴在一起", "观察拼出的新图形"],
+    commonGaps: ["只认单个图形不会组合", "拼组后不会说新图形", "图形旋转后认不出来"],
+    keywords: ["拼组", "拼图形", "两个三角形", "平面图形"],
+    visualType: "shape",
+    answerKeywords: ["正方形", "长方形", "平行四边形", "三角形"],
+  },
+  {
+    id: "g1b-borrow-subtract-20",
+    grade: "一年级下册",
+    unit: "20 以内的退位减法",
+    lesson: "十几减 9",
+    node: "破十法计算十几减 9",
+    problem: "13 - 9 怎样算？",
+    microSteps: ["把 13 看成 10 和 3", "先算 10-9", "再把 1 和 3 合起来"],
+    commonGaps: ["不知道为什么要破十", "10-9 后忘记加个位", "把 13-9 误算成 9-3"],
+    keywords: ["退位减法", "十几减9", "破十", "13-9"],
+    visualType: "ten-frame",
+    answerKeywords: ["4", "四", "破十", "10减9"],
+  },
+  {
+    id: "g1b-subtract-20-general",
+    grade: "一年级下册",
+    unit: "20 以内的退位减法",
+    lesson: "十几减几",
+    node: "十几减 8、7、6、5、4、3、2",
+    problem: "15 - 7 可以怎样想？",
+    microSteps: ["把 15 分成 10 和 5", "先算 10-7", "再加上剩下的 5"],
+    commonGaps: ["退位后漏加个位", "不会选择破十或想加算减", "只背答案不稳定"],
+    keywords: ["十几减几", "15-7", "破十法", "想加算减"],
+    visualType: "ten-frame",
+    answerKeywords: ["8", "八", "10减7", "3加5"],
+  },
+  {
+    id: "g1b-classify",
+    grade: "一年级下册",
+    unit: "分类与整理",
+    lesson: "分类",
+    node: "按一个标准分类",
+    problem: "一堆扣子可以按颜色分，也可以按形状分，先要确定什么？",
+    microSteps: ["先选一个分类标准", "按这个标准分组", "数一数每组有多少"],
+    commonGaps: ["同时按两个标准导致混乱", "分类标准说不清", "分完不会整理数量"],
+    keywords: ["分类", "整理", "标准", "按颜色", "按形状"],
+    visualType: "data",
+    answerKeywords: ["标准", "分类标准", "先确定"],
+  },
+  {
+    id: "g1b-numbers-100",
+    grade: "一年级下册",
+    unit: "100 以内数的认识",
+    lesson: "100 以内数数和读写",
+    node: "100 以内数的组成、读写和数位",
+    problem: "46 里面有几个十和几个一？",
+    microSteps: ["看十位上的 4", "看个位上的 6", "说成 4 个十和 6 个一"],
+    commonGaps: ["读写两位数时颠倒", "不理解十位表示几个十", "整十数个位写漏 0"],
+    keywords: ["100以内数", "读写", "数位", "十位", "个位", "46"],
+    visualType: "place-value",
+    answerKeywords: ["4个十", "四个十", "6个一", "六个一"],
+  },
+  {
+    id: "g1b-compare-100",
+    grade: "一年级下册",
+    unit: "100 以内数的认识",
+    lesson: "100 以内数的大小比较",
+    node: "比较两位数大小",
+    problem: "46 和 64 哪个数更大？",
+    microSteps: ["先比十位", "十位大的数就大", "十位一样再比个位"],
+    commonGaps: ["只看个位数字大小", "不会先比十位", "多一些少一些表达不清"],
+    keywords: ["100以内", "比较大小", "多一些", "少一些", "46", "64"],
+    visualType: "place-value",
+    answerKeywords: ["64", "六十四", "十位"],
+  },
+  {
+    id: "renminbi-conversion",
+    grade: "一年级下册",
+    unit: "认识人民币",
+    lesson: "人民币换算",
+    node: "元角分换算",
+    problem: "3 元 5 角等于多少角？",
+    microSteps: ["记住 1 元=10 角", "把 3 元换成 30 角", "再加 5 角得到 35 角"],
+    commonGaps: ["把 3 元直接当 3 角", "忘记 1 元等于 10 角", "会写答案但讲不清先换再加"],
+    keywords: ["人民币", "元角分", "元和角", "换算", "钱", "买东西"],
+    visualType: "money",
+    answerKeywords: ["35", "三十五", "35角", "1元10角"],
+  },
+  {
+    id: "g1b-simple-shopping",
+    grade: "一年级下册",
+    unit: "认识人民币",
+    lesson: "简单购物",
+    node: "用人民币解决简单购物问题",
+    problem: "一本本子 4 元，付 5 元，应找回多少钱？",
+    microSteps: ["看清商品价格", "看清付了多少钱", "用付的钱减去价格"],
+    commonGaps: ["分不清付出和找回", "把价格和找回相加", "单位元角混用"],
+    keywords: ["购物", "找钱", "付钱", "价格", "人民币"],
+    visualType: "money",
+    answerKeywords: ["1元", "一元", "找回"],
+  },
+  {
+    id: "g1b-add-subtract-tens",
+    grade: "一年级下册",
+    unit: "100 以内的加法和减法（一）",
+    lesson: "整十数加减整十数",
+    node: "几十加减几十",
+    problem: "30 + 40 等于多少？",
+    microSteps: ["把 30 看成 3 个十", "把 40 看成 4 个十", "3 个十加 4 个十是 7 个十"],
+    commonGaps: ["把 30+40 算成 7", "不理解几个十", "漏写个位 0"],
+    keywords: ["整十数", "几十加几十", "30+40", "几个十"],
+    visualType: "place-value",
+    answerKeywords: ["70", "七十", "7个十"],
+  },
+  {
+    id: "g1b-add-100-no-carry",
+    grade: "一年级下册",
+    unit: "100 以内的加法和减法（一）",
+    lesson: "两位数加一位数、整十数",
+    node: "100 以内不进位加法",
+    problem: "34 + 5 等于多少？",
+    microSteps: ["先看个位 4+5", "十位 3 不变", "合成 39"],
+    commonGaps: ["个位和十位乱加", "加一位数时改了十位", "不会用数位解释"],
+    keywords: ["两位数加一位数", "不进位加法", "34+5", "100以内加法"],
+    visualType: "place-value",
+    answerKeywords: ["39", "三十九", "4加5"],
+  },
+  {
+    id: "g1b-subtract-100-no-borrow",
+    grade: "一年级下册",
+    unit: "100 以内的加法和减法（一）",
+    lesson: "两位数减一位数、整十数",
+    node: "100 以内不退位减法",
+    problem: "46 - 3 等于多少？",
+    microSteps: ["先看个位 6-3", "十位 4 不变", "合成 43"],
+    commonGaps: ["从十位减一位数", "个位够减也去退位", "不会说十位为什么不变"],
+    keywords: ["两位数减一位数", "不退位减法", "46-3", "100以内减法"],
+    visualType: "place-value",
+    answerKeywords: ["43", "四十三", "6减3"],
+  },
+  {
+    id: "g1b-pattern",
+    grade: "一年级下册",
+    unit: "找规律",
+    lesson: "图形和数的规律",
+    node: "发现重复规律并接着排",
+    problem: "红、蓝、红、蓝、红，下面应该是什么颜色？",
+    microSteps: ["先找重复的一组", "看已经排到哪里", "按规律接着排"],
+    commonGaps: ["只看最后一个", "找不到重复单位", "规律改变后还按旧规律"],
+    keywords: ["找规律", "规律", "重复", "接着排", "红蓝"],
+    visualType: "pattern",
+    answerKeywords: ["蓝", "蓝色", "红蓝一组"],
+  },
+  {
+    id: "g2a-length-unit",
+    grade: "二年级上册",
+    unit: "长度单位",
+    lesson: "厘米和米",
+    node: "认识厘米、米并选择合适单位",
+    problem: "橡皮大约长 4 厘米，教室大约长 8 什么？",
+    microSteps: ["先想物体有多长", "短的常用厘米", "长的常用米"],
+    commonGaps: ["厘米和米乱用", "不会估计实际长度", "只看数字不看单位"],
+    keywords: ["长度单位", "厘米", "米", "测量", "单位"],
+    visualType: "ruler",
+    answerKeywords: ["米", "8米", "教室长"],
+  },
+  {
+    id: "g2a-line-segment",
+    grade: "二年级上册",
+    unit: "长度单位",
+    lesson: "线段",
+    node: "认识线段并测量长度",
+    problem: "一条线段从 0 厘米到 6 厘米，它长多少厘米？",
+    microSteps: ["看线段从哪里开始", "看线段到哪里结束", "结束刻度减开始刻度"],
+    commonGaps: ["不从 0 开始时直接读终点", "线段和曲线混淆", "测量时尺子没对齐"],
+    keywords: ["线段", "量一量", "厘米", "尺子", "0刻度"],
+    visualType: "ruler",
+    answerKeywords: ["6厘米", "六厘米", "6"],
+  },
+  {
+    id: "g2a-add-100-carry",
+    grade: "二年级上册",
+    unit: "100 以内的加法和减法（二）",
+    lesson: "两位数加两位数",
+    node: "两位数加两位数进位加法",
+    problem: "36 + 28 怎样列竖式？",
+    microSteps: ["相同数位对齐", "先算个位 6+8", "个位满十向十位进 1"],
+    commonGaps: ["数位没有对齐", "个位满十忘记进位", "先算十位导致进位漏掉"],
+    keywords: ["两位数加两位数", "进位加法", "竖式", "36+28", "100以内加法二"],
+    visualType: "place-value",
+    answerKeywords: ["64", "六十四", "进1", "进位"],
+  },
+  {
+    id: "g2a-subtract-100-borrow",
+    grade: "二年级上册",
+    unit: "100 以内的加法和减法（二）",
+    lesson: "两位数减两位数",
+    node: "两位数减两位数退位减法",
+    problem: "52 - 27 怎样列竖式？",
+    microSteps: ["相同数位对齐", "个位 2 不够减 7", "从十位退 1 作 10"],
+    commonGaps: ["退位后十位忘记少 1", "个位不够减还硬减", "数位没有对齐"],
+    keywords: ["两位数减两位数", "退位减法", "竖式", "52-27", "100以内减法二"],
+    visualType: "place-value",
+    answerKeywords: ["25", "二十五", "退位"],
+  },
+  {
+    id: "g2a-add-subtract-mixed",
+    grade: "二年级上册",
+    unit: "100 以内的加法和减法（二）",
+    lesson: "连加、连减和加减混合",
+    node: "100 以内连加连减和加减混合",
+    problem: "23 + 18 - 9 应该怎样算？",
+    microSteps: ["从左往右算", "先算 23+18", "再用结果减 9"],
+    commonGaps: ["跳过中间结果", "加减顺序混乱", "竖式转写时抄错数"],
+    keywords: ["连加", "连减", "加减混合", "23+18-9", "从左往右"],
+    visualType: "arithmetic",
+    answerKeywords: ["32", "三十二", "先算23+18"],
+  },
+  {
+    id: "g2a-angle",
+    grade: "二年级上册",
+    unit: "角的初步认识",
+    lesson: "认识角",
+    node: "认识角、直角、锐角和钝角",
+    problem: "三角尺上的最大角通常是什么角？",
+    microSteps: ["先找角的顶点", "再看两条边", "用三角尺比一比是不是直角"],
+    commonGaps: ["把边长和角大小混淆", "只看开口方向", "不会用直角作标准比较"],
+    keywords: ["角", "直角", "锐角", "钝角", "顶点", "边"],
+    visualType: "angle",
+    answerKeywords: ["直角", "最大角"],
+  },
+  {
+    id: "g2a-multiply-meaning",
+    grade: "二年级上册",
+    unit: "表内乘法（一）",
+    lesson: "乘法的初步认识",
+    node: "几个相同加数可以用乘法表示",
+    problem: "3 盘苹果，每盘 4 个，一共有几个？",
+    microSteps: ["看每组是不是同样多", "数有几组", "用几乘几表示"],
+    commonGaps: ["把不同加数也写乘法", "几组和每组几个说反", "只背口诀不懂意义"],
+    keywords: ["乘法", "几个几", "相同加数", "3盘", "每盘4个"],
+    visualType: "array",
+    answerKeywords: ["12", "十二", "3个4", "3乘4", "4乘3"],
+  },
+  {
+    id: "g2a-multiply-2-6",
+    grade: "二年级上册",
+    unit: "表内乘法（一）",
+    lesson: "2-6 的乘法口诀",
+    node: "用 2-6 的乘法口诀求积",
+    problem: "6 × 4 可以用哪句口诀？",
+    microSteps: ["看乘法算式里的两个数", "找到对应口诀", "说出积是多少"],
+    commonGaps: ["口诀背串", "乘号两边数字看漏", "会背口诀但不会用到题里"],
+    keywords: ["2-6乘法口诀", "乘法口诀", "6×4", "四六"],
+    visualType: "array",
+    answerKeywords: ["四六二十四", "24", "二十四"],
+  },
+  {
+    id: "g2a-observe-object",
+    grade: "二年级上册",
+    unit: "观察物体（一）",
+    lesson: "从不同位置观察物体",
+    node: "判断前后左右看到的形状",
+    problem: "同一个杯子，从正面和侧面看到的样子一定一样吗？",
+    microSteps: ["先确定观察位置", "想象眼睛看到哪一面", "比较不同位置的样子"],
+    commonGaps: ["以为同一物体看到的都一样", "分不清正面侧面后面", "不会把看到的图和位置对应"],
+    keywords: ["观察物体", "正面", "侧面", "后面", "不同位置"],
+    visualType: "position",
+    answerKeywords: ["不一定", "不一样", "位置不同"],
+  },
+  {
+    id: "g2a-multiply-7-9",
+    grade: "二年级上册",
+    unit: "表内乘法（二）",
+    lesson: "7-9 的乘法口诀",
+    node: "用 7-9 的乘法口诀求积",
+    problem: "8 × 7 可以用哪句口诀？",
+    microSteps: ["看两个因数 8 和 7", "找到七八口诀", "说出结果 56"],
+    commonGaps: ["7、8、9 口诀容易背混", "只会顺背不会取用", "不会用互换关系"],
+    keywords: ["7-9乘法口诀", "七八", "8×7", "表内乘法二"],
+    visualType: "array",
+    answerKeywords: ["七八五十六", "56", "五十六"],
+  },
+  {
+    id: "g2a-read-time-minute",
+    grade: "二年级上册",
+    unit: "认识时间",
+    lesson: "认识几时几分",
+    node: "看钟面读几时几分",
+    problem: "时针过了 3，分针指着 6，是几时几分？",
+    microSteps: ["先看时针过了几", "再看分针指向几小格", "合起来读几时几分"],
+    commonGaps: ["分针指 6 读成 6 分", "时针接近下一个数就读错", "不知道 1 大格是 5 分"],
+    keywords: ["认识时间", "几时几分", "分针", "时针", "5分5分数"],
+    visualType: "clock",
+    answerKeywords: ["3:30", "三点半", "三时三十分", "3时30分"],
+  },
+  {
+    id: "g2a-combination",
+    grade: "二年级上册",
+    unit: "数学广角",
+    lesson: "搭配（一）",
+    node: "简单排列和搭配",
+    problem: "红、黄两件上衣和黑、蓝两条裤子，可以搭配几套？",
+    microSteps: ["先选一件上衣", "分别搭配每条裤子", "再换另一件上衣"],
+    commonGaps: ["漏搭配", "重复数同一套", "没有按顺序列举"],
+    keywords: ["搭配", "排列", "组合", "数学广角", "几套"],
+    visualType: "logic",
+    answerKeywords: ["4", "四", "4套"],
+  },
+  {
+    id: "g2b-data-collection",
+    grade: "二年级下册",
+    unit: "数据收集整理",
+    lesson: "调查和统计表",
+    node: "收集数据并用统计表整理",
+    problem: "调查同学喜欢的水果，第一步应该做什么？",
+    microSteps: ["先确定调查问题", "逐个记录数据", "整理成表再比较"],
+    commonGaps: ["没确定问题就统计", "记录时漏人或重复", "看表时只看第一行"],
+    keywords: ["数据收集", "统计表", "调查", "整理数据"],
+    visualType: "data",
+    answerKeywords: ["确定问题", "调查问题", "记录"],
+  },
+  {
+    id: "g2b-average-share",
+    grade: "二年级下册",
+    unit: "表内除法（一）",
+    lesson: "平均分",
+    node: "理解平均分",
+    problem: "12 个苹果平均分给 3 个小朋友，每人几个？",
+    microSteps: ["看总数 12", "看平均分成 3 份", "每份同样多"],
+    commonGaps: ["每份不一样也当平均分", "总数和份数混淆", "不会用摆一摆理解"],
+    keywords: ["平均分", "每份同样多", "12个", "3个小朋友"],
+    visualType: "sharing",
+    answerKeywords: ["4", "四", "每人4个"],
+  },
+  {
+    id: "g2b-division-meaning",
+    grade: "二年级下册",
+    unit: "表内除法（一）",
+    lesson: "除法的初步认识",
+    node: "用除法表示平均分",
+    problem: "12 个苹果平均分给 3 人，可以写成什么除法算式？",
+    microSteps: ["总数写在除号前", "平均分成几份写在除号后", "结果表示每份几个"],
+    commonGaps: ["除号前后写反", "不知道商表示什么", "把平均分和随便分混淆"],
+    keywords: ["除法", "除号", "12÷3", "平均分"],
+    visualType: "sharing",
+    answerKeywords: ["12÷3=4", "12除以3等于4", "4"],
+  },
+  {
+    id: "g2b-division-2-6",
+    grade: "二年级下册",
+    unit: "表内除法（一）",
+    lesson: "用 2-6 乘法口诀求商",
+    node: "用乘法口诀求除法的商",
+    problem: "18 ÷ 3 可以想哪句口诀？",
+    microSteps: ["看除数 3", "想三几十八", "找到几就是商"],
+    commonGaps: ["不知道用哪句口诀", "把商和除数说反", "只背乘法不迁移到除法"],
+    keywords: ["用口诀求商", "18÷3", "三几十八", "表内除法"],
+    visualType: "sharing",
+    answerKeywords: ["三六十八", "6", "六"],
+  },
+  {
+    id: "g2b-shape-motion",
+    grade: "二年级下册",
+    unit: "图形的运动（一）",
+    lesson: "轴对称、平移和旋转",
+    node: "辨认轴对称、平移、旋转现象",
+    problem: "电梯上下移动，是平移还是旋转？",
+    microSteps: ["看图形有没有转圈", "位置变了但方向不变是平移", "绕一点转动是旋转"],
+    commonGaps: ["把移动都叫旋转", "轴对称和平移混淆", "只看距离不看方向"],
+    keywords: ["图形运动", "轴对称", "平移", "旋转", "电梯"],
+    visualType: "motion",
+    answerKeywords: ["平移", "方向不变"],
+  },
+  {
+    id: "g2b-division-7-9",
+    grade: "二年级下册",
+    unit: "表内除法（二）",
+    lesson: "用 7-9 的乘法口诀求商",
+    node: "用 7-9 口诀求除法的商",
+    problem: "56 ÷ 8 可以想哪句口诀？",
+    microSteps: ["看除数 8", "想八几五十六", "找到 7 就是商"],
+    commonGaps: ["7、8、9 口诀不熟", "除数和商位置混淆", "不会从乘法反推除法"],
+    keywords: ["表内除法二", "56÷8", "八几五十六", "口诀求商"],
+    visualType: "sharing",
+    answerKeywords: ["七八五十六", "7", "七"],
+  },
+  {
+    id: "g2b-mixed-operations",
+    grade: "二年级下册",
+    unit: "混合运算",
+    lesson: "没有括号和有括号的混合运算",
+    node: "按运算顺序计算混合算式",
+    problem: "18 + 12 ÷ 3 应该先算什么？",
+    microSteps: ["先看有没有括号", "没有括号先算乘除", "再算加减"],
+    commonGaps: ["完全从左到右算", "看到加号就先加", "有括号时忘记先算括号"],
+    keywords: ["混合运算", "运算顺序", "先乘除后加减", "括号"],
+    visualType: "arithmetic",
+    answerKeywords: ["先算12÷3", "先算除法", "乘除"],
+  },
+  {
+    id: "g2b-remainder-division",
+    grade: "二年级下册",
+    unit: "有余数的除法",
+    lesson: "有余数除法",
+    node: "理解余数和余数小于除数",
+    problem: "14 个苹果，每 4 个装一盘，可以装几盘，还剩几个？",
+    microSteps: ["先按每 4 个分一组", "看能分成几组", "剩下不够一组的就是余数"],
+    commonGaps: ["余数比除数还大", "把剩下的也算成一组", "不会把商和余数放回情境"],
+    keywords: ["有余数", "余数", "14÷4", "还剩", "每4个"],
+    visualType: "sharing",
+    answerKeywords: ["3盘", "三盘", "剩2个", "余2"],
+  },
+  {
+    id: "g2b-numbers-10000",
+    grade: "二年级下册",
+    unit: "万以内数的认识",
+    lesson: "千以内、万以内数",
+    node: "万以内数的读写和数位",
+    problem: "3050 应该怎样读？",
+    microSteps: ["从高位读起", "中间有 0 要按规则读", "末尾的 0 不读"],
+    commonGaps: ["中间 0 读漏或多读", "数位顺序不清", "写数时漏占位 0"],
+    keywords: ["万以内数", "读数", "写数", "数位", "3050"],
+    visualType: "place-value",
+    answerKeywords: ["三千零五十", "零五十"],
+  },
+  {
+    id: "g2b-compare-10000",
+    grade: "二年级下册",
+    unit: "万以内数的认识",
+    lesson: "万以内数的大小比较和近似数",
+    node: "比较万以内数并估计近似数",
+    problem: "3280 和 3820 哪个数更大？",
+    microSteps: ["先比千位", "千位相同再比百位", "百位大的数更大"],
+    commonGaps: ["只看个位或十位", "位数相同不会从高位比", "近似数和准确数混淆"],
+    keywords: ["万以内比较", "近似数", "3280", "3820", "高位"],
+    visualType: "place-value",
+    answerKeywords: ["3820", "百位", "8大于2"],
+  },
+  {
+    id: "g2b-gram-kilogram",
+    grade: "二年级下册",
+    unit: "克和千克",
+    lesson: "质量单位",
+    node: "认识克、千克并估计质量",
+    problem: "一个西瓜大约重 3 什么？",
+    microSteps: ["先想物体轻还是重", "轻小物体常用克", "较重物体常用千克"],
+    commonGaps: ["克和千克乱用", "只看数字不看物体", "不会联系生活估计"],
+    keywords: ["克", "千克", "质量单位", "重量", "估计"],
+    visualType: "mass",
+    answerKeywords: ["千克", "3千克"],
+  },
+  {
+    id: "g2b-reasoning",
+    grade: "二年级下册",
+    unit: "数学广角",
+    lesson: "推理",
+    node: "用排除法做简单推理",
+    problem: "小明不是第一名，小红也不是第一名，三个人里谁可能是第一名？",
+    microSteps: ["先记录已知条件", "把不可能的划掉", "看剩下谁可能"],
+    commonGaps: ["不记录条件只靠猜", "没有排除不可能项", "把可能和一定混淆"],
+    keywords: ["推理", "排除法", "可能", "一定", "数学广角"],
+    visualType: "logic",
+    answerKeywords: ["剩下的人", "排除", "可能"],
+  },
+];
+
+const lessons = buildLessonCatalog();
+
+function buildLessonCatalog() {
+  const customById = new Map(customLessons.map((lesson) => [lesson.id, lesson]));
+  const generated = curriculumBlueprints.map((spec) => {
+    const custom = customById.get(spec.id);
+    return custom ? { ...custom, curriculumKeywords: spec.keywords } : createCurriculumLesson(spec);
+  });
+  const generatedIds = new Set(generated.map((lesson) => lesson.id));
+  return generated.concat(customLessons.filter((lesson) => !generatedIds.has(lesson.id)));
+}
+
+function createCurriculumLesson(spec) {
+  const strategies = createStrategiesForSpec(spec);
+  return {
+    id: spec.id,
+    subject: "数学",
+    edition: "人教版",
+    grade: spec.grade,
+    unit: spec.unit,
+    lesson: spec.lesson,
+    node: spec.node,
+    problem: spec.problem,
+    initialContext: `${spec.node} 的学习从一个小问题开始。`,
+    initialMessage: `我们先学「${spec.node}」。先看这题：${spec.problem}`,
+    initialStep: `小台阶 1：${spec.microSteps[0]}`,
+    stepHint: spec.microSteps[0],
+    teachbackPrompt: `这次换你当小老师，讲给我听：${spec.node} 这题应该先想什么？`,
+    repairPrompt: `没关系，我们换个更小的说法。先看图，再说：${spec.microSteps[0]}。`,
+    doneMessage: "你讲清楚了。你不是只说答案，还说出了怎么想。",
+    prerequisites: createPrerequisites(spec),
+    microSteps: spec.microSteps,
+    commonGaps: spec.commonGaps,
+    strategies,
+    answer: createAnswerRules(spec),
+    visualType: spec.visualType || "generic",
+    visualLabel: "程序辅助理解",
+    visualTitle: createVisualTitle(spec),
+    visualCardTitle: "AI 生活图",
+    visualCardHint: `需要时可以画一个“${spec.lesson}”的生活例子。`,
+    imagePrompt: createImagePrompt(spec),
+    generatedCaption: "这张图用于生活类比；精确数量关系以上面的程序图为准。",
+    summary: `${spec.node}：${spec.microSteps.join("，")}。`,
+    explainSummary: `孩子能用自己的话说出「${spec.node}」的关键步骤。`,
+    nextSuggestion: `下次换一道「${spec.node}」的题，让孩子继续先做再讲一遍。`,
+    simulated: createSimulatedAnswers(spec),
+    curriculumKeywords: spec.keywords,
+  };
+}
+
+function createStrategiesForSpec(spec) {
+  return [
+    {
+      key: "step",
+      label: "拆步骤",
+      childLabel: "小台阶讲法",
+      message: `我们只做一步：${spec.microSteps[0]}。`,
+      guidance: spec.microSteps[1] || spec.microSteps[0],
+    },
+    {
+      key: "visual",
+      label: "画图",
+      childLabel: "看图讲法",
+      message: `看图说一说：${spec.microSteps.slice(0, 2).join("，")}。`,
+      guidance: spec.microSteps[2] || spec.microSteps[1] || spec.microSteps[0],
+    },
+    {
+      key: "story",
+      label: "生活类比",
+      childLabel: "生活讲法",
+      message: `把它想成生活里的小问题：${spec.problem}`,
+      guidance: "先说你看到了什么，再说你怎么一步一步想。",
+    },
+    {
+      key: "example",
+      label: "换例子",
+      childLabel: "换个例子",
+      message: `我们换一道同类小题，还是用这三个台阶：${spec.microSteps.join("，")}。`,
+      guidance: "你先讲第一步就可以。",
+    },
+  ];
+}
+
+function createPrerequisites(spec) {
+  if (spec.prerequisites?.length) return spec.prerequisites;
+  const gradeStart = spec.grade.includes("一年级") ? "会听懂题目里的数量关系" : "一年级相关数感和计算基础";
+  return [gradeStart, "能按顺序观察题目条件", "愿意用一句话说出自己的想法"];
+}
+
+function createAnswerRules(spec) {
+  const base = spec.answerKeywords || [];
+  return {
+    attemptKeywords: uniqueKeywords(base.concat(spec.microSteps, spec.keywords || [])),
+    answerKeywords: uniqueKeywords(base),
+    conceptKeywords: uniqueKeywords([spec.node, spec.lesson, spec.unit].concat(spec.keywords || [])),
+    whyKeywords: uniqueKeywords(spec.microSteps.concat(["因为", "所以", "先", "再", "最后"])),
+    ownWordsKeywords: uniqueKeywords(["我想", "先", "再", "图上", "生活里", "可以"].concat(spec.keywords || [])),
+    resultKeywords: uniqueKeywords(base.concat(spec.microSteps.slice(-1))),
+  };
+}
+
+function createVisualTitle(spec) {
+  if (spec.visualType === "number-line") return "在数线上一步一步看";
+  if (spec.visualType === "ten-frame") return "用十格图看数量变化";
+  if (spec.visualType === "place-value") return "按数位拆开看";
+  if (spec.visualType === "array") return "用几行几列看几个几";
+  if (spec.visualType === "sharing") return "平均分给每一份";
+  if (spec.visualType === "money") return "先把元换成角，再相加";
+  if (spec.visualType === "clock") return "先看时针，再看分针";
+  return "把题目拆成三个小台阶";
+}
+
+function createImagePrompt(spec) {
+  return [
+    "为小学低年级孩子生成一张帮助理解数学知识点的生活情景图。",
+    `教材范围：人教版${spec.grade}${spec.unit}。`,
+    `知识点：${spec.node}。`,
+    `当前题目：${spec.problem}。`,
+    "要求：儿童教育插图风格，主体清楚，画面干净，不要复杂小字，不要真实品牌，不要直接复刻教材插图。",
+  ];
+}
+
+function createSimulatedAnswers(spec) {
+  const answer = spec.answerKeywords?.[0] || spec.microSteps[spec.microSteps.length - 1] || "我知道了";
+  return {
+    guiding: `${spec.microSteps.join("，")}，所以答案是${answer}。`,
+    teachback: `我先看题目，再一步一步想：${spec.microSteps.join("，")}。`,
+    repair: `我可以看图说，先${spec.microSteps[0]}，再${spec.microSteps[1] || spec.microSteps[0]}。`,
+  };
+}
+
+function uniqueKeywords(items) {
+  return Array.from(new Set(items.filter(Boolean).map((item) => String(item))));
+}
+
+function createInitialEvidence(lesson) {
+  return {
+    type: "attempt",
+    text: `孩子正在学习「${lesson.node}」。`,
+    signal: "开始学习",
+    strategy: "拆步骤",
+  };
+}
+
 let state = {
   view: "child",
   lessonIndex: 0,
@@ -353,14 +1202,7 @@ let state = {
     url: "",
     message: "",
   },
-  evidence: [
-    {
-      type: "attempt",
-      text: "孩子正在学习“分母不同先变成能比较的样子”。",
-      signal: "开始学习",
-      strategy: "拆步骤",
-    },
-  ],
+  evidence: [createInitialEvidence(lessons[0])],
 };
 
 let recordingSession = null;
@@ -576,7 +1418,286 @@ function renderLessonSvg(lesson) {
   if (lesson.visualType === "money") return renderMoneySvg(lesson);
   if (lesson.visualType === "perimeter") return renderPerimeterSvg(lesson);
   if (lesson.visualType === "time") return renderTimeSvg(lesson);
+  if (lesson.visualType === "clock") return renderClockSvg(lesson);
+  if (lesson.visualType === "ten-frame") return renderTenFrameSvg(lesson);
+  if (lesson.visualType === "number-line") return renderNumberLineSvg(lesson);
+  if (lesson.visualType === "place-value") return renderPlaceValueSvg(lesson);
+  if (lesson.visualType === "shape") return renderShapeSvg(lesson);
+  if (lesson.visualType === "ruler") return renderRulerSvg(lesson);
+  if (lesson.visualType === "angle") return renderAngleSvg(lesson);
+  if (lesson.visualType === "array") return renderArraySvg(lesson);
+  if (lesson.visualType === "sharing") return renderSharingSvg(lesson);
+  if (lesson.visualType === "data") return renderDataSvg(lesson);
+  if (lesson.visualType === "pattern") return renderPatternSvg(lesson);
+  if (lesson.visualType === "motion") return renderMotionSvg(lesson);
+  if (lesson.visualType === "mass") return renderMassSvg(lesson);
+  if (lesson.visualType === "logic") return renderLogicSvg(lesson);
+  if (lesson.visualType === "count" || lesson.visualType === "compare" || lesson.visualType === "position") {
+    return renderPrimaryThinkingSvg(lesson);
+  }
+  if (lesson.visualType !== "fraction") return renderGenericStepSvg(lesson);
   return renderFractionSvg(lesson);
+}
+
+function renderPrimaryThinkingSvg(lesson) {
+  const labels = lesson.visualType === "compare" ? ["一一配对", "看谁剩下", "说多和少"] : lesson.microSteps;
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <g transform="translate(48 62)">
+        ${[0, 1, 2, 3, 4, 5].map((item) => `<circle cx="${item * 46}" cy="22" r="15" fill="#65d6ad" stroke="#244056" stroke-width="3"/>`).join("")}
+        ${[0, 1, 2, 3, 4].map((item) => `<rect x="${item * 46 - 15}" y="78" width="30" height="30" rx="8" fill="#4da3ff" stroke="#244056" stroke-width="3"/>`).join("")}
+        <path d="M0 52h214" stroke="#ffb72b" stroke-width="5" stroke-linecap="round" stroke-dasharray="10 10"/>
+      </g>
+      <text x="58" y="184" class="svg-win">${escapeText((labels || []).slice(0, 3).join(" -> "))}</text>
+    </svg>
+  `;
+}
+
+function renderGenericStepSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      ${stepBlock(42, 68, "1", lesson.microSteps[0], "#65d6ad")}
+      <path d="M168 100h42" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
+      <path d="m202 90 14 10-14 10" fill="none" stroke="#244056" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      ${stepBlock(226, 68, "2", lesson.microSteps[1] || "再看关系", "#4da3ff")}
+      <path d="M352 100h42" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
+      <path d="m386 90 14 10-14 10" fill="none" stroke="#244056" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      ${stepBlock(410, 68, "3", lesson.microSteps[2] || "说出原因", "#ffd36a")}
+      <text x="42" y="190" class="svg-win">${escapeText(lesson.node)}</text>
+    </svg>
+  `;
+}
+
+function stepBlock(x, y, number, label, color) {
+  return `
+    <rect x="${x}" y="${y}" width="126" height="72" rx="14" fill="${color}" stroke="#244056" stroke-width="3"/>
+    <text x="${x + 18}" y="${y + 30}" class="svg-label">${number}</text>
+    <text x="${x + 18}" y="${y + 56}" class="svg-note">${escapeText(shortSvgText(label, 8))}</text>
+  `;
+}
+
+function renderTenFrameSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <g transform="translate(70 62)">
+        ${Array.from({ length: 10 }, (_, index) => {
+          const x = (index % 5) * 54;
+          const y = Math.floor(index / 5) * 48;
+          const filled = index < 7;
+          return `<rect x="${x}" y="${y}" width="44" height="38" rx="9" fill="${filled ? "#65d6ad" : "#fff"}" stroke="#244056" stroke-width="3"/>`;
+        }).join("")}
+      </g>
+      <path d="M366 90c34 0 54 18 54 42s-20 42-54 42" fill="none" stroke="#ffb72b" stroke-width="6" stroke-linecap="round"/>
+      <text x="318" y="110" class="svg-note">${escapeText(shortSvgText(lesson.microSteps[0], 12))}</text>
+      <text x="318" y="152" class="svg-win">${escapeText(shortSvgText(lesson.microSteps[1] || lesson.node, 12))}</text>
+    </svg>
+  `;
+}
+
+function renderNumberLineSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <line x1="54" y1="116" x2="462" y2="116" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
+      ${Array.from({ length: 11 }, (_, index) => {
+        const x = 64 + index * 38;
+        return `<line x1="${x}" y1="104" x2="${x}" y2="128" stroke="#244056" stroke-width="3"/><text x="${x - 6}" y="154" class="svg-label">${index}</text>`;
+      }).join("")}
+      <path d="M180 86c38-36 86-36 126 0" fill="none" stroke="#ffb72b" stroke-width="6" stroke-linecap="round"/>
+      <path d="m292 78 18 10-20 8" fill="none" stroke="#ffb72b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="90" y="190" class="svg-win">${escapeText(shortSvgText(lesson.microSteps.join("，"), 26))}</text>
+    </svg>
+  `;
+}
+
+function renderPlaceValueSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      ${placeValueColumn(78, "千位", "#d9ecff")}
+      ${placeValueColumn(174, "百位", "#eaf8f1")}
+      ${placeValueColumn(270, "十位", "#fff4d8")}
+      ${placeValueColumn(366, "个位", "#ffe8e3")}
+      <text x="72" y="184" class="svg-win">${escapeText(shortSvgText(lesson.microSteps.join("，"), 28))}</text>
+    </svg>
+  `;
+}
+
+function placeValueColumn(x, label, color) {
+  return `
+    <rect x="${x}" y="64" width="78" height="90" rx="12" fill="${color}" stroke="#244056" stroke-width="3"/>
+    <text x="${x + 16}" y="102" class="svg-label">${label}</text>
+    <circle cx="${x + 39}" cy="130" r="10" fill="#65d6ad" stroke="#244056" stroke-width="2"/>
+  `;
+}
+
+function renderShapeSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <rect x="64" y="72" width="90" height="64" rx="6" fill="#65d6ad" stroke="#244056" stroke-width="4"/>
+      <rect x="190" y="72" width="66" height="66" rx="6" fill="#4da3ff" stroke="#244056" stroke-width="4"/>
+      <circle cx="330" cy="106" r="36" fill="#ffd36a" stroke="#244056" stroke-width="4"/>
+      <path d="M426 68 474 144H378Z" fill="#ff8f78" stroke="#244056" stroke-width="4"/>
+      <text x="78" y="184" class="svg-win">${escapeText(shortSvgText(lesson.node, 26))}</text>
+    </svg>
+  `;
+}
+
+function renderRulerSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <rect x="58" y="82" width="398" height="54" rx="8" fill="#fff4d8" stroke="#244056" stroke-width="4"/>
+      ${Array.from({ length: 11 }, (_, index) => {
+        const x = 78 + index * 36;
+        return `<line x1="${x}" y1="82" x2="${x}" y2="${index % 5 === 0 ? 126 : 112}" stroke="#244056" stroke-width="3"/><text x="${x - 5}" y="154" class="svg-label">${index}</text>`;
+      }).join("")}
+      <text x="94" y="190" class="svg-win">${escapeText(shortSvgText(lesson.microSteps[0], 24))}</text>
+    </svg>
+  `;
+}
+
+function renderAngleSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <path d="M150 150H320M150 150 260 64" fill="none" stroke="#244056" stroke-width="7" stroke-linecap="round"/>
+      <path d="M190 150c0-34 16-58 44-78" fill="none" stroke="#ffb72b" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="150" cy="150" r="8" fill="#ff7d6e"/>
+      <text x="330" y="96" class="svg-note">先找顶点和两条边</text>
+      <text x="126" y="190" class="svg-win">${escapeText(shortSvgText(lesson.node, 22))}</text>
+    </svg>
+  `;
+}
+
+function renderArraySvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <g transform="translate(86 62)">
+        ${Array.from({ length: 4 }, (_, row) =>
+          Array.from({ length: 6 }, (_, col) => `<circle cx="${col * 38}" cy="${row * 32}" r="11" fill="#65d6ad" stroke="#244056" stroke-width="2"/>`).join(""),
+        ).join("")}
+      </g>
+      <text x="330" y="98" class="svg-note">几组同样多</text>
+      <text x="128" y="190" class="svg-win">${escapeText(shortSvgText(lesson.microSteps.join("，"), 24))}</text>
+    </svg>
+  `;
+}
+
+function renderSharingSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      ${sharePlate(84, "#d9ecff")}
+      ${sharePlate(218, "#eaf8f1")}
+      ${sharePlate(352, "#fff4d8")}
+      <text x="118" y="186" class="svg-win">${escapeText(shortSvgText(lesson.microSteps.join("，"), 24))}</text>
+    </svg>
+  `;
+}
+
+function sharePlate(x, color) {
+  return `
+    <ellipse cx="${x}" cy="116" rx="48" ry="30" fill="${color}" stroke="#244056" stroke-width="3"/>
+    <circle cx="${x - 18}" cy="110" r="8" fill="#ff8f78"/>
+    <circle cx="${x + 2}" cy="122" r="8" fill="#65d6ad"/>
+    <circle cx="${x + 22}" cy="110" r="8" fill="#ffd36a"/>
+  `;
+}
+
+function renderDataSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <line x1="88" y1="162" x2="420" y2="162" stroke="#244056" stroke-width="4"/>
+      ${bar(116, 112, 50, "#65d6ad")}
+      ${bar(204, 82, 80, "#4da3ff")}
+      ${bar(292, 132, 30, "#ffd36a")}
+      <text x="94" y="192" class="svg-win">${escapeText(shortSvgText(lesson.microSteps.join("，"), 24))}</text>
+    </svg>
+  `;
+}
+
+function bar(x, y, height, color) {
+  return `<rect x="${x}" y="${y}" width="46" height="${height}" rx="8" fill="${color}" stroke="#244056" stroke-width="3"/>`;
+}
+
+function renderPatternSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      ${Array.from({ length: 7 }, (_, index) => {
+        const color = index % 2 === 0 ? "#ff8f78" : "#4da3ff";
+        return `<circle cx="${82 + index * 56}" cy="108" r="23" fill="${color}" stroke="#244056" stroke-width="3"/>`;
+      }).join("")}
+      <text x="82" y="176" class="svg-win">找重复的一组，再接着排</text>
+    </svg>
+  `;
+}
+
+function renderMotionSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <rect x="74" y="82" width="78" height="54" rx="10" fill="#65d6ad" stroke="#244056" stroke-width="3"/>
+      <path d="M178 110h116" stroke="#244056" stroke-width="5" stroke-linecap="round"/>
+      <path d="m282 96 22 14-22 14" fill="none" stroke="#244056" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="328" y="82" width="78" height="54" rx="10" fill="#65d6ad" stroke="#244056" stroke-width="3"/>
+      <path d="M438 80a38 38 0 1 1-10 42" fill="none" stroke="#ffb72b" stroke-width="6" stroke-linecap="round"/>
+      <text x="82" y="184" class="svg-win">${escapeText(shortSvgText(lesson.node, 22))}</text>
+    </svg>
+  `;
+}
+
+function renderMassSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <line x1="260" y1="66" x2="260" y2="158" stroke="#244056" stroke-width="5"/>
+      <line x1="160" y1="90" x2="360" y2="90" stroke="#244056" stroke-width="5"/>
+      <path d="M126 90 92 150h68Z" fill="#d9ecff" stroke="#244056" stroke-width="3"/>
+      <path d="M394 90 360 150h68Z" fill="#fff4d8" stroke="#244056" stroke-width="3"/>
+      <text x="196" y="188" class="svg-win">轻的用克，重的用千克</text>
+    </svg>
+  `;
+}
+
+function renderLogicSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      ${logicCard(72, "条件")}
+      ${logicCard(216, "排除")}
+      ${logicCard(360, "剩下")}
+      <text x="94" y="184" class="svg-win">${escapeText(shortSvgText(lesson.microSteps.join("，"), 24))}</text>
+    </svg>
+  `;
+}
+
+function logicCard(x, text) {
+  return `<rect x="${x}" y="72" width="94" height="78" rx="14" fill="#eaf8f1" stroke="#244056" stroke-width="3"/><text x="${x + 18}" y="118" class="svg-label">${text}</text>`;
+}
+
+function renderClockSvg(lesson) {
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <circle cx="178" cy="112" r="62" fill="#fff" stroke="#244056" stroke-width="5"/>
+      <text x="170" y="68" class="svg-label">12</text>
+      <text x="226" y="118" class="svg-label">3</text>
+      <text x="174" y="168" class="svg-label">6</text>
+      <text x="120" y="118" class="svg-label">9</text>
+      <line x1="178" y1="112" x2="178" y2="70" stroke="#244056" stroke-width="5" stroke-linecap="round"/>
+      <line x1="178" y1="112" x2="214" y2="112" stroke="#ff8f78" stroke-width="5" stroke-linecap="round"/>
+      <text x="286" y="98" class="svg-note">先看时针</text>
+      <text x="286" y="140" class="svg-win">再看分针</text>
+    </svg>
+  `;
 }
 
 function renderFractionSvg(lesson) {
@@ -1427,8 +2548,12 @@ async function askGatewayTutor(text, inputType) {
           problem: lesson.problem,
           textbook: `${lesson.edition} ${lesson.grade} ${lesson.unit}`,
           node: lesson.node,
+          lessonName: lesson.lesson,
+          prerequisites: lesson.prerequisites,
           microSteps: lesson.microSteps,
           commonGaps: lesson.commonGaps,
+          answerSignals: lesson.answer,
+          teachingStrategies: lesson.strategies.map((strategy) => strategy.label),
         },
       }),
     });
@@ -1647,12 +2772,7 @@ function addEvidence(signal, text, strategy) {
 
 function findRequestedLessonIndex(text) {
   const normalized = normalizeText(text);
-  const explicitTopic = [
-    { id: "fraction-compare", keywords: ["分数", "分数比较", "三分之二", "四分之三"] },
-    { id: "rectangle-perimeter", keywords: ["周长", "长方形", "正方形", "一圈"] },
-    { id: "elapsed-time", keywords: ["时间", "钟表", "经过时间", "几点", "分钟"] },
-    { id: "renminbi-conversion", keywords: ["人民币", "元角分", "元和角", "换算", "钱", "买东西"] },
-  ].find((entry) => entry.keywords.some((keyword) => normalized.includes(normalizeText(keyword))));
+  const explicitTopic = findExplicitTopic(normalized);
 
   const hasGenericSwitchIntent = [
     "换知识点",
@@ -1665,22 +2785,68 @@ function findRequestedLessonIndex(text) {
     "换内容",
     "换课程",
     "换课",
+    "下一个",
+    "下一题",
+    "重新选",
   ].some((keyword) => normalized.includes(normalizeText(keyword)));
 
   const hasTopicSwitchIntent = [
+    "换",
     "换成",
+    "换到",
+    "帮我换",
+    "我想换",
     "想学",
+    "想学习",
     "学一下",
+    "学习",
     "讲一下",
     "讲讲",
+    "教我",
+    "帮我",
+    "知识",
+    "知识点",
   ].some((keyword) => normalized.includes(normalizeText(keyword)));
 
   if (explicitTopic && (hasGenericSwitchIntent || hasTopicSwitchIntent)) {
-    const index = lessons.findIndex((lesson) => lesson.id === explicitTopic.id);
-    return index;
+    return explicitTopic.index;
   }
 
   return hasGenericSwitchIntent ? (state.lessonIndex + 1) % lessons.length : -1;
+}
+
+function findExplicitTopic(normalizedText) {
+  const currentId = currentLesson().id;
+  const candidates = lessons
+    .map((lesson, index) => {
+      const keywords = buildLessonKeywords(lesson);
+      const score = keywords.reduce((total, keyword) => {
+        const normalizedKeyword = normalizeText(keyword);
+        if (!normalizedKeyword || !normalizedText.includes(normalizedKeyword)) return total;
+        return total + Math.min(12, Math.max(2, normalizedKeyword.length));
+      }, 0);
+      return { lesson, index, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const best = candidates[0];
+  if (!best) return null;
+  if (best.lesson.id === currentId && candidates[1]?.score === best.score) return candidates[1];
+  return best;
+}
+
+function buildLessonKeywords(lesson) {
+  return uniqueKeywords([
+    lesson.id,
+    lesson.unit,
+    lesson.lesson,
+    lesson.node,
+    lesson.problem,
+    ...(lesson.curriculumKeywords || []),
+    ...(lesson.prerequisites || []),
+    ...(lesson.commonGaps || []),
+  ]);
 }
 
 function includesAny(normalizedText, keywords) {
@@ -1689,6 +2855,11 @@ function includesAny(normalizedText, keywords) {
 
 function normalizeText(text) {
   return String(text).toLowerCase().replace(/\s/g, "");
+}
+
+function shortSvgText(text, maxLength) {
+  const value = String(text || "");
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
 }
 
 function toastMessage(message) {
