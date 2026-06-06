@@ -13,7 +13,9 @@ const icons = {
 };
 
 const USE_BROWSER_SPEECH_RECOGNITION = false;
+const USE_REALTIME_ASR = true;
 const MAX_RECORDING_MS = 9000;
+const REALTIME_ASR_CHUNK_BYTES = 6400;
 
 const customLessons = [
   {
@@ -1207,6 +1209,7 @@ let state = {
 
 let recordingSession = null;
 let recognitionSession = null;
+let realtimeVoiceSession = null;
 let currentAudio = null;
 
 const app = document.querySelector("#app");
@@ -1360,7 +1363,6 @@ function renderVoiceDock() {
 }
 
 function renderVoiceButtonLabel() {
-  if (state.voiceStatus === "processing") return "正在听";
   if (state.recording) return "松开结束";
   if (state.phase === "teachback") return "讲给老师听";
   return "按住说";
@@ -1375,7 +1377,7 @@ function renderStepHint() {
 }
 
 function renderDockNote() {
-  if (state.voiceStatus === "processing") return "我正在把你说的话变成文字。";
+  if (state.voiceStatus === "processing") return "老师听到了，马上接着讲。";
   if (state.phase === "teachback") return "像小老师一样讲给老师听，说不完整也没关系。";
   if (state.phase === "repair") return "可以看着图说，不用一次讲完整。";
   if (state.phase === "summary") return "这一题已经完成，可以换知识点或去家长页看记录。";
@@ -1385,7 +1387,7 @@ function renderDockNote() {
 function renderKeyboardComposer() {
   return `
     <form class="keyboard-composer" data-form="typed-answer">
-      <input name="answer" value="${escapeAttr(state.transcript)}" placeholder="也可以打字，例如：我想换知识点" />
+      <input name="answer" autocomplete="off" placeholder="也可以打字，例如：我想换知识点" />
       <button class="btn btn-primary" type="submit">发送</button>
     </form>
   `;
@@ -2210,6 +2212,16 @@ async function handleVoiceButton() {
     return;
   }
 
+  if (USE_REALTIME_ASR && canUseRealtimeAsr()) {
+    try {
+      await startRealtimeVoiceInput();
+      return;
+    } catch (error) {
+      console.warn("Realtime speech recognition did not start.", error);
+      toastMessage("实时语音没有接通，改用短录音识别。");
+    }
+  }
+
   if (
     USE_BROWSER_SPEECH_RECOGNITION &&
     window.location.protocol !== "file:" &&
@@ -2236,6 +2248,10 @@ async function handleVoiceButton() {
 }
 
 function stopVoiceInput() {
+  if (realtimeVoiceSession) {
+    stopRealtimeVoiceInput();
+    return;
+  }
   if (recognitionSession) {
     recognitionSession.stop();
     return;
@@ -2251,6 +2267,185 @@ function stopVoiceInput() {
 
 function getSpeechRecognitionCtor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition;
+}
+
+function canUseRealtimeAsr() {
+  return (
+    window.location.protocol !== "file:" &&
+    window.WebSocket &&
+    navigator.mediaDevices?.getUserMedia &&
+    (window.AudioContext || window.webkitAudioContext)
+  );
+}
+
+async function startRealtimeVoiceInput() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1,
+    },
+  });
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  const audioContext = new AudioContext();
+  if (audioContext.state === "suspended") await audioContext.resume();
+
+  const socketProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const socket = new WebSocket(`${socketProtocol}//${window.location.host}/api/realtime/voice`);
+  const source = audioContext.createMediaStreamSource(stream);
+  const processor = audioContext.createScriptProcessor(4096, 1, 1);
+  const mute = audioContext.createGain();
+  mute.gain.value = 0;
+
+  realtimeVoiceSession = {
+    socket,
+    stream,
+    audioContext,
+    source,
+    processor,
+    mute,
+    pendingBytes: new Uint8Array(0),
+    sentBytes: [],
+    finalTranscript: "",
+    stopped: false,
+    finished: false,
+  };
+
+  processor.onaudioprocess = (event) => {
+    if (!realtimeVoiceSession || realtimeVoiceSession.stopped) return;
+    const pcm = downsampleFloatToPcm16(event.inputBuffer.getChannelData(0), audioContext.sampleRate, 16000);
+    if (pcm.byteLength) queueRealtimePcm(pcm);
+  };
+
+  socket.addEventListener("open", () => {
+    socket.send(JSON.stringify({ type: "start" }));
+    flushRealtimePcmQueue();
+  });
+
+  socket.addEventListener("message", (event) => {
+    handleRealtimeVoiceMessage(event.data);
+  });
+
+  socket.addEventListener("error", () => {
+    fallbackRealtimeVoiceToBatch("实时语音连接中断。");
+  });
+
+  socket.addEventListener("close", () => {
+    if (realtimeVoiceSession && !realtimeVoiceSession.finished && !realtimeVoiceSession.finalTranscript) {
+      fallbackRealtimeVoiceToBatch("实时语音连接已关闭。");
+    }
+  });
+
+  source.connect(processor);
+  processor.connect(mute);
+  mute.connect(audioContext.destination);
+  state.recording = true;
+  state.voiceStatus = "recording";
+  render();
+}
+
+function queueRealtimePcm(chunk) {
+  const session = realtimeVoiceSession;
+  if (!session) return;
+  session.pendingBytes = concatUint8Arrays(session.pendingBytes, new Uint8Array(chunk));
+  flushRealtimePcmQueue();
+}
+
+function flushRealtimePcmQueue() {
+  const session = realtimeVoiceSession;
+  if (!session || session.socket.readyState !== WebSocket.OPEN) return;
+  while (session.pendingBytes.byteLength >= REALTIME_ASR_CHUNK_BYTES) {
+    const current = session.pendingBytes.slice(0, REALTIME_ASR_CHUNK_BYTES);
+    session.pendingBytes = session.pendingBytes.slice(REALTIME_ASR_CHUNK_BYTES);
+    sendRealtimePcm(current);
+  }
+}
+
+function sendRealtimePcm(chunk) {
+  const session = realtimeVoiceSession;
+  if (!session || session.socket.readyState !== WebSocket.OPEN) return;
+  session.sentBytes.push(chunk);
+  session.socket.send(JSON.stringify({ type: "audio", audioBase64: bytesToBase64(chunk) }));
+}
+
+function stopRealtimeVoiceInput() {
+  const session = realtimeVoiceSession;
+  if (!session) return;
+  session.stopped = true;
+  state.recording = false;
+  state.voiceStatus = "processing";
+  render();
+
+  const finalChunk = session.pendingBytes.byteLength ? session.pendingBytes : new Uint8Array(0);
+  if (finalChunk.byteLength) session.sentBytes.push(finalChunk);
+  if (session.socket.readyState === WebSocket.OPEN) {
+    session.socket.send(JSON.stringify({ type: "stop", audioBase64: bytesToBase64(finalChunk) }));
+  } else {
+    fallbackRealtimeVoiceToBatch("实时语音还没准备好。");
+  }
+  cleanupRealtimeAudio(false);
+}
+
+function handleRealtimeVoiceMessage(raw) {
+  const session = realtimeVoiceSession;
+  if (!session) return;
+  const payload = JSON.parse(String(raw || "{}"));
+  if (payload.type === "partial") {
+    session.finalTranscript = String(payload.transcript || "").trim() || session.finalTranscript;
+    return;
+  }
+  if (payload.type === "final") {
+    const transcript = String(payload.transcript || session.finalTranscript || "").trim();
+    session.finished = true;
+    cleanupRealtimeAudio(true);
+    state.voiceStatus = "idle";
+    render();
+    if (transcript) handleChildInput(transcript, "voice");
+    else toastMessage("没有听清楚，可以再按住说一次。");
+    return;
+  }
+  if (payload.type === "error") {
+    fallbackRealtimeVoiceToBatch(payload.message || "实时语音识别不可用。");
+  }
+}
+
+async function fallbackRealtimeVoiceToBatch(message) {
+  const session = realtimeVoiceSession;
+  if (!session) return;
+  const chunks = session.sentBytes.slice();
+  if (session.pendingBytes?.byteLength) chunks.push(session.pendingBytes);
+  cleanupRealtimeAudio(true);
+  state.recording = false;
+  state.voiceStatus = "processing";
+  render();
+  if (!chunks.length) {
+    state.voiceStatus = "idle";
+    render();
+    toastMessage(message || "没有听到声音，请再试一次。");
+    return;
+  }
+  const wavBlob = new Blob([encodePcmWav(concatUint8Arrays(...chunks), 16000)], { type: "audio/wav" });
+  await transcribeRecording(wavBlob, "");
+}
+
+function cleanupRealtimeAudio(closeSocket) {
+  const session = realtimeVoiceSession;
+  if (!session) return;
+  if (!session.audioStopped) {
+    try {
+      session.processor.disconnect();
+      session.source.disconnect();
+      session.mute.disconnect();
+    } catch {
+      // Audio nodes may already be disconnected.
+    }
+    session.stream.getTracks().forEach((track) => track.stop());
+    if (session.audioContext.state !== "closed") session.audioContext.close();
+    session.audioStopped = true;
+  }
+  if (closeSocket && session.socket.readyState < WebSocket.CLOSING) session.socket.close();
+  if (closeSocket) realtimeVoiceSession = null;
 }
 
 function startBrowserSpeechRecognition() {
@@ -2291,6 +2486,7 @@ function startBrowserSpeechRecognition() {
     recognitionSession = null;
     state.recording = false;
     state.voiceStatus = "idle";
+    state.transcript = "";
     render();
     if (text) handleChildInput(text, "voice");
     else {
@@ -2400,6 +2596,7 @@ async function transcribeRecording(blob, fallbackTranscript = "") {
       throw new Error(payload.detail || payload.message || "语音识别暂不可用");
     }
     state.voiceStatus = "idle";
+    render();
     handleChildInput(payload.transcript, "voice");
   } catch (error) {
     console.warn("Speech recognition gateway fell back to browser transcript.", error);
@@ -2475,6 +2672,71 @@ function encodeWav(audioBuffer) {
   return buffer;
 }
 
+function encodePcmWav(pcmBytes, sampleRate) {
+  const data = pcmBytes instanceof Uint8Array ? pcmBytes : new Uint8Array(pcmBytes || 0);
+  const buffer = new ArrayBuffer(44 + data.byteLength);
+  const view = new DataView(buffer);
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + data.byteLength, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, data.byteLength, true);
+  new Uint8Array(buffer, 44).set(data);
+  return buffer;
+}
+
+function downsampleFloatToPcm16(samples, inputRate, outputRate) {
+  if (!samples?.length) return new Uint8Array(0);
+  const ratio = inputRate / outputRate;
+  const outputLength = Math.max(1, Math.floor(samples.length / ratio));
+  const output = new Uint8Array(outputLength * 2);
+  const view = new DataView(output.buffer);
+
+  for (let i = 0; i < outputLength; i += 1) {
+    const start = Math.floor(i * ratio);
+    const end = Math.min(samples.length, Math.floor((i + 1) * ratio));
+    let sum = 0;
+    let count = 0;
+    for (let j = start; j < end; j += 1) {
+      sum += samples[j] || 0;
+      count += 1;
+    }
+    const sample = Math.max(-1, Math.min(1, count ? sum / count : samples[start] || 0));
+    view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+
+  return output;
+}
+
+function concatUint8Arrays(...arrays) {
+  const normalized = arrays.filter(Boolean).map((item) => (item instanceof Uint8Array ? item : new Uint8Array(item)));
+  const total = normalized.reduce((sum, item) => sum + item.byteLength, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  normalized.forEach((item) => {
+    result.set(item, offset);
+    offset += item.byteLength;
+  });
+  return result;
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(offset, offset + chunkSize));
+  }
+  return window.btoa(binary);
+}
+
 function writeAscii(view, offset, text) {
   for (let i = 0; i < text.length; i += 1) {
     view.setUint8(offset + i, text.charCodeAt(i));
@@ -2515,8 +2777,7 @@ function handleChildInput(text, inputType) {
     return;
   }
 
-  state.transcript = text;
-  state.lastStudentText = text;
+  state.transcript = "";
 
   const requestedLessonIndex = findRequestedLessonIndex(text);
   if (requestedLessonIndex >= 0) {
@@ -2524,6 +2785,8 @@ function handleChildInput(text, inputType) {
     return;
   }
 
+  state.lastStudentText = text;
+  render();
   askGatewayTutor(text, inputType);
 }
 

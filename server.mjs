@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gzipSync, gunzipSync } from "node:zlib";
+import { WebSocket, WebSocketServer } from "ws";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 4173);
@@ -20,6 +22,9 @@ const mimeTypes = {
   ".jpeg": "image/jpeg",
   ".svg": "image/svg+xml",
 };
+
+const transientAudioFiles = new Map();
+const transientAudioTtlMs = 5 * 60 * 1000;
 
 const server = createServer(async (request, response) => {
   try {
@@ -60,6 +65,11 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && url.pathname.startsWith("/api/speech/audio/")) {
+      serveTransientAudio(url.pathname, response);
+      return;
+    }
+
     if (request.method !== "GET" && request.method !== "HEAD") {
       sendJson(response, 405, { error: "Method not allowed" });
       return;
@@ -71,10 +81,197 @@ const server = createServer(async (request, response) => {
   }
 });
 
+const realtimeVoiceServer = new WebSocketServer({ noServer: true });
+
+server.on("upgrade", (request, socket, head) => {
+  const url = new URL(request.url || "/", `http://${request.headers.host}`);
+  if (url.pathname !== "/api/realtime/voice") {
+    socket.destroy();
+    return;
+  }
+
+  realtimeVoiceServer.handleUpgrade(request, socket, head, (websocket) => {
+    realtimeVoiceServer.emit("connection", websocket, request);
+  });
+});
+
+realtimeVoiceServer.on("connection", (websocket, request) => {
+  handleRealtimeVoiceConnection(websocket, request);
+});
+
 server.listen(port, host, () => {
   const shownHost = host === "0.0.0.0" ? "127.0.0.1" : host;
   console.log(`启步学伴原型已启动：http://${shownHost}:${port}`);
 });
+
+function handleRealtimeVoiceConnection(client) {
+  let asrSession = null;
+
+  client.on("message", async (raw) => {
+    let message;
+    try {
+      message = JSON.parse(String(raw));
+    } catch {
+      sendRealtime(client, { type: "error", message: "语音通道收到的消息格式不对。" });
+      return;
+    }
+
+    try {
+      if (message.type === "start") {
+        if (asrSession) asrSession.close();
+        asrSession = new StreamingAsrSession(client);
+        await asrSession.start();
+        return;
+      }
+
+      if (message.type === "audio") {
+        const audio = Buffer.from(String(message.audioBase64 || ""), "base64");
+        if (audio.length && asrSession) asrSession.sendAudio(audio, false);
+        return;
+      }
+
+      if (message.type === "stop") {
+        const audio = Buffer.from(String(message.audioBase64 || ""), "base64");
+        if (asrSession) asrSession.finish(audio.length ? audio : null);
+        return;
+      }
+    } catch (error) {
+      sendRealtime(client, {
+        type: "error",
+        message: "实时语音识别没有接通，已切回备用识别。",
+        detail: sanitizeMessage(error),
+      });
+    }
+  });
+
+  client.on("close", () => {
+    if (asrSession) asrSession.close();
+  });
+
+  client.on("error", () => {
+    if (asrSession) asrSession.close();
+  });
+}
+
+class StreamingAsrSession {
+  constructor(client) {
+    this.client = client;
+    this.upstream = null;
+    this.ready = false;
+    this.closed = false;
+    this.lastTranscript = "";
+    this.finalSent = false;
+    this.pendingAudio = [];
+    this.finalTimer = null;
+  }
+
+  async start() {
+    const apiKey = getSpeechApiKey("ASR");
+    if (!apiKey) throw new Error("Missing ASR key");
+
+    const connectId = crypto.randomUUID();
+    const headers = buildStreamingSpeechHeaders("ASR", apiKey, {
+      connectId,
+      resourceId: getStreamingAsrResourceId(),
+    });
+    const upstreamUrl = process.env.ARK_ASR_STREAM_URL || "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
+
+    this.upstream = new WebSocket(upstreamUrl, { headers });
+    this.upstream.binaryType = "nodebuffer";
+    this.upstream.on("open", () => {
+      this.ready = true;
+      this.upstream.send(buildAsrFullRequestPacket(createStreamingAsrPayload()));
+      sendRealtime(this.client, { type: "ready", mode: "volc-stream-asr", connectId });
+      while (this.pendingAudio.length) {
+        this.upstream.send(this.pendingAudio.shift());
+      }
+    });
+    this.upstream.on("message", (data) => this.handleUpstreamMessage(Buffer.from(data)));
+    this.upstream.on("error", (error) => {
+      sendRealtime(this.client, {
+        type: "error",
+        message: "火山流式语音识别连接失败。",
+        detail: sanitizeMessage(error),
+      });
+    });
+    this.upstream.on("close", () => {
+      this.closed = true;
+      if (!this.finalSent && this.lastTranscript) {
+        this.sendFinal(this.lastTranscript);
+      }
+    });
+  }
+
+  sendAudio(audio, isLast) {
+    if (this.closed) return;
+    const packet = buildAsrAudioPacket(audio, isLast);
+    if (this.ready && this.upstream?.readyState === WebSocket.OPEN) {
+      this.upstream.send(packet);
+    } else {
+      this.pendingAudio.push(packet);
+    }
+  }
+
+  finish(finalAudio) {
+    if (this.closed) return;
+    this.sendAudio(finalAudio || Buffer.alloc(0), true);
+    this.finalTimer = setTimeout(() => {
+      if (!this.finalSent) this.sendFinal(this.lastTranscript);
+      this.close();
+    }, Number(process.env.ARK_ASR_STREAM_FINAL_TIMEOUT_MS || 5500));
+  }
+
+  handleUpstreamMessage(buffer) {
+    let packet;
+    try {
+      packet = parseAsrPacket(buffer);
+    } catch (error) {
+      sendRealtime(this.client, {
+        type: "error",
+        message: "火山流式识别返回内容无法解析。",
+        detail: sanitizeMessage(error),
+      });
+      return;
+    }
+    if (packet.error) {
+      sendRealtime(this.client, {
+        type: "error",
+        message: "火山流式识别返回错误。",
+        detail: packet.error,
+      });
+      return;
+    }
+
+    const transcript = extractAsrTranscript(packet.payload);
+    if (transcript) {
+      this.lastTranscript = transcript;
+      sendRealtime(this.client, { type: "partial", transcript });
+    }
+
+    if (packet.isFinal) {
+      this.sendFinal(transcript || this.lastTranscript);
+      this.close();
+    }
+  }
+
+  sendFinal(transcript) {
+    if (this.finalSent) return;
+    this.finalSent = true;
+    if (this.finalTimer) clearTimeout(this.finalTimer);
+    sendRealtime(this.client, { type: "final", transcript: String(transcript || "").trim() });
+  }
+
+  close() {
+    this.closed = true;
+    if (this.finalTimer) clearTimeout(this.finalTimer);
+    if (this.upstream && this.upstream.readyState < WebSocket.CLOSING) this.upstream.close();
+  }
+}
+
+function sendRealtime(client, payload) {
+  if (client.readyState !== WebSocket.OPEN) return;
+  client.send(JSON.stringify(payload));
+}
 
 async function handleImageGeneration(request, response) {
   const apiKey = process.env.ARK_API_KEY;
@@ -243,6 +440,7 @@ async function handleSpeechTranscription(request, response) {
   const input = await readJsonBody(request);
   const audioData = String(input.audioData || "").trim();
   const audioUrl = String(input.audioUrl || "").trim();
+  const mimeType = String(input.mimeType || "").trim();
   const apiKey = getSpeechApiKey("ASR");
 
   if (!apiKey) {
@@ -256,6 +454,21 @@ async function handleSpeechTranscription(request, response) {
 
   if (!audioData && !audioUrl) {
     sendJson(response, 400, { error: "Missing audioData or audioUrl" });
+    return;
+  }
+
+  const resourceId = process.env.ARK_ASR_RESOURCE_ID || "volc.bigasr.auc_turbo";
+  const asrUrl = process.env.ARK_ASR_URL || "";
+  if (resourceId === "volc.seedasr.auc" || asrUrl.includes("/submit")) {
+    await handleSpeechTranscriptionSubmitQuery({
+      request,
+      response,
+      apiKey,
+      audioData,
+      audioUrl,
+      mimeType,
+      resourceId,
+    });
     return;
   }
 
@@ -292,6 +505,98 @@ async function handleSpeechTranscription(request, response) {
     transcript: upstreamPayload?.result?.text || "",
     utterances: upstreamPayload?.result?.utterances || [],
     duration: upstreamPayload?.audio_info?.duration || 0,
+  });
+}
+
+async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey, audioData, audioUrl, mimeType, resourceId }) {
+  const taskId = crypto.randomUUID();
+  const externalAudioUrl = audioUrl || createTransientAudioUrl(request, audioData, mimeType);
+  const payload = {
+    user: { uid: process.env.ARK_ASR_UID || "qibu-child" },
+    audio: {
+      url: externalAudioUrl,
+      format: inferAudioFormat(mimeType, audioData, externalAudioUrl),
+      codec: "raw",
+      rate: 16000,
+      bits: 16,
+      channel: 1,
+    },
+    request: {
+      model_name: process.env.ARK_ASR_MODEL || "bigmodel",
+      enable_itn: true,
+      enable_punc: true,
+      enable_ddc: false,
+      enable_speaker_info: false,
+      enable_channel_split: false,
+      show_utterances: true,
+      vad_segment: false,
+      sensitive_words_filter: "",
+    },
+  };
+
+  const submitUrl = process.env.ARK_ASR_SUBMIT_URL || process.env.ARK_ASR_URL || "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit";
+  const queryUrl = process.env.ARK_ASR_QUERY_URL || submitUrl.replace(/\/submit$/, "/query");
+  const submit = await fetch(submitUrl, {
+    method: "POST",
+    headers: buildSpeechHeaders("ASR", apiKey, { requestId: taskId, resourceId }),
+    body: JSON.stringify(payload),
+  });
+  const submitStatus = submit.headers.get("X-Api-Status-Code");
+  if (!submit.ok || (submitStatus && submitStatus !== "20000000")) {
+    const submitPayload = await submit.json().catch(async () => ({ message: await submit.text().catch(() => "") }));
+    sendJson(response, 502, {
+      error: "ASR submit failed",
+      detail: submit.headers.get("X-Api-Message") || summarizeUpstreamError(submitPayload),
+      logId: submit.headers.get("X-Tt-Logid") || "",
+    });
+    return;
+  }
+
+  let lastPayload = {};
+  let lastStatus = "";
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    await wait(attempt === 0 ? 250 : attempt < 4 ? 450 : 900);
+    const query = await fetch(queryUrl, {
+      method: "POST",
+      headers: buildSpeechHeaders("ASR", apiKey, { requestId: taskId, resourceId }),
+      body: "{}",
+    });
+    lastStatus = query.headers.get("X-Api-Status-Code") || "";
+    lastPayload = await query.json().catch(async () => ({ message: await query.text().catch(() => "") }));
+
+    if (!query.ok) {
+      sendJson(response, 502, {
+        error: "ASR query failed",
+        detail: query.headers.get("X-Api-Message") || summarizeUpstreamError(lastPayload),
+        logId: query.headers.get("X-Tt-Logid") || "",
+      });
+      return;
+    }
+
+    if (lastStatus === "20000000" || lastPayload?.result?.text) {
+      sendJson(response, 200, {
+        mode: "ark-asr",
+        transcript: lastPayload?.result?.text || "",
+        utterances: lastPayload?.result?.utterances || [],
+        duration: lastPayload?.audio_info?.duration || lastPayload?.result?.additions?.duration || 0,
+      });
+      return;
+    }
+
+    if (lastStatus && lastStatus !== "20000001" && lastStatus !== "20000002") {
+      sendJson(response, 502, {
+        error: "ASR failed",
+        detail: query.headers.get("X-Api-Message") || summarizeUpstreamError(lastPayload),
+        logId: query.headers.get("X-Tt-Logid") || "",
+      });
+      return;
+    }
+  }
+
+  sendJson(response, 504, {
+    error: "ASR timeout",
+    detail: `语音识别仍在处理中，最后状态：${lastStatus || "unknown"}`,
+    lastPayload,
   });
 }
 
@@ -382,6 +687,7 @@ function getModelConfig() {
     summaryModel: process.env.ARK_SUMMARY_MODEL || process.env.ARK_TUTOR_MODEL || process.env.ARK_TEXT_MODEL || "",
     asrModel: process.env.ARK_ASR_MODEL || "bigmodel",
     asrResourceId: process.env.ARK_ASR_RESOURCE_ID || "volc.bigasr.auc_turbo",
+    asrStreamResourceId: getStreamingAsrResourceId(),
     ttsResourceId: process.env.ARK_TTS_RESOURCE_ID || "seed-tts-2.0",
     ttsSpeaker: process.env.ARK_TTS_SPEAKER || "zh_female_vv_uranus_bigtts",
     imageModel: process.env.ARK_IMAGE_MODEL || "doubao-seedream-5-0-260128",
@@ -403,6 +709,7 @@ function getPublicModelConfig() {
     },
     voice: {
       asrResourceId: config.asrResourceId,
+      asrStreamResourceId: config.asrStreamResourceId,
       ttsResourceId: config.ttsResourceId,
       ttsSpeaker: config.ttsSpeaker,
     },
@@ -426,36 +733,146 @@ function selectLearningModel(phase) {
 }
 
 function getSpeechApiKey(kind) {
+  const explicitKey = process.env[`ARK_${kind}_API_KEY`] || process.env.ARK_SPEECH_API_KEY || "";
+  if (explicitKey) return explicitKey;
   if (hasLegacySpeechCredentials(kind)) return "legacy-speech-credentials";
-  return (
-    process.env[`ARK_${kind}_API_KEY`] ||
-    process.env.ARK_SPEECH_API_KEY ||
-    process.env.ARK_API_KEY ||
-    ""
-  );
+  return process.env.ARK_API_KEY || "";
 }
 
-function buildSpeechHeaders(kind, apiKey) {
+function buildSpeechHeaders(kind, apiKey, options = {}) {
   const headers = {
     "Content-Type": "application/json",
-    "X-Api-Request-Id": crypto.randomUUID(),
+    "X-Api-Request-Id": options.requestId || crypto.randomUUID(),
   };
   const legacy = getLegacySpeechCredentials(kind);
-  if (legacy.appId && legacy.accessKey) {
+  if (apiKey !== "legacy-speech-credentials") {
+    headers["X-Api-Key"] = apiKey;
+  } else if (legacy.appId && legacy.accessKey) {
     headers["X-Api-App-Id"] = legacy.appId;
     headers["X-Api-App-Key"] = legacy.appId;
     headers["X-Api-Access-Key"] = legacy.accessKey;
-  } else {
-    headers["X-Api-Key"] = apiKey;
   }
   if (kind === "ASR") {
-    headers["X-Api-Resource-Id"] = process.env.ARK_ASR_RESOURCE_ID || "volc.bigasr.auc_turbo";
+    headers["X-Api-Resource-Id"] = options.resourceId || process.env.ARK_ASR_RESOURCE_ID || "volc.bigasr.auc_turbo";
     headers["X-Api-Sequence"] = "-1";
   } else {
     headers["X-Api-Resource-Id"] = process.env.ARK_TTS_RESOURCE_ID || "seed-tts-2.0";
     headers.Connection = "keep-alive";
   }
   return headers;
+}
+
+function buildStreamingSpeechHeaders(kind, apiKey, options = {}) {
+  const headers = {
+    "X-Api-Connect-Id": options.connectId || crypto.randomUUID(),
+    "X-Api-Resource-Id":
+      options.resourceId ||
+      (kind === "ASR" ? getStreamingAsrResourceId() : process.env.ARK_TTS_RESOURCE_ID || "seed-tts-2.0"),
+  };
+  const legacy = getLegacySpeechCredentials(kind);
+  if (apiKey !== "legacy-speech-credentials") {
+    headers["X-Api-Key"] = apiKey;
+  } else if (legacy.appId && legacy.accessKey) {
+    headers["X-Api-App-Key"] = legacy.appId;
+    headers["X-Api-Access-Key"] = legacy.accessKey;
+  }
+  return headers;
+}
+
+function getStreamingAsrResourceId() {
+  const explicit = process.env.ARK_ASR_STREAM_RESOURCE_ID || "";
+  if (explicit) return explicit;
+  const configured = process.env.ARK_ASR_RESOURCE_ID || "";
+  if (configured.includes(".sauc.")) return configured;
+  return "volc.seedasr.sauc.duration";
+}
+
+function createStreamingAsrPayload() {
+  return {
+    user: { uid: process.env.ARK_ASR_UID || "qibu-child" },
+    audio: {
+      format: "pcm",
+      codec: "raw",
+      rate: 16000,
+      bits: 16,
+      channel: 1,
+    },
+    request: {
+      model_name: process.env.ARK_ASR_MODEL || "bigmodel",
+      enable_itn: true,
+      enable_punc: true,
+      enable_ddc: false,
+      show_utterances: true,
+      enable_nonstream: process.env.ARK_ASR_STREAM_ENABLE_NONSTREAM !== "false",
+      end_window_size: Number(process.env.ARK_ASR_STREAM_END_WINDOW_MS || 800),
+    },
+  };
+}
+
+function buildAsrFullRequestPacket(payload) {
+  const compressed = gzipSync(Buffer.from(JSON.stringify(payload)));
+  return Buffer.concat([Buffer.from([0x11, 0x10, 0x11, 0x00]), uint32be(compressed.length), compressed]);
+}
+
+function buildAsrAudioPacket(audio, isLast) {
+  const compressed = gzipSync(Buffer.from(audio || ""));
+  return Buffer.concat([Buffer.from([0x11, isLast ? 0x22 : 0x20, 0x01, 0x00]), uint32be(compressed.length), compressed]);
+}
+
+function parseAsrPacket(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 8) return { error: "empty ASR packet" };
+  const headerSize = (buffer[0] & 0x0f) * 4;
+  const messageType = buffer[1] >> 4;
+  const flags = buffer[1] & 0x0f;
+  const serialization = buffer[2] >> 4;
+  const compression = buffer[2] & 0x0f;
+  let offset = headerSize;
+
+  if (messageType === 0x0f) {
+    const code = buffer.length >= offset + 4 ? buffer.readInt32BE(offset) : 0;
+    offset += 4;
+    const size = buffer.length >= offset + 4 ? buffer.readUInt32BE(offset) : 0;
+    offset += 4;
+    return { error: buffer.slice(offset, offset + size).toString("utf8") || `ASR protocol error ${code}` };
+  }
+
+  let sequence = 0;
+  if (flags === 0x01 || flags === 0x03) {
+    sequence = buffer.readInt32BE(offset);
+    offset += 4;
+  }
+
+  const payloadSize = buffer.readUInt32BE(offset);
+  offset += 4;
+  let payloadBuffer = buffer.slice(offset, offset + payloadSize);
+  if (compression === 0x01 && payloadBuffer.length) payloadBuffer = gunzipSync(payloadBuffer);
+
+  let payload = payloadBuffer;
+  if (serialization === 0x01) {
+    payload = JSON.parse(payloadBuffer.toString("utf8") || "{}");
+  }
+
+  return {
+    messageType,
+    flags,
+    sequence,
+    payload,
+    isFinal: flags === 0x02 || flags === 0x03 || sequence < 0,
+  };
+}
+
+function extractAsrTranscript(payload) {
+  const result = payload?.result || payload;
+  const text = result?.text || "";
+  if (text) return String(text).trim();
+  const utterances = Array.isArray(result?.utterances) ? result.utterances : [];
+  return utterances.map((item) => item?.text || "").join("").trim();
+}
+
+function uint32be(value) {
+  const buffer = Buffer.alloc(4);
+  buffer.writeUInt32BE(value >>> 0, 0);
+  return buffer;
 }
 
 function getLegacySpeechCredentials(kind) {
@@ -474,6 +891,68 @@ function stripDataUrl(value) {
   const text = String(value || "");
   const index = text.indexOf(",");
   return text.startsWith("data:") && index >= 0 ? text.slice(index + 1) : text;
+}
+
+function createTransientAudioUrl(request, audioData, mimeType) {
+  cleanupTransientAudioFiles();
+  const id = crypto.randomUUID();
+  const buffer = Buffer.from(stripDataUrl(audioData), "base64");
+  transientAudioFiles.set(id, {
+    buffer,
+    mimeType: normalizeAudioMimeType(mimeType, audioData),
+    expiresAt: Date.now() + transientAudioTtlMs,
+  });
+  const baseUrl = getPublicBaseUrl(request);
+  return `${baseUrl}/api/speech/audio/${id}`;
+}
+
+function serveTransientAudio(pathname, response) {
+  cleanupTransientAudioFiles();
+  const id = pathname.split("/").pop();
+  const item = transientAudioFiles.get(id);
+  if (!item) {
+    sendJson(response, 404, { error: "Audio not found" });
+    return;
+  }
+  response.writeHead(200, {
+    "Content-Type": item.mimeType || "audio/wav",
+    "Content-Length": item.buffer.length,
+    "Cache-Control": "no-store",
+  });
+  response.end(item.buffer);
+}
+
+function cleanupTransientAudioFiles() {
+  const now = Date.now();
+  for (const [id, item] of transientAudioFiles.entries()) {
+    if (!item || item.expiresAt <= now) transientAudioFiles.delete(id);
+  }
+}
+
+function getPublicBaseUrl(request) {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, "");
+  const proto = String(request.headers["x-forwarded-proto"] || "http").split(",")[0].trim() || "http";
+  const host = String(request.headers["x-forwarded-host"] || request.headers.host || "").split(",")[0].trim();
+  return `${proto}://${host}`;
+}
+
+function normalizeAudioMimeType(mimeType, audioData) {
+  const fromDataUrl = String(audioData || "").match(/^data:([^;,]+)/)?.[1] || "";
+  return String(mimeType || fromDataUrl || "audio/wav").split(";")[0] || "audio/wav";
+}
+
+function inferAudioFormat(mimeType, audioData, audioUrl) {
+  const normalized = normalizeAudioMimeType(mimeType, audioData).toLowerCase();
+  if (normalized.includes("mpeg") || normalized.includes("mp3")) return "mp3";
+  if (normalized.includes("ogg")) return "ogg";
+  if (normalized.includes("wav") || normalized.includes("wave")) return "wav";
+  const ext = String(audioUrl || "").split("?")[0].split(".").pop()?.toLowerCase();
+  if (["mp3", "ogg", "wav"].includes(ext)) return ext;
+  return "wav";
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseConcatenatedJson(raw) {
