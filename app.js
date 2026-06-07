@@ -1244,7 +1244,7 @@ function renderTopbar() {
       <button class="brand" data-action="child-home" aria-label="返回孩子学习页">
         <span class="brand-mark" aria-hidden="true">${renderMascotFace()}</span>
         <span>
-          <strong>启步学伴</strong>
+          <strong>乐之老师</strong>
           <small>AI 语音陪练</small>
         </span>
       </button>

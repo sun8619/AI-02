@@ -101,7 +101,7 @@ realtimeVoiceServer.on("connection", (websocket, request) => {
 
 server.listen(port, host, () => {
   const shownHost = host === "0.0.0.0" ? "127.0.0.1" : host;
-  console.log(`启步学伴原型已启动：http://${shownHost}:${port}`);
+  console.log(`乐之老师原型已启动：http://${shownHost}:${port}`);
 });
 
 function handleRealtimeVoiceConnection(client) {
@@ -359,7 +359,7 @@ async function handleLearningTurn(request, response) {
       {
         role: "system",
         content: [
-          "你是启步学伴，面向小学低年级孩子的中文 AI 语音陪练老师。",
+          "你是乐之老师，面向小学低年级孩子的中文 AI 语音陪练老师。",
           "你要像真人老师一样说话：短句、自然、温和，避免播报内部判断和长篇分析。",
           "你使用启发式教学，不直接代答；每次只推进一个很小的台阶。",
           "先判断孩子是否卡在前置知识；如果是，先补前置知识，不要硬往后讲。",
