@@ -1184,6 +1184,7 @@ let state = {
   phase: "guiding",
   recording: false,
   voiceStatus: "idle",
+  showLessonPicker: false,
   showKeyboard: false,
   showVisual: true,
   strategyIndex: 0,
@@ -1203,6 +1204,8 @@ let state = {
     status: "idle",
     url: "",
     message: "",
+    lessonId: lessons[0].id,
+    interactionKey: "",
   },
   evidence: [createInitialEvidence(lessons[0])],
 };
@@ -1275,73 +1278,157 @@ function renderChildView() {
     <main class="child-stage">
       <section class="learning-scene" aria-label="孩子学习区">
         <div class="scene-left">
-          <div class="problem-strip">
-            <span>${icon("book")}当前题目</span>
-            <strong>${escapeText(lesson.problem)}</strong>
-          </div>
-
-          <div class="tutor-wrap">
-            <div class="tutor-card">
-              ${renderMascot()}
-              <div class="speech-card">
-                <div class="dialogue-card">
-                  <div class="dialogue-line teacher-line">
-                    <span>老师</span>
-                    <strong>${escapeText(state.aiMessage)}</strong>
-                  </div>
-                  ${
-                    state.lastStudentText
-                      ? `<div class="dialogue-line student-line"><span>学生</span><p>${escapeText(state.lastStudentText)}</p></div>`
-                      : ""
-                  }
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="quick-actions" aria-label="求助按钮">
-            ${actionButtons
-              .map(
-                ([action, label, iconName]) => `
-                  <button class="help-button" data-action="${action}">
-                    ${icon(iconName)}
-                    <span>${label}</span>
-                  </button>
-                `,
-              )
-              .join("")}
-          </div>
-
-          ${renderVoiceDock()}
+          ${renderKnowledgeSelector()}
+          ${renderStepPanel()}
+          ${renderInteractionPanel(actionButtons)}
         </div>
 
         <aside class="scene-right">
-          <div class="step-panel">
-            <div class="panel-head">
-              <span>${icon("star")}小台阶</span>
-              <strong>${escapeText(lesson.unit)}</strong>
-            </div>
-            <h2>${escapeText(state.currentStep)}</h2>
-            <p>${escapeText(renderStepHint())}</p>
-            <div class="step-ladder" aria-label="学习小台阶">
-              ${lesson.microSteps
-                .map(
-                  (step, index) => `
-                    <div class="ladder-step ${index < state.completedSteps ? "is-done" : ""} ${index === state.completedSteps ? "is-now" : ""}">
-                      <span>${index < state.completedSteps ? icon("check") : index + 1}</span>
-                      <em>${escapeText(step)}</em>
-                    </div>
-                  `,
-                )
-                .join("")}
-            </div>
-          </div>
-
-          ${state.showVisual ? renderLearningVisual() : ""}
-          ${renderPracticePanel()}
+          ${renderVisualArea()}
         </aside>
       </section>
     </main>
+  `;
+}
+
+function renderKnowledgeSelector() {
+  const lesson = currentLesson();
+  return `
+    <section class="knowledge-select-panel">
+      <button class="knowledge-current" data-action="toggle-lesson-picker" aria-expanded="${state.showLessonPicker ? "true" : "false"}">
+        <span>${icon("book")}当前知识点</span>
+        <strong>${escapeText(lesson.node)}</strong>
+        <em>${escapeText(`${lesson.grade} · ${lesson.unit}`)}</em>
+        <small>${escapeText(lesson.problem)}</small>
+      </button>
+      ${state.showLessonPicker ? renderLessonPicker() : ""}
+    </section>
+  `;
+}
+
+function renderLessonPicker() {
+  const groups = groupLessonsByGrade();
+  return `
+    <div class="lesson-picker" role="listbox" aria-label="选择知识点">
+      ${groups
+        .map(
+          (group) => `
+            <section class="lesson-picker-group">
+              <h3>${escapeText(group.grade)}</h3>
+              <div>
+                ${group.items
+                  .map(
+                    ({ lesson, index }) => `
+                      <button class="lesson-option ${index === state.lessonIndex ? "is-current" : ""}" data-action="select-lesson" data-lesson-index="${index}">
+                        <span>${escapeText(lesson.unit)}</span>
+                        <strong>${escapeText(lesson.node)}</strong>
+                        <small>${escapeText(lesson.problem)}</small>
+                      </button>
+                    `,
+                  )
+                  .join("")}
+              </div>
+            </section>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function groupLessonsByGrade() {
+  const groups = [];
+  const byGrade = new Map();
+  lessons.forEach((lesson, index) => {
+    if (!byGrade.has(lesson.grade)) {
+      const group = { grade: lesson.grade, items: [] };
+      byGrade.set(lesson.grade, group);
+      groups.push(group);
+    }
+    byGrade.get(lesson.grade).items.push({ lesson, index });
+  });
+  return groups;
+}
+
+function renderStepPanel() {
+  const lesson = currentLesson();
+  return `
+    <section class="step-panel compact-panel">
+      <div class="panel-head">
+        <span>${icon("star")}小台阶</span>
+        <strong>${escapeText(lesson.unit)}</strong>
+      </div>
+      <h2>${escapeText(state.currentStep)}</h2>
+      <p>${escapeText(renderStepHint())}</p>
+      <div class="step-ladder" aria-label="学习小台阶">
+        ${lesson.microSteps
+          .map(
+            (step, index) => `
+              <div class="ladder-step ${index < state.completedSteps ? "is-done" : ""} ${index === state.completedSteps ? "is-now" : ""}">
+                <span>${index < state.completedSteps ? icon("check") : index + 1}</span>
+                <em>${escapeText(step)}</em>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderInteractionPanel(actionButtons) {
+  return `
+    <section class="interaction-panel">
+      <div class="tutor-wrap">
+        <div class="tutor-card">
+          ${renderMascot()}
+          <div class="speech-card">
+            <div class="dialogue-card">
+              <div class="dialogue-line teacher-line">
+                <span>老师</span>
+                <strong>${escapeText(state.aiMessage)}</strong>
+              </div>
+              ${
+                state.lastStudentText
+                  ? `<div class="dialogue-line student-line"><span>学生</span><p>${escapeText(state.lastStudentText)}</p></div>`
+                  : ""
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="quick-actions" aria-label="求助按钮">
+        ${actionButtons
+          .map(
+            ([action, label, iconName]) => `
+              <button class="help-button" data-action="${action}">
+                ${icon(iconName)}
+                <span>${label}</span>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+
+      ${renderVoiceDock()}
+    </section>
+  `;
+}
+
+function renderVisualArea() {
+  return state.showVisual ? renderLearningVisual() : renderVisualPlaceholder();
+}
+
+function renderVisualPlaceholder() {
+  return `
+    <section class="visual-panel visual-placeholder">
+      <div class="panel-head">
+        <span>${icon("image")}图片区</span>
+        <strong>按当前互动更新</strong>
+      </div>
+      <p>需要看图时，乐之老师会根据当前知识点和正在讲的小台阶显示图片。</p>
+    </section>
   `;
 }
 
@@ -1803,6 +1890,8 @@ function renderPracticePanel() {
 
 function renderGeneratedImage() {
   const lesson = currentLesson();
+  if (state.imageJob.lessonId && state.imageJob.lessonId !== lesson.id) return "";
+  if (state.imageJob.interactionKey && state.imageJob.interactionKey !== getVisualInteractionKey()) return "";
   if (state.imageJob.status === "idle") return "";
   if (state.imageJob.status === "loading") {
     return `
@@ -1826,6 +1915,11 @@ function renderGeneratedImage() {
       <p>${escapeText(lesson.generatedCaption)}</p>
     </div>
   `;
+}
+
+function getVisualInteractionKey() {
+  const lesson = currentLesson();
+  return [lesson.id, state.phase, state.currentStep, state.aiMessage].join("|");
 }
 
 function fractionBar(x, y, denominator, numerator, color, label) {
@@ -1972,16 +2066,25 @@ function renderSummaryView() {
 
 function renderMascot() {
   return `
-    <div class="mascot" aria-hidden="true">
-      <div class="mascot-antenna"></div>
-      <div class="mascot-head">
-        <span class="mascot-eye"></span>
-        <span class="mascot-eye"></span>
-        <span class="mascot-smile"></span>
+    <div class="mascot ice-princess" aria-hidden="true">
+      <div class="ice-cape"></div>
+      <div class="ice-hair"></div>
+      <div class="ice-head">
+        <span class="ice-eye"></span>
+        <span class="ice-eye"></span>
+        <span class="ice-smile"></span>
+        <span class="ice-cheek ice-cheek-left"></span>
+        <span class="ice-cheek ice-cheek-right"></span>
       </div>
-      <div class="mascot-body">
+      <div class="ice-braid">
         <span></span>
         <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="ice-dress">
+        <span class="ice-snow">✦</span>
+        <span class="ice-snow">✧</span>
       </div>
     </div>
   `;
@@ -1990,10 +2093,10 @@ function renderMascot() {
 function renderMascotFace() {
   return `
     <svg viewBox="0 0 44 44" aria-hidden="true">
-      <rect x="8" y="10" width="28" height="24" rx="8" fill="currentColor"/>
-      <circle cx="18" cy="22" r="2.5" fill="#fff"/>
-      <circle cx="26" cy="22" r="2.5" fill="#fff"/>
-      <path d="M18 28c2.5 2 5.5 2 8 0" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <path d="M22 5 25 15l10-3-6 9 8 7-11 1-4 10-4-10-11-1 8-7-6-9 10 3 3-10Z" fill="currentColor"/>
+      <circle cx="18" cy="23" r="2" fill="#fff"/>
+      <circle cx="26" cy="23" r="2" fill="#fff"/>
+      <path d="M18 30c2.6 1.8 5.4 1.8 8 0" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
     </svg>
   `;
 }
@@ -2045,19 +2148,39 @@ async function handleAction(event) {
 
   if (action === "child-home") {
     state.view = "child";
+    state.showLessonPicker = false;
     render();
     return;
   }
 
   if (action === "parent-view") {
     state.view = "parent";
+    state.showLessonPicker = false;
     render();
     return;
   }
 
   if (action === "summary-view") {
     state.view = "summary";
+    state.showLessonPicker = false;
     render();
+    return;
+  }
+
+  if (action === "toggle-lesson-picker") {
+    state.showLessonPicker = !state.showLessonPicker;
+    render();
+    return;
+  }
+
+  if (action === "select-lesson") {
+    const index = Number(event.currentTarget.dataset.lessonIndex);
+    state.showLessonPicker = false;
+    if (Number.isInteger(index) && index !== state.lessonIndex) {
+      changeLesson("孩子从知识点列表选择了新内容。", index);
+    } else {
+      render();
+    }
     return;
   }
 
@@ -2083,7 +2206,13 @@ async function handleAction(event) {
     return;
   }
 
-  if (action === "change-lesson" || action === "new-example") {
+  if (action === "change-lesson") {
+    state.showLessonPicker = true;
+    render();
+    return;
+  }
+
+  if (action === "new-example") {
     changeLesson("孩子想换一个知识点。");
     return;
   }
@@ -2121,6 +2250,7 @@ function changeLesson(reason, targetIndex = null) {
   state.phase = "guiding";
   state.recording = false;
   state.voiceStatus = "idle";
+  state.showLessonPicker = false;
   state.showKeyboard = false;
   state.strategyIndex = 0;
   state.mastery = 60;
@@ -2135,7 +2265,7 @@ function changeLesson(reason, targetIndex = null) {
   state.canUseOwnWords = false;
   state.bestStrategy = lesson.strategies[0].label;
   state.showVisual = true;
-  state.imageJob = { status: "idle", url: "", message: "" };
+  state.imageJob = { status: "idle", url: "", message: "", lessonId: lesson.id, interactionKey: getVisualInteractionKey() };
   addEvidence("换知识点", `切换到「${lesson.node}」：${lesson.problem}`, "课程切换");
   render();
   speakCurrentMessage();
@@ -2154,14 +2284,20 @@ function startTeachback() {
 
 async function generateStoryImage() {
   const lesson = currentLesson();
-  state.imageJob = { status: "loading", url: "", message: "" };
+  const interactionKey = getVisualInteractionKey();
+  state.imageJob = { status: "loading", url: "", message: "", lessonId: lesson.id, interactionKey };
   render();
 
   const prompt = [
     ...lesson.imagePrompt,
+    `当前知识点：${lesson.node}`,
     `当前题目：${lesson.problem}`,
+    `当前小台阶：${state.currentStep}`,
+    `老师正在讲：${state.aiMessage}`,
+    state.lastStudentText ? `孩子刚才说：${state.lastStudentText}` : "",
+    "图片必须只表现当前知识点、当前题目和当前小台阶，不要画其他数学内容。",
     "注意：这只是生活类比图，精确数学关系会由页面上的程序图呈现。",
-  ].join("");
+  ].filter(Boolean).join("\n");
 
   try {
     const response = await fetch("/api/images/generations", {
@@ -2179,7 +2315,7 @@ async function generateStoryImage() {
     }
     const url = extractImageUrl(payload);
     if (!url) throw new Error("图片服务没有返回图片地址");
-    state.imageJob = { status: "done", url, message: "" };
+    state.imageJob = { status: "done", url, message: "", lessonId: lesson.id, interactionKey };
     state.strategyIndex = Math.max(state.strategyIndex, 2);
     state.bestStrategy = lesson.strategies[2]?.label || "生活类比";
     addEvidence("AI 生成理解图片", "AI 生成生活情景图，帮助孩子把知识点放进真实场景。", "生活类比图");
@@ -2189,6 +2325,8 @@ async function generateStoryImage() {
       status: "error",
       url: "",
       message: error?.message || "图片生成失败，请检查 Ark 配置",
+      lessonId: lesson.id,
+      interactionKey,
     };
     toastMessage("AI 图片暂时没画出来");
   }
