@@ -500,7 +500,21 @@ function buildParentSignals(point, session) {
 
 function makeTeachMessage(atom) {
   if (!atom) return "我们先看一个很小的问题。";
-  return `我们只学一步：${atom.atom_name}。${toChildSentence(atom.can_do_statement)}`;
+  const atomName = atom.atom_name || "";
+  if (atomName.includes("1元等于10角")) return "我们先只看1元。1元等于几角？";
+  if (atomName.includes("换成几十角")) return "现在只换整元：3元是几角？";
+  if (atomName.includes("再加原来的几角")) return "现在把换好的角和原来的角合起来。30角加5角是多少？";
+  if (atomName.includes("说清为什么先换单位")) return "你试着说一句：为什么要先把元换成角？";
+  if (atomName.includes("看清商品价格")) return "先只看价格：商品多少钱？";
+  if (atomName.includes("看清付了多少钱")) return "再只看付出去的钱：付了多少钱？";
+  if (atomName.includes("找回就是剩下的钱")) return "找回的钱，是付出去后剩下的钱，还是还要再付的钱？";
+  if (atomName.includes("用减法算找回")) return "现在只算找回：5减4等于几？";
+  if (atomName.includes("说清为什么用减法")) return "你试着说一句：为什么找回的钱要用减法？";
+  if (atomName.includes("看到9先想差1到10")) return "现在只看9：9还差几就到10？";
+  if (atomName.includes("把另一个数拆成")) return "为了给9凑成10，4可以拆成1和几？";
+  if (atomName.includes("10再加剩下的数")) return "9拿到1变成10，还剩3。10加3等于几？";
+  if (atomName.includes("说清为什么这样算")) return "你试着说一句：为什么9加几可以先凑10？";
+  return `我们只学一步：${atomName}。你先说第一步该看什么？`;
 }
 
 function makeRepairMessage(atom, errorTag, point) {
