@@ -838,6 +838,17 @@ button {
   min-height: 0;
 }
 
+.visual-turn-note {
+  margin: -2px 0 8px;
+  border-radius: var(--radius-sm);
+  background: #f4f8fb;
+  color: var(--muted);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 780;
+  line-height: 1.35;
+}
+
 .ai-visual-card {
   display: flex;
   align-items: center;
@@ -1057,6 +1068,13 @@ button {
 .voice-button.is-recording {
   background: linear-gradient(135deg, var(--coral), var(--amber));
   animation: pulse 860ms ease-in-out infinite;
+}
+
+.voice-button.is-processing {
+  background: linear-gradient(135deg, #d7f0ff, #bde5ff);
+  color: #16425d;
+  box-shadow: 0 14px 28px rgba(52, 132, 195, 0.16);
+  cursor: progress;
 }
 
 @keyframes pulse {

@@ -260,8 +260,8 @@ const customLessons = [
     node: "元角分换算",
     problem: "3 元 5 角等于多少角？",
     initialContext: "先记住一个规则：1 元等于 10 角。",
-    initialMessage: "我们先只看 3 元。1 元是 10 角，3 元可以换成多少角？",
-    initialStep: "小台阶 1：先换整元",
+    initialMessage: "我们先只看 1 元。1 元可以换成多少角？",
+    initialStep: "小台阶 1：1 元等于 10 角",
     stepHint: "遇到元和角在一起，先把几元换成几十角，再加上原来的几角。",
     teachbackPrompt: "你来当小老师讲一遍：为什么 3 元 5 角是 35 角？",
     repairPrompt: "看着图慢慢说：1 元是 10 角，3 张 1 元就是几个 10 角？",
@@ -1443,7 +1443,7 @@ function renderVoiceDock() {
       ${state.showKeyboard ? renderKeyboardComposer() : ""}
       <div class="dock-actions">
         <button class="dock-mini" data-action="camera">${icon("camera")}拍照</button>
-        <button class="voice-button ${state.recording ? "is-recording" : ""}" data-action="voice" aria-label="按住说话，松开结束">
+        <button class="voice-button ${state.recording ? "is-recording" : ""} ${state.voiceStatus === "processing" ? "is-processing" : ""}" data-action="voice" aria-label="按住说话，松开结束">
           ${icon("mic")}
           <span>${renderVoiceButtonLabel()}</span>
         </button>
@@ -1456,6 +1456,7 @@ function renderVoiceDock() {
 
 function renderVoiceButtonLabel() {
   if (state.recording) return "松开结束";
+  if (state.voiceStatus === "processing") return "正在想";
   if (state.phase === "teachback") return "讲给老师听";
   return "按住说";
 }
@@ -1518,6 +1519,7 @@ function renderLearningVisual() {
         <strong>${escapeText(lesson.visualLabel)}</strong>
       </div>
       ${renderLessonSvg(lesson)}
+      <p class="visual-turn-note">本轮图示：${escapeText(state.currentStep)}${state.currentAtomName ? ` · ${escapeText(state.currentAtomName)}` : ""}</p>
       <div class="ai-visual-card">
         <div>
           <strong>${escapeText(lesson.visualCardTitle)}</strong>
@@ -1865,17 +1867,23 @@ function renderTimeSvg(lesson) {
 }
 
 function renderMoneySvg(lesson) {
+  const atom = normalizeText(state.currentAtomName || "");
+  const step = normalizeText(state.currentStep || "");
+  const isRate = atom.includes("1元等于10角") || step.includes("1元等于10角");
+  const isConvert = atom.includes("换成几十角") || step.includes("换成几十角") || step.includes("先换整元");
+  const isAdd = atom.includes("再加") || step.includes("再加") || step.includes("闯关");
+  const title = isRate ? "先记住：1 元就是 10 角" : isConvert ? "把 3 元先换成 30 角" : isAdd ? "30 角再加 5 角" : lesson.visualTitle;
   return `
     <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="把三元五角换成三十五角">
-      <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
+      <text x="26" y="30" class="svg-title">${escapeText(title)}</text>
       <g transform="translate(44 58)">
         ${moneyNote(0, 0, "1 元", "#65d6ad")}
-        ${moneyNote(118, 0, "1 元", "#65d6ad")}
-        ${moneyNote(236, 0, "1 元", "#65d6ad")}
-        <text x="22" y="94" class="svg-note">3 张 1 元 = 30 角</text>
+        ${!isRate ? moneyNote(118, 0, "1 元", "#65d6ad") : ""}
+        ${!isRate ? moneyNote(236, 0, "1 元", "#65d6ad") : ""}
+        <text x="22" y="94" class="svg-note">${isRate ? "1 张 1 元 = 10 角" : "3 张 1 元 = 30 角"}</text>
       </g>
       <path d="M120 144h235" fill="none" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
-      <text x="362" y="150" class="svg-note">再加 5 角</text>
+      <text x="362" y="150" class="svg-note">${isRate ? "先不用加 5 角" : isConvert ? "先换整元" : "再加 5 角"}</text>
       <g transform="translate(146 128)">
         ${moneyCoin(0)}
         ${moneyCoin(34)}
@@ -1883,7 +1891,7 @@ function renderMoneySvg(lesson) {
         ${moneyCoin(102)}
         ${moneyCoin(136)}
       </g>
-      <text x="118" y="202" class="svg-win">30 角 + 5 角 = 35 角</text>
+      <text x="118" y="202" class="svg-win">${isRate ? "先会说 1 元 = 10 角" : isConvert ? "3 元 = 30 角" : "30 角 + 5 角 = 35 角"}</text>
     </svg>
   `;
 }
@@ -2181,6 +2189,7 @@ function bindEvents() {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const value = new FormData(form).get("answer");
+      form.reset();
       handleChildInput(String(value || "").trim(), "typed");
     });
   });
@@ -2987,6 +2996,7 @@ function handleChildInput(text, inputType) {
   }
 
   state.lastStudentText = text;
+  state.voiceStatus = "processing";
   render();
   askGatewayTutor(text, inputType);
 }
@@ -2995,6 +3005,7 @@ async function askGatewayTutor(text, inputType) {
   const lesson = currentLesson();
   if (window.location.protocol === "file:") {
     evaluateLocally(text, inputType);
+    state.voiceStatus = "idle";
     render();
     return;
   }
@@ -3033,6 +3044,7 @@ async function askGatewayTutor(text, inputType) {
     evaluateLocally(text, inputType);
   }
 
+  state.voiceStatus = "idle";
   render();
 }
 
@@ -3082,6 +3094,7 @@ function applyGatewayTutor(payload, inputType) {
     payload.evidenceText || "真实模型已根据孩子回答更新学习状态。",
     inputType === "voice" ? "语音回答" : "键盘回答",
   );
+  state.voiceStatus = "idle";
   speakCurrentMessage();
 }
 
