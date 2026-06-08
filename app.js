@@ -1896,33 +1896,41 @@ function renderMoneySvg(lesson) {
   const isConvert = atom.includes("换成几十角") || step.includes("换成几十角") || step.includes("先换整元");
   const isAdd = !money.isPureYuanQuestion && (atom.includes("再加") || step.includes("再加") || step.includes("闯关"));
   const title = isRate
-    ? "先记住：1 元就是 10 角"
+    ? "先看：1 元能换成几个 1 角？"
     : isConvert || money.isPureYuanQuestion
-      ? `把 ${money.yuan} 元先换成 ${money.yuanJiao} 角`
+      ? `先只换整元：${money.yuan} 元是几角？`
       : isAdd
-        ? `${money.yuanJiao} 角再加 ${money.jiao} 角`
+        ? `再加原来的 ${money.jiao} 角`
         : lesson.visualTitle;
   const noteCount = isRate ? 1 : Math.max(1, Math.min(4, money.yuan));
-  const coinCount = isRate ? 10 : isConvert || money.isPureYuanQuestion ? 0 : Math.max(0, Math.min(10, money.jiao));
+  const coinCount = isRate ? 10 : isConvert || money.isPureYuanQuestion ? 0 : Math.max(0, Math.min(5, money.jiao));
+  const leftText = isRate ? "1张1元" : `${money.yuan}张1元`;
+  const middleText = isRate ? "可以换成" : isConvert || money.isPureYuanQuestion ? "先换成" : `${money.yuanJiao}角`;
+  const rightText = isRate ? "几个1角？" : isConvert || money.isPureYuanQuestion ? "几角？" : "+";
+  const promptText = isRate
+    ? "1元 = ? 角"
+    : money.isPureYuanQuestion || isConvert
+      ? `${money.yuan}元 = ? 角`
+      : `${money.yuanJiao}角 + ${money.jiao}角 = ?`;
+  const coinGroup = coinCount
+    ? `<g transform="translate(${isRate ? 244 : 312} ${isRate ? 62 : 104})">${renderMoneyCoins(coinCount)}</g>
+      <text x="${isRate ? 282 : 326}" y="${isRate ? 158 : 156}" class="svg-note">${escapeText(isRate ? "10个1角" : `原来的${money.jiao}角`)}</text>`
+    : "";
   return `
-    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="把三元五角换成三十五角">
+    <svg class="lesson-svg money-svg" viewBox="0 0 520 214" role="img" aria-label="把元和角换成同一种单位">
       <text x="26" y="30" class="svg-title">${escapeText(title)}</text>
-      <g transform="translate(44 58)">
-        ${Array.from({ length: noteCount }, (_, index) => moneyNote(index * 106, 0, "1 元", "#65d6ad")).join("")}
-        <text x="22" y="94" class="svg-note">${isRate ? "1 张 1 元 = 10 角" : `${money.yuan} 张 1 元 = ${money.yuanJiao} 角`}</text>
+      <g transform="translate(44 48)">
+        ${Array.from({ length: noteCount }, (_, index) => moneyNote(index * 98, 0, "1元", "#65d6ad")).join("")}
       </g>
-      <path d="M120 144h235" fill="none" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
-      <text x="362" y="150" class="svg-note">${isRate || money.isPureYuanQuestion ? "先不用加几角" : isConvert ? "先换整元" : `再加 ${money.jiao} 角`}</text>
-      <g transform="translate(146 116)">
-        ${renderMoneyCoins(coinCount)}
+      ${coinGroup}
+      <g transform="translate(48 114)">
+        <text x="0" y="20" class="svg-note">${escapeText(leftText)}</text>
+        <path d="M96 13h66" fill="none" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
+        <text x="174" y="20" class="svg-note">${escapeText(middleText)}</text>
+        <text x="306" y="20" class="svg-note">${escapeText(rightText)}</text>
       </g>
-      <text x="118" y="202" class="svg-win">${
-        isRate
-          ? "先会说 1 元 = 10 角"
-          : money.isPureYuanQuestion || isConvert
-            ? `${money.yuan} 元 = ${money.yuanJiao} 角`
-            : `${money.yuanJiao} 角 + ${money.jiao} 角 = ${money.totalJiao} 角`
-      }</text>
+      <rect x="118" y="166" width="284" height="34" rx="12" fill="#fff4d8"/>
+      <text x="164" y="190" class="svg-win">${escapeText(promptText)}</text>
     </svg>
   `;
 }
