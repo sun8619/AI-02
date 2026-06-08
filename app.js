@@ -2586,11 +2586,20 @@ async function handleVoiceButton() {
       await startRecording();
       return;
     } catch {
-      toastMessage("没有拿到麦克风权限，先用模拟语音体验。");
+      state.showKeyboard = true;
+      state.transcript = "";
+      state.lastStudentText = "";
+      render();
+      toastMessage("没有拿到麦克风权限，可以再试一次或用键盘输入。");
+      return;
     }
   }
 
-  simulateVoiceInput();
+  state.showKeyboard = true;
+  state.transcript = "";
+  state.lastStudentText = "";
+  render();
+  toastMessage("语音没有启动成功，可以再试一次或用键盘输入。");
 }
 
 function stopVoiceInput() {
@@ -2746,6 +2755,8 @@ function handleRealtimeVoiceMessage(raw) {
     session.finished = true;
     cleanupRealtimeAudio(true);
     state.voiceStatus = "idle";
+    state.transcript = "";
+    if (!transcript) state.lastStudentText = "";
     render();
     if (transcript) handleChildInput(transcript, "voice");
     else toastMessage("没有听清楚，可以再按住说一次。");
@@ -2767,6 +2778,8 @@ async function fallbackRealtimeVoiceToBatch(message) {
   render();
   if (!chunks.length) {
     state.voiceStatus = "idle";
+    state.transcript = "";
+    state.lastStudentText = "";
     render();
     toastMessage(message || "没有听到声音，请再试一次。");
     return;
@@ -2833,6 +2846,7 @@ function startBrowserSpeechRecognition() {
     state.recording = false;
     state.voiceStatus = "idle";
     state.transcript = "";
+    if (!text) state.lastStudentText = "";
     render();
     if (text) handleChildInput(text, "voice");
     else {
@@ -2848,7 +2862,7 @@ async function startRecording() {
   const chunks = [];
   const options = getMediaRecorderOptions();
   const recorder = new MediaRecorder(stream, options);
-  const fallbackRecognition = startPassiveBrowserRecognition();
+  const fallbackRecognition = null;
   const timeoutId = window.setTimeout(() => {
     if (recordingSession) stopRecording();
   }, MAX_RECORDING_MS);
@@ -2945,13 +2959,10 @@ async function transcribeRecording(blob, fallbackTranscript = "") {
     render();
     handleChildInput(payload.transcript, "voice");
   } catch (error) {
-    console.warn("Speech recognition gateway fell back to browser transcript.", error);
+    console.warn("Speech recognition did not return a usable transcript.", error);
     state.voiceStatus = "idle";
-    if (fallbackTranscript.trim()) {
-      toastMessage("已听清，老师继续。");
-      handleChildInput(fallbackTranscript.trim(), "voice");
-      return;
-    }
+    state.transcript = "";
+    state.lastStudentText = "";
     state.showKeyboard = true;
     render();
     toastMessage("语音识别没有成功，请再说一次或用键盘输入。");
@@ -3096,25 +3107,6 @@ function blobToDataUrl(blob) {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
-}
-
-function simulateVoiceInput() {
-  state.recording = true;
-  state.voiceStatus = "recording";
-  render();
-  window.setTimeout(() => {
-    const transcript = getSimulatedTranscript();
-    state.recording = false;
-    state.voiceStatus = "idle";
-    handleChildInput(transcript, "voice");
-  }, 420);
-}
-
-function getSimulatedTranscript() {
-  const lesson = currentLesson();
-  if (state.phase === "teachback") return lesson.simulated.teachback;
-  if (state.phase === "repair") return lesson.simulated.repair;
-  return lesson.simulated.guiding;
 }
 
 function handleChildInput(text, inputType) {

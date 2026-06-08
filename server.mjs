@@ -464,7 +464,7 @@ async function handleSpeechTranscription(request, response) {
     sendJson(response, 200, {
       mode: "mock",
       transcript: "",
-      message: "未配置语音识别 Key，前端会回退到模拟输入。",
+      message: "未配置语音识别 Key，请让孩子再说一次或改用键盘输入。",
     });
     return;
   }
