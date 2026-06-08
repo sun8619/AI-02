@@ -1375,9 +1375,9 @@ function renderStepPanel() {
         <span>${icon("star")}小台阶</span>
         <strong>${escapeText(renderTeachingStageLabel())}</strong>
       </div>
-      <h2>${escapeText(state.currentStep)}</h2>
+      <h2>${escapeText(renderChildStepTitle(state.currentStep))}</h2>
       <p>${escapeText(renderStepHint())}</p>
-      ${state.currentAtomName ? `<p class="atom-note">当前小原子：${escapeText(state.currentAtomName)}</p>` : ""}
+      ${state.currentAtomName ? `<p class="atom-note">现在只看：${escapeText(state.currentAtomName)}</p>` : ""}
       <div class="step-ladder" aria-label="学习小台阶">
         ${lesson.microSteps
           .map(
@@ -1489,22 +1489,28 @@ function renderStepHint() {
 
 function renderTeachingStageLabel() {
   const labels = {
-    DIAGNOSE_ENTRY: "轻诊断",
-    TEACH_CONCEPT: "讲概念",
+    DIAGNOSE_ENTRY: "先看一看",
+    TEACH_CONCEPT: "讲一讲",
     GUIDED_STEP: "小台阶",
-    CHECK_UNDERSTANDING: "微练",
-    SPLIT_ATOM: "拆小一步",
-    FALLBACK_PREREQUISITE: "补前置",
+    CHECK_UNDERSTANDING: "试一试",
+    SPLIT_ATOM: "再小一步",
+    FALLBACK_PREREQUISITE: "补一小步",
     PRACTICE_SET: "闯关检验",
-    ERROR_ANALYSIS: "找卡点",
-    REMEDIATION_TEACH: "精准重讲",
-    REMEDIATION_RECHECK: "再检验",
+    ERROR_ANALYSIS: "看哪里没稳",
+    REMEDIATION_TEACH: "再看一遍",
+    REMEDIATION_RECHECK: "再试一次",
     FEYNMAN_EXPLAIN: "当小老师",
     FEYNMAN_EVAL: "听你讲",
     MASTERED: "已掌握",
     EXIT_WITH_NEXT: "下一点",
   };
   return labels[state.teachingState] || currentLesson().unit;
+}
+
+function renderChildStepTitle(step) {
+  return String(step || "")
+    .replace(/^重讲：/, "再看一遍：")
+    .replace(/^拆小：/, "再小一步：");
 }
 
 function renderDockNote() {
@@ -1534,7 +1540,7 @@ function renderLearningVisual() {
         <strong>${escapeText(lesson.visualLabel)}</strong>
       </div>
       ${renderLessonSvg(lesson)}
-      <p class="visual-turn-note">本轮图示：${escapeText(state.currentStep)}${state.currentAtomName ? ` · ${escapeText(state.currentAtomName)}` : ""}</p>
+      <p class="visual-turn-note">本轮图示：${escapeText(renderChildStepTitle(state.currentStep))}${state.currentAtomName ? ` · ${escapeText(state.currentAtomName)}` : ""}</p>
       <div class="ai-visual-card">
         <div>
           <strong>${escapeText(lesson.visualCardTitle)}</strong>
@@ -1883,33 +1889,58 @@ function renderTimeSvg(lesson) {
 }
 
 function renderMoneySvg(lesson) {
+  const money = getMoneyVisualNumbers(lesson);
   const atom = normalizeText(state.currentAtomName || "");
   const step = normalizeText(state.currentStep || "");
   const isRate = atom.includes("1元等于10角") || step.includes("1元等于10角");
   const isConvert = atom.includes("换成几十角") || step.includes("换成几十角") || step.includes("先换整元");
-  const isAdd = atom.includes("再加") || step.includes("再加") || step.includes("闯关");
-  const title = isRate ? "先记住：1 元就是 10 角" : isConvert ? "把 3 元先换成 30 角" : isAdd ? "30 角再加 5 角" : lesson.visualTitle;
+  const isAdd = !money.isPureYuanQuestion && (atom.includes("再加") || step.includes("再加") || step.includes("闯关"));
+  const title = isRate
+    ? "先记住：1 元就是 10 角"
+    : isConvert || money.isPureYuanQuestion
+      ? `把 ${money.yuan} 元先换成 ${money.yuanJiao} 角`
+      : isAdd
+        ? `${money.yuanJiao} 角再加 ${money.jiao} 角`
+        : lesson.visualTitle;
+  const noteCount = isRate ? 1 : Math.max(1, Math.min(4, money.yuan));
+  const coinCount = isRate ? 10 : isConvert || money.isPureYuanQuestion ? 0 : Math.max(0, Math.min(10, money.jiao));
   return `
     <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="把三元五角换成三十五角">
       <text x="26" y="30" class="svg-title">${escapeText(title)}</text>
       <g transform="translate(44 58)">
-        ${moneyNote(0, 0, "1 元", "#65d6ad")}
-        ${!isRate ? moneyNote(118, 0, "1 元", "#65d6ad") : ""}
-        ${!isRate ? moneyNote(236, 0, "1 元", "#65d6ad") : ""}
-        <text x="22" y="94" class="svg-note">${isRate ? "1 张 1 元 = 10 角" : "3 张 1 元 = 30 角"}</text>
+        ${Array.from({ length: noteCount }, (_, index) => moneyNote(index * 106, 0, "1 元", "#65d6ad")).join("")}
+        <text x="22" y="94" class="svg-note">${isRate ? "1 张 1 元 = 10 角" : `${money.yuan} 张 1 元 = ${money.yuanJiao} 角`}</text>
       </g>
       <path d="M120 144h235" fill="none" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
-      <text x="362" y="150" class="svg-note">${isRate ? "先不用加 5 角" : isConvert ? "先换整元" : "再加 5 角"}</text>
-      <g transform="translate(146 128)">
-        ${moneyCoin(0)}
-        ${moneyCoin(34)}
-        ${moneyCoin(68)}
-        ${moneyCoin(102)}
-        ${moneyCoin(136)}
+      <text x="362" y="150" class="svg-note">${isRate || money.isPureYuanQuestion ? "先不用加几角" : isConvert ? "先换整元" : `再加 ${money.jiao} 角`}</text>
+      <g transform="translate(146 116)">
+        ${renderMoneyCoins(coinCount)}
       </g>
-      <text x="118" y="202" class="svg-win">${isRate ? "先会说 1 元 = 10 角" : isConvert ? "3 元 = 30 角" : "30 角 + 5 角 = 35 角"}</text>
+      <text x="118" y="202" class="svg-win">${
+        isRate
+          ? "先会说 1 元 = 10 角"
+          : money.isPureYuanQuestion || isConvert
+            ? `${money.yuan} 元 = ${money.yuanJiao} 角`
+            : `${money.yuanJiao} 角 + ${money.jiao} 角 = ${money.totalJiao} 角`
+      }</text>
     </svg>
   `;
+}
+
+function getMoneyVisualNumbers(lesson) {
+  const source = normalizeText(`${state.aiMessage || ""} ${state.currentStep || ""} ${lesson.problem || ""}`);
+  const yuanJiaoMatch = source.match(/(\d+)元(\d+)角/);
+  const pureYuanQuestion = /(\d+)元是几角/.test(source);
+  const yuanOnlyMatch = source.match(/(\d+)元/);
+  const yuan = yuanJiaoMatch ? Number(yuanJiaoMatch[1]) : pureYuanQuestion && yuanOnlyMatch ? Number(yuanOnlyMatch[1]) : yuanOnlyMatch ? Number(yuanOnlyMatch[1]) : 3;
+  const jiao = yuanJiaoMatch ? Number(yuanJiaoMatch[2]) : 0;
+  return {
+    yuan: Number.isFinite(yuan) && yuan > 0 ? yuan : 3,
+    jiao: Number.isFinite(jiao) && jiao > 0 ? jiao : 0,
+    yuanJiao: (Number.isFinite(yuan) && yuan > 0 ? yuan : 3) * 10,
+    totalJiao: (Number.isFinite(yuan) && yuan > 0 ? yuan : 3) * 10 + (Number.isFinite(jiao) && jiao > 0 ? jiao : 0),
+    isPureYuanQuestion: pureYuanQuestion,
+  };
 }
 
 function renderShoppingSvg(lesson) {
@@ -1983,10 +2014,19 @@ function moneyNote(x, y, label, color) {
   `;
 }
 
-function moneyCoin(x) {
+function renderMoneyCoins(count) {
+  if (!count) return "";
+  return Array.from({ length: count }, (_, index) => {
+    const x = (index % 5) * 34;
+    const y = Math.floor(index / 5) * 34;
+    return moneyCoin(x, y);
+  }).join("");
+}
+
+function moneyCoin(x, y = 0) {
   return `
-    <circle cx="${x}" cy="16" r="15" fill="#ffd36a" stroke="#244056" stroke-width="2"/>
-    <text x="${x - 11}" y="22" class="svg-label">1角</text>
+    <circle cx="${x}" cy="${y + 16}" r="15" fill="#ffd36a" stroke="#244056" stroke-width="2"/>
+    <text x="${x - 11}" y="${y + 22}" class="svg-label">1角</text>
   `;
 }
 
@@ -2036,7 +2076,14 @@ function renderGeneratedImage() {
 
 function getVisualInteractionKey() {
   const lesson = currentLesson();
-  return [lesson.id, state.phase, state.currentStep, state.aiMessage].join("|");
+  return [lesson.id, state.phase, state.currentStep, state.currentAtomName, state.aiMessage, state.lastStudentText].join("|");
+}
+
+function resetGeneratedVisualForTurn() {
+  const lesson = currentLesson();
+  const interactionKey = getVisualInteractionKey();
+  if (state.imageJob.lessonId === lesson.id && state.imageJob.interactionKey === interactionKey && state.imageJob.status === "idle") return;
+  state.imageJob = { status: "idle", url: "", message: "", lessonId: lesson.id, interactionKey };
 }
 
 function fractionBar(x, y, denominator, numerator, color, label) {
@@ -2430,6 +2477,7 @@ function startTeachback() {
   state.aiMessage = lesson.teachbackPrompt;
   state.currentStep = "小台阶 3：用自己的话讲";
   state.feynmanStatus = "等待孩子讲";
+  resetGeneratedVisualForTurn();
   render();
   speakCurrentMessage();
 }
@@ -3082,6 +3130,7 @@ function handleChildInput(text, inputType) {
 
   state.lastStudentText = text;
   state.voiceStatus = "processing";
+  resetGeneratedVisualForTurn();
   render();
   askGatewayTutor(text, inputType);
 }
@@ -3174,6 +3223,7 @@ function applyGatewayTutor(payload, inputType) {
     if (!payload.aiMessage) state.aiMessage = lesson.doneMessage;
   }
 
+  resetGeneratedVisualForTurn();
   addEvidence(
     payload.evidenceSignal || "AI 评估",
     payload.evidenceText || "真实模型已根据孩子回答更新学习状态。",
@@ -3205,6 +3255,7 @@ function evaluateAttempt(text, inputType) {
     state.aiContext = "你已经会做这一步了。";
     state.aiMessage = "这次换你当小老师，讲给我听一遍。";
     state.feynmanStatus = "等待孩子讲";
+    resetGeneratedVisualForTurn();
     addEvidence("答对并进入复述", `孩子能做出「${lesson.node}」，开始进入讲给老师听。`, inputType === "voice" ? "语音回答" : "键盘回答");
     speakCurrentMessage();
     return;
@@ -3218,6 +3269,7 @@ function evaluateAttempt(text, inputType) {
   state.showVisual = true;
   state.strategyIndex = 1;
   state.bestStrategy = lesson.strategies[1]?.label || "画图";
+  resetGeneratedVisualForTurn();
   addEvidence("需要换讲法", "孩子回答还没有说清楚过程或答案，AI 切到看图讲法。", "画图");
   speakCurrentMessage();
 }
@@ -3241,6 +3293,7 @@ function evaluateTeachback(text, inputType) {
     state.canExplainWhy = true;
     state.canUseOwnWords = usesOwnWords;
     state.bestStrategy = usesOwnWords ? lesson.strategies[1]?.label || state.bestStrategy : state.bestStrategy;
+    resetGeneratedVisualForTurn();
     addEvidence("能用自己的话解释", `孩子复述时能说出「${lesson.node}」的关键原因。`, inputType === "voice" ? "讲给老师听" : "打字复述");
     speakCurrentMessage();
     return;
@@ -3255,6 +3308,7 @@ function evaluateTeachback(text, inputType) {
   state.showVisual = true;
   state.strategyIndex = 1;
   state.bestStrategy = lesson.strategies[1]?.label || "画图";
+  resetGeneratedVisualForTurn();
   addEvidence("会做但讲不清", "孩子复述不完整，AI 没有判错，而是换成看图追问。", "画图");
   speakCurrentMessage();
 }
@@ -3268,6 +3322,7 @@ function switchExplanation(reason) {
   state.showVisual = state.showVisual || strategy.key === "visual" || state.phase === "repair";
   state.bestStrategy = strategy.label;
   state.currentStep = strategy.key === "story" ? "小台阶 2：用生活例子想" : "小台阶 2：换一种讲法";
+  resetGeneratedVisualForTurn();
   addEvidence("换讲法", `AI 改用「${strategy.label}」帮助孩子理解。`, strategy.label);
   speakCurrentMessage();
   render();
