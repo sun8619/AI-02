@@ -172,15 +172,15 @@ function advanceAtomOrPractice({ graph, point, session, atom, inputType }) {
     });
   }
 
+  const firstQuestion = point.assessment_templates?.[0];
   const nextSession = {
     ...session,
     current_state: TeachingState.PRACTICE_SET,
-    current_atom_id: atom?.id || session.current_atom_id,
+    current_atom_id: firstQuestion?.primary_atom_id || atom?.id || session.current_atom_id,
     completed_atom_ids: completed,
     consecutive_fail_count: 0,
     assessment_index: 0,
   };
-  const firstQuestion = point.assessment_templates?.[0];
   return buildResult({
     point,
     session: nextSession,
@@ -241,7 +241,7 @@ function evaluateAssessment({ graph, point, session, text, inputType }) {
       session: nextSession,
       phase: "repair",
       aiContext: "掌握检验中发现一个小地方没稳，精确回讲对应知识原子。",
-      aiMessage: `我们发现一个小地方还没稳：${targetAtom?.atom_name || point.point_name}。先补这个小台阶，补完就回来。`,
+      aiMessage: makeAssessmentRepairMessage(current, targetAtom, point),
       currentStep: `重讲：${targetAtom?.atom_name || point.point_name}`,
       evidenceSignal: "错题映射到知识原子",
       evidenceText: `错题对应 ${targetAtom?.atom_name || targetAtomId}，不整章重讲。`,
@@ -258,6 +258,7 @@ function evaluateAssessment({ graph, point, session, text, inputType }) {
       session: {
         ...session,
         current_state: TeachingState.PRACTICE_SET,
+        current_atom_id: nextQuestion.primary_atom_id || session.current_atom_id,
         assessment_index: nextIndex,
         assessment_records: records,
       },
@@ -413,7 +414,7 @@ function fallbackToPrerequisite({ point, session, atom, fallback, inputType, rea
     session: nextSession,
     phase: "repair",
     aiContext: "孩子卡在强前置知识，先补一个前置小台阶，补完回主线。",
-    aiMessage: `我们先补一个小台阶：${fallback.atom_name}。补完它，就回到刚才那题。`,
+    aiMessage: makeTeachMessage(fallback),
     currentStep: `先补：${fallback.atom_name}`,
     evidenceSignal: "回溯前置知识",
     evidenceText: `从 ${atom?.atom_name || session.current_atom_id} 回溯到 ${fallback.atom_name}。`,
@@ -440,6 +441,23 @@ function evaluateAssessmentAnswer(text, template, point) {
     return includesAny(normalized, point.feynman_prompt?.required_signals || []);
   }
   return false;
+}
+
+function makeAssessmentRepairMessage(template, atom, point) {
+  const atomName = atom?.atom_name || "";
+  const prompt = template?.prompt || point?.entry_question || "";
+  if (atomName.includes("1元等于10角")) {
+    if (normalizeText(prompt).includes("25角")) return "25角里，先圈出10角。10角就是几元？";
+    return "我们先补一小问：1元等于几角？";
+  }
+  if (atomName.includes("换成几十角")) return "我们只补换算这一步：几元就有几个10角。你先说，2元是几角？";
+  if (atomName.includes("再加原来的几角")) return "我们只补最后一小步：先换成角，再加原来的几角。你先说，30角加5角是多少？";
+  if (atomName.includes("说清为什么先换单位")) return "这题不是只要答案，还要说原因。你先接一句：因为元和角...";
+  if (atomName.includes("看清商品价格")) return "我们先只看商品价格。题里说商品要多少钱？";
+  if (atomName.includes("看清付了多少钱")) return "我们先只看付出去的钱。题里说付了多少钱？";
+  if (atomName.includes("找回就是剩下的钱")) return "找回的钱是剩下的钱。你先说：找回是剩下，还是再付？";
+  if (atomName.includes("用减法算找回")) return "我们只补计算：付了5元，花4元，5减4等于几？";
+  return makeNoResponseMessage(atom, point);
 }
 
 function buildResult({
@@ -641,7 +659,10 @@ function includesAny(normalizedText, keywords) {
 }
 
 function normalizeText(text) {
-  return String(text || "").toLowerCase().replace(/\s/g, "");
+  return String(text || "")
+    .toLowerCase()
+    .replace(/\s/g, "")
+    .replace(/两/g, "二");
 }
 
 function toChildSentence(text) {

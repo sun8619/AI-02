@@ -193,7 +193,7 @@ export const pilotKnowledgeModules = [
           question("g1b-money-d1", direct, "2元是几角？", ["g1b-atom-one-yuan-ten-jiao", "g1b-atom-convert-yuan-to-jiao"], ["20角", "二十角", "20"]),
           question("g1b-money-d2", direct, "4元3角一共是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["43角", "四十三角", "43"]),
           question("g1b-money-v1", variant, "买铅笔要1元6角，如果全用角来数，是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["16角", "十六角", "16"]),
-          question("g1b-money-v2", variant, "25角里面有几元几角？", ["g1b-atom-one-yuan-ten-jiao", "g1b-atom-convert-yuan-to-jiao"], ["2元5角", "二元五角"]),
+          question("g1b-money-v2", variant, "25角里面有几元几角？", ["g1b-atom-one-yuan-ten-jiao", "g1b-atom-convert-yuan-to-jiao"], ["2元5角", "二元五角", "两元五角", "二元5角", "两元5角"]),
           question("g1b-money-r1", reasoning, "为什么3元5角不能直接说成35元？", ["g1b-atom-explain-same-unit"], ["单位不同", "先换成角", "元和角不一样"]),
         ],
         remediation_rules: [
