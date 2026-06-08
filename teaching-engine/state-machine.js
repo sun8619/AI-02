@@ -519,8 +519,8 @@ function makeTeachMessage(atom) {
 
 function makeRepairMessage(atom, errorTag, point) {
   const atomName = atom?.atom_name || "";
-  if (errorTag === ErrorTag.OFF_TOPIC) return `我们先回到这道题。现在只看：${atomName || point?.point_name || "这一小步"}。你可以先说一个词。`;
-  if (errorTag === ErrorTag.NO_RESPONSE) return "没关系，问题太大了。我们只回答半句：先看哪里？";
+  if (errorTag === ErrorTag.OFF_TOPIC) return makeReturnToQuestionMessage(atom, point);
+  if (errorTag === ErrorTag.NO_RESPONSE) return makeNoResponseMessage(atom, point);
   if (errorTag === ErrorTag.LANGUAGE_MISREAD) return "我把题目换成更口语的话。你先说：题里让我们找什么？";
   if ((errorTag === ErrorTag.CONCEPT_GAP || errorTag === ErrorTag.CALCULATION_SLIP) && atomName.includes("1元等于10角")) return "差一点。1元不是1角，1元可以换成10个1角。你再说一遍：1元等于几角？";
   if ((errorTag === ErrorTag.PROCESS_DROP || errorTag === ErrorTag.CALCULATION_SLIP) && atomName.includes("换成几十角")) return "先只换整元：1元是10角，所以3元是3个10角。你先说：3元是几角？";
@@ -532,6 +532,35 @@ function makeRepairMessage(atom, errorTag, point) {
   if (errorTag === ErrorTag.CALCULATION_SLIP) return "这像是小计算滑了一下。我们只检查这一步，不重讲整题。";
   if (errorTag === ErrorTag.EXPRESSION_WEAK) return "你说出了结果，还要补一句原因。你可以接着说：因为...";
   return `这个小台阶再切小一点：${atom?.atom_name || "先看第一步"}。你先说一个词也可以。`;
+}
+
+function makeNoResponseMessage(atom, point) {
+  const atomName = atom?.atom_name || "";
+  if (atomName.includes("1元等于10角")) return "没关系。我们只回答一个数：1元等于几角？";
+  if (atomName.includes("换成几十角")) return "没关系。先只看3元：1元是10角，3元是几个10角？";
+  if (atomName.includes("再加原来的几角")) return "没关系。只算最后一小步：30角加5角是多少？";
+  if (atomName.includes("看清商品价格")) return "没关系。先只看价格：本子要多少钱？";
+  if (atomName.includes("看清付了多少钱")) return "没关系。先只看付出去的钱：付了多少钱？";
+  if (atomName.includes("用减法算找回")) return "没关系。只算一小步：5减4等于几？";
+  if (atomName.includes("看到9先想差1到10")) return "没关系。只看9：9还差几就到10？";
+  if (atomName.includes("把另一个数拆成")) return "没关系。只拆4：4可以拆成1和几？";
+  if (atomName.includes("10再加剩下的数")) return "没关系。只算10加3等于几？";
+  return `没关系。我们只看这一小步：${atomName || point?.point_name || "先看第一步"}。你可以说“不知道”，老师再拆小一点。`;
+}
+
+function makeReturnToQuestionMessage(atom, point) {
+  const atomName = atom?.atom_name || "";
+  if (atomName.includes("1元等于10角")) return "这句还没有回答题目。我们回到这一小问：1元等于几角？";
+  if (atomName.includes("换成几十角")) return "这句还没有回答题目。现在只看3元：3元是几角？";
+  if (atomName.includes("再加原来的几角")) return "这句还没有回答题目。现在只算：30角加5角是多少？";
+  if (atomName.includes("看清商品价格")) return "这句还没有回答题目。先只看价格：本子要多少钱？";
+  if (atomName.includes("看清付了多少钱")) return "这句还没有回答题目。先只看付了多少钱？";
+  if (atomName.includes("找回就是剩下的钱")) return "这句还没有回答题目。找回的钱，是剩下的钱，还是又要付的钱？";
+  if (atomName.includes("用减法算找回")) return "这句还没有回答题目。现在只算：5减4等于几？";
+  if (atomName.includes("看到9先想差1到10")) return "这句还没有回答题目。现在只看：9还差几就到10？";
+  if (atomName.includes("把另一个数拆成")) return "这句还没有回答题目。现在只拆4：4可以拆成1和几？";
+  if (atomName.includes("10再加剩下的数")) return "这句还没有回答题目。现在只算：10加3等于几？";
+  return `这句还没有回答题目。我们先回到：${atomName || point?.point_name || "这一小步"}。`;
 }
 
 function makeFeynmanScaffold(requiredSignals) {
@@ -555,7 +584,11 @@ function errorTagToChildSignal(errorTag) {
 }
 
 function looksLikeNoResponse(normalized) {
-  return !normalized || ["不知道", "不会", "不懂", "没懂", "讲不出来", "不知道怎么说"].some((item) => normalized.includes(item));
+  if (!normalized) return true;
+  const unablePhrases = ["不知道", "不会", "不懂", "没懂", "讲不出来", "不知道怎么说"];
+  if (unablePhrases.some((item) => normalized.includes(item))) return true;
+  const acknowledgements = ["好的", "好吧", "可以", "行", "知道了", "明白了", "听懂了", "嗯嗯", "哦哦"];
+  return acknowledgements.includes(normalized);
 }
 
 function looksInvalidForLearning(normalized) {
