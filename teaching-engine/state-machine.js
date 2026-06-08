@@ -502,6 +502,8 @@ function makeTeachMessage(atom) {
 function makeRepairMessage(atom, errorTag) {
   if (errorTag === ErrorTag.NO_RESPONSE) return "没关系，问题太大了。我们只回答半句：先看哪里？";
   if (errorTag === ErrorTag.LANGUAGE_MISREAD) return "我把题目换成更口语的话。你先说：题里让我们找什么？";
+  if (errorTag === ErrorTag.CALCULATION_SLIP && atom?.atom_name?.includes("价格")) return "先别急着说答案。我们只看价格：商品多少钱？";
+  if (errorTag === ErrorTag.CALCULATION_SLIP && atom?.atom_name?.includes("付了多少钱")) return "先不算答案。我们只看付出去的钱是多少？";
   if (errorTag === ErrorTag.CALCULATION_SLIP) return "这像是小计算滑了一下。我们只检查这一步，不重讲整题。";
   if (errorTag === ErrorTag.EXPRESSION_WEAK) return "你说出了结果，还要补一句原因。你可以接着说：因为...";
   return `这个小台阶再切小一点：${atom?.atom_name || "先看第一步"}。你先说一个词也可以。`;
@@ -555,6 +557,7 @@ function includesAny(normalizedText, keywords) {
   const list = Array.isArray(keywords) ? keywords : [keywords];
   return list.some((keyword) => {
     const normalized = normalizeText(keyword);
+    if (/^\d$/.test(normalized)) return normalizedText === normalized;
     return normalized && normalizedText.includes(normalized);
   });
 }
