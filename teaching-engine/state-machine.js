@@ -129,6 +129,10 @@ function classifyChildAttempt({ point, atom, text, lesson }) {
     return { passed: false, error_tag: ErrorTag.CALCULATION_SLIP };
   }
 
+  if (looksOffTopic(normalized, point, atom, answerSignals)) {
+    return { passed: false, error_tag: ErrorTag.OFF_TOPIC };
+  }
+
   if (mentionsTopicButMissesUnit(normalized, point)) {
     return { passed: false, error_tag: ErrorTag.PROCESS_DROP };
   }
@@ -377,7 +381,7 @@ function handleFailure({ graph, point, session, atom, errorTag, inputType }) {
     session: nextSession,
     phase: "repair",
     aiContext: `孩子卡住原因：${errorTag}。不要重复原话，缩小台阶。`,
-    aiMessage: makeRepairMessage(atom, errorTag),
+    aiMessage: makeRepairMessage(atom, errorTag, point),
     currentStep: nextState === TeachingState.SPLIT_ATOM ? `拆小：${atom?.atom_name || point.point_name}` : `重讲：${atom?.atom_name || point.point_name}`,
     evidenceSignal: errorTagToChildSignal(errorTag),
     evidenceText: `系统判断不是简单答错，而是 ${errorTag}，已切换策略。`,
@@ -499,11 +503,18 @@ function makeTeachMessage(atom) {
   return `我们只学一步：${atom.atom_name}。${toChildSentence(atom.can_do_statement)}`;
 }
 
-function makeRepairMessage(atom, errorTag) {
+function makeRepairMessage(atom, errorTag, point) {
+  const atomName = atom?.atom_name || "";
+  if (errorTag === ErrorTag.OFF_TOPIC) return `我们先回到这道题。现在只看：${atomName || point?.point_name || "这一小步"}。你可以先说一个词。`;
   if (errorTag === ErrorTag.NO_RESPONSE) return "没关系，问题太大了。我们只回答半句：先看哪里？";
   if (errorTag === ErrorTag.LANGUAGE_MISREAD) return "我把题目换成更口语的话。你先说：题里让我们找什么？";
-  if (errorTag === ErrorTag.CALCULATION_SLIP && atom?.atom_name?.includes("价格")) return "先别急着说答案。我们只看价格：商品多少钱？";
-  if (errorTag === ErrorTag.CALCULATION_SLIP && atom?.atom_name?.includes("付了多少钱")) return "先不算答案。我们只看付出去的钱是多少？";
+  if ((errorTag === ErrorTag.CONCEPT_GAP || errorTag === ErrorTag.CALCULATION_SLIP) && atomName.includes("1元等于10角")) return "差一点。1元不是1角，1元可以换成10个1角。你再说一遍：1元等于几角？";
+  if ((errorTag === ErrorTag.PROCESS_DROP || errorTag === ErrorTag.CALCULATION_SLIP) && atomName.includes("换成几十角")) return "先只换整元：1元是10角，所以3元是3个10角。你先说：3元是几角？";
+  if ((errorTag === ErrorTag.PROCESS_DROP || errorTag === ErrorTag.CALCULATION_SLIP) && atomName.includes("再加原来的几角")) return "先别急。3元先换成30角，再加原来的5角。你先说：30角加5角是多少？";
+  if (errorTag === ErrorTag.CALCULATION_SLIP && atomName.includes("价格")) return "先别急着说答案。我们只看价格：商品多少钱？";
+  if (errorTag === ErrorTag.CALCULATION_SLIP && atomName.includes("付了多少钱")) return "先不算答案。我们只看付出去的钱是多少？";
+  if (errorTag === ErrorTag.CONCEPT_GAP && atomName.includes("找回就是剩下的钱")) return "找回的钱，就是付出去以后剩下要还给你的钱。你先说：找回是剩下的钱，还是又要付的钱？";
+  if (errorTag === ErrorTag.CALCULATION_SLIP && atomName.includes("用减法算找回")) return "先看清：付了5元，花掉4元，剩下的钱才找回。你先说：5减4等于几？";
   if (errorTag === ErrorTag.CALCULATION_SLIP) return "这像是小计算滑了一下。我们只检查这一步，不重讲整题。";
   if (errorTag === ErrorTag.EXPRESSION_WEAK) return "你说出了结果，还要补一句原因。你可以接着说：因为...";
   return `这个小台阶再切小一点：${atom?.atom_name || "先看第一步"}。你先说一个词也可以。`;
@@ -524,6 +535,7 @@ function errorTagToChildSignal(errorTag) {
     [ErrorTag.LANGUAGE_MISREAD]: "题意没听懂，换说法",
     [ErrorTag.CALCULATION_SLIP]: "偶发算错，只纠一步",
     [ErrorTag.EXPRESSION_WEAK]: "会做但讲不清，补半句",
+    [ErrorTag.OFF_TOPIC]: "回答跑开了，拉回题目",
   };
   return map[errorTag] || "需要换讲法";
 }
@@ -547,6 +559,25 @@ function mentionsOnlyResult(normalized, resultKeywords) {
 
 function hasPossibleCalculationSlip(normalized, answerKeywords) {
   return /\d/.test(normalized) && !includesAny(normalized, answerKeywords);
+}
+
+function looksOffTopic(normalized, point, atom, answerSignals) {
+  if (!normalized || /\d/.test(normalized)) return false;
+  const learningSignals = [
+    point?.point_name,
+    point?.child_title,
+    atom?.atom_name,
+    ...(atom?.check_keywords || []),
+    ...(atom?.assessment_targets || []),
+    ...(answerSignals.answerKeywords || []),
+    ...(answerSignals.attemptKeywords || []),
+    ...(answerSignals.whyKeywords || []),
+    ...(answerSignals.resultKeywords || []),
+  ];
+  if (includesAny(normalized, learningSignals)) return false;
+  const studySignals = ["元", "角", "钱", "价格", "付", "找回", "剩下", "减", "加", "等于", "题", "答案", "怎么算", "不会", "不懂", "老师", "讲", "看图", "知识点"];
+  if (includesAny(normalized, studySignals)) return false;
+  return normalized.length >= 2;
 }
 
 function mentionsTopicButMissesUnit(normalized, point) {

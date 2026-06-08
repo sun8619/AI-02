@@ -23,6 +23,7 @@ export const ErrorTag = Object.freeze({
   LANGUAGE_MISREAD: "LANGUAGE_MISREAD",
   CALCULATION_SLIP: "CALCULATION_SLIP",
   EXPRESSION_WEAK: "EXPRESSION_WEAK",
+  OFF_TOPIC: "OFF_TOPIC",
 });
 
 export const DependencyStrength = Object.freeze({

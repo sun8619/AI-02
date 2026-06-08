@@ -139,7 +139,7 @@ export const pilotKnowledgeModules = [
             atom_name: "1元等于10角",
             is_entry: true,
             can_do_statement: "孩子能说出1元就是10角。",
-            check_keywords: ["1元10角", "一元十角", "1元等于10角", "一元等于十角", "10角", "十角"],
+            check_keywords: ["10", "十", "1元10角", "一元十角", "1元等于10角", "一元等于十角", "10角", "十角"],
             dependencies: [
               makeDependency("g1b-atom-know-yuan-jiao", DependencyStrength.STRONG, "不分清单位，就不能做换算。"),
             ],
