@@ -5,10 +5,14 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { WebSocket, WebSocketServer } from "ws";
+import { createKnowledgeGraph } from "./teaching-engine/knowledge-model.js";
+import { pilotKnowledgeModules } from "./teaching-engine/pilot-curriculum.js";
+import { runTeachingTurn } from "./teaching-engine/state-machine.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "0.0.0.0";
+const teachingGraph = createKnowledgeGraph(pilotKnowledgeModules);
 
 await loadDotEnv();
 
@@ -330,19 +334,17 @@ async function handleLearningTurn(request, response) {
   const input = await readJsonBody(request);
   const phase = String(input.phase || "guiding");
   const model = selectLearningModel(phase);
-  if (!apiKey || !model) {
-    sendJson(response, 200, {
-      mode: "mock",
-      message: "本地模拟 AI 已接管。部署后配置 ARK_API_KEY 和对应教学模型，就会使用火山 Ark 真实模型。",
-      nextPhase: "mock",
-    });
-    return;
-  }
-
   const userText = String(input.text || "").trim();
   const context = String(input.context || "");
   const step = String(input.step || "");
   const lesson = input.lesson && typeof input.lesson === "object" ? input.lesson : {};
+  const engineTurn = runTeachingTurn({
+    graph: teachingGraph,
+    lesson,
+    childText: userText,
+    session: input.engineSession,
+    inputType: input.inputType || "text",
+  });
   const lessonProblem = String(lesson.problem || "比较 2/3 和 3/4 哪个大？");
   const lessonTextbook = String(lesson.textbook || "人教版 三年级上册 分数的初步认识");
   const lessonNode = String(lesson.node || "异分母分数比较");
@@ -350,6 +352,20 @@ async function handleLearningTurn(request, response) {
 
   if (!userText) {
     sendJson(response, 400, { error: "Missing text" });
+    return;
+  }
+
+  if (engineTurn) {
+    sendJson(response, 200, engineTurn);
+    return;
+  }
+
+  if (!apiKey || !model) {
+    sendJson(response, 200, {
+      mode: "mock",
+      message: "本地模拟 AI 已接管。部署后配置 ARK_API_KEY 和对应教学模型，就会使用火山 Ark 真实模型。",
+      nextPhase: "mock",
+    });
     return;
   }
 

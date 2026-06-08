@@ -1196,6 +1196,10 @@ let state = {
   aiContext: lessons[0].initialContext,
   aiMessage: lessons[0].initialMessage,
   currentStep: lessons[0].initialStep,
+  teachingState: "GUIDED_STEP",
+  currentAtomName: "",
+  engineSession: null,
+  parentSignals: null,
   feynmanStatus: "还没开始讲",
   canExplainWhy: false,
   canUseOwnWords: false,
@@ -1356,10 +1360,11 @@ function renderStepPanel() {
     <section class="step-panel compact-panel">
       <div class="panel-head">
         <span>${icon("star")}小台阶</span>
-        <strong>${escapeText(lesson.unit)}</strong>
+        <strong>${escapeText(renderTeachingStageLabel())}</strong>
       </div>
       <h2>${escapeText(state.currentStep)}</h2>
       <p>${escapeText(renderStepHint())}</p>
+      ${state.currentAtomName ? `<p class="atom-note">当前小原子：${escapeText(state.currentAtomName)}</p>` : ""}
       <div class="step-ladder" aria-label="学习小台阶">
         ${lesson.microSteps
           .map(
@@ -1457,10 +1462,34 @@ function renderVoiceButtonLabel() {
 
 function renderStepHint() {
   const lesson = currentLesson();
+  if (state.teachingState === "PRACTICE_SET") return "现在不是新讲解，是小闯关。答错也没关系，老师会只补那一个小地方。";
+  if (state.teachingState === "REMEDIATION_TEACH" || state.teachingState === "REMEDIATION_RECHECK") return "我们只补刚才没稳的小台阶，不会整章重来。";
+  if (state.teachingState === "FALLBACK_PREREQUISITE") return "这是前置小台阶，补完会自动回到刚才的知识点。";
+  if (state.teachingState === "FEYNMAN_EXPLAIN" || state.teachingState === "FEYNMAN_EVAL") return "你来当小老师，重点说先做什么、为什么这样做。";
   if (state.phase === "teachback") return "你已经会做这一步了。现在试着用自己的话讲给老师听。";
   if (state.phase === "repair") return "没关系，我们换一种讲法。先看图，再慢慢说。";
   if (state.phase === "summary") return "你能说出为什么，这个知识点就更稳了。";
   return lesson.stepHint;
+}
+
+function renderTeachingStageLabel() {
+  const labels = {
+    DIAGNOSE_ENTRY: "轻诊断",
+    TEACH_CONCEPT: "讲概念",
+    GUIDED_STEP: "小台阶",
+    CHECK_UNDERSTANDING: "微练",
+    SPLIT_ATOM: "拆小一步",
+    FALLBACK_PREREQUISITE: "补前置",
+    PRACTICE_SET: "闯关检验",
+    ERROR_ANALYSIS: "找卡点",
+    REMEDIATION_TEACH: "精准重讲",
+    REMEDIATION_RECHECK: "再检验",
+    FEYNMAN_EXPLAIN: "当小老师",
+    FEYNMAN_EVAL: "听你讲",
+    MASTERED: "已掌握",
+    EXIT_WITH_NEXT: "下一点",
+  };
+  return labels[state.teachingState] || currentLesson().unit;
 }
 
 function renderDockNote() {
@@ -1991,6 +2020,14 @@ function renderParentView() {
           </div>
         </article>
 
+        <article class="parent-card wide">
+          <div class="panel-head">
+            <span>${icon("repeat")}卡住链路</span>
+            <strong>${escapeText(renderTeachingStageLabel())}</strong>
+          </div>
+          ${renderParentSignals()}
+        </article>
+
         <article class="parent-card">
           <div class="panel-head">
             <span>${icon("repeat")}换过的讲法</span>
@@ -2037,6 +2074,28 @@ function renderParentView() {
         </article>
       </section>
     </main>
+  `;
+}
+
+function renderParentSignals() {
+  const signals = state.parentSignals;
+  if (!signals?.stuck_chain?.length) {
+    return `<p class="plain-text">目前还没有明显卡住链路。系统会记录孩子是卡在当前小台阶、前置知识，还是会做但讲不清。</p>`;
+  }
+  return `
+    <div class="evidence-list compact">
+      ${signals.stuck_chain
+        .map(
+          (item) => `
+            <div class="evidence-row">
+              <strong>${escapeText(item.error_tag || item.state || "卡住记录")}</strong>
+              <p>${escapeText(item.fallback_atom_id ? `回溯到 ${item.fallback_atom_id}` : `卡在 ${item.atom_id || "当前小台阶"}`)}</p>
+              <span>${escapeText(item.state || "记录")}</span>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
   `;
 }
 
@@ -2260,6 +2319,10 @@ function changeLesson(reason, targetIndex = null) {
   state.aiContext = reason || lesson.initialContext;
   state.aiMessage = `好，我们换一个知识点。${lesson.initialMessage}`;
   state.currentStep = lesson.initialStep;
+  state.teachingState = "GUIDED_STEP";
+  state.currentAtomName = "";
+  state.engineSession = null;
+  state.parentSignals = null;
   state.feynmanStatus = "还没开始讲";
   state.canExplainWhy = false;
   state.canUseOwnWords = false;
@@ -2942,10 +3005,13 @@ async function askGatewayTutor(text, inputType) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text,
+        inputType,
         phase: state.phase,
         context: state.aiContext,
         step: state.currentStep,
+        engineSession: state.engineSession,
         lesson: {
+          id: lesson.id,
           problem: lesson.problem,
           textbook: `${lesson.edition} ${lesson.grade} ${lesson.unit}`,
           node: lesson.node,
@@ -2979,19 +3045,25 @@ function applyGatewayTutor(payload, inputType) {
   state.phase = nextPhase;
   state.aiContext = payload.aiContext || state.aiContext;
   state.aiMessage = payload.aiMessage || state.aiMessage;
+  state.teachingState = payload.teachingState || state.teachingState;
+  state.currentAtomName = payload.currentAtomName || state.currentAtomName;
+  state.engineSession = payload.engineSession || state.engineSession;
+  state.parentSignals = payload.parentSignals || state.parentSignals;
+  if (payload.mastery) state.mastery = Number(payload.mastery) || state.mastery;
+  if (payload.currentStep) state.currentStep = payload.currentStep;
   state.feynmanStatus = payload.feynmanStatus || state.feynmanStatus;
   state.bestStrategy = payload.bestStrategy || state.bestStrategy;
 
   if (nextPhase === "teachback") {
     state.completedSteps = Math.max(state.completedSteps, 2);
     state.mastery = Math.max(state.mastery, 74);
-    state.currentStep = "小台阶 3：讲给老师听";
+    state.currentStep = payload.currentStep || "小台阶 3：讲给老师听";
   }
 
   if (nextPhase === "repair") {
     state.showVisual = true;
     state.strategyIndex = Math.max(state.strategyIndex, 1);
-    state.currentStep = "小台阶 3：再讲一次";
+    state.currentStep = payload.currentStep || "小台阶 3：再讲一次";
     state.mastery = Math.max(state.mastery, 68);
     if (!payload.aiMessage) state.aiMessage = lesson.repairPrompt;
   }
@@ -2999,7 +3071,7 @@ function applyGatewayTutor(payload, inputType) {
   if (nextPhase === "summary") {
     state.completedSteps = lesson.microSteps.length;
     state.mastery = Math.max(state.mastery, 86);
-    state.currentStep = "完成：能讲清楚原因";
+    state.currentStep = payload.currentStep || "完成：能讲清楚原因";
     state.canExplainWhy = true;
     state.canUseOwnWords = true;
     if (!payload.aiMessage) state.aiMessage = lesson.doneMessage;
