@@ -105,20 +105,23 @@ function normalizeSession(session, pointId, atomId) {
 
 function classifyChildAttempt({ point, atom, text, lesson }) {
   const normalized = normalizeText(text);
-  if (looksLikeNoResponse(normalized)) {
+  if (looksLikeNoResponse(normalized) || looksInvalidForLearning(normalized)) {
     return { passed: false, error_tag: ErrorTag.NO_RESPONSE };
   }
 
   const answerSignals = lesson?.answerSignals || lesson?.answer || {};
-  const answerHit = includesAny(normalized, answerSignals.answerKeywords || []);
-  const processHit = includesAny(normalized, atom?.assessment_targets || []) || includesAny(normalized, answerSignals.attemptKeywords || []);
-  const conceptHit = includesAny(normalized, atom?.can_do_statement || []) || includesAny(normalized, answerSignals.conceptKeywords || []);
+  const atomHit = includesAny(normalized, atom?.check_keywords || []);
+  const targetHit = includesAny(normalized, atom?.assessment_targets || []);
+  const finalAnswerHit = atom?.accepts_final_answer && includesAny(normalized, answerSignals.answerKeywords || []);
+  const processHit =
+    atom?.accepts_final_answer &&
+    (includesAny(normalized, answerSignals.attemptKeywords || []) || includesAny(normalized, answerSignals.whyKeywords || []));
 
-  if (answerHit || processHit || conceptHit) {
+  if (atomHit || targetHit || finalAnswerHit || processHit) {
     return { passed: true, error_tag: "" };
   }
 
-  if (mentionsOnlyResult(normalized, answerSignals.resultKeywords || []) && !processHit) {
+  if (mentionsOnlyResult(normalized, answerSignals.resultKeywords || []) && !processHit && !atom?.accepts_final_answer) {
     return { passed: false, error_tag: ErrorTag.EXPRESSION_WEAK };
   }
 
@@ -136,7 +139,11 @@ function classifyChildAttempt({ point, atom, text, lesson }) {
 function advanceAtomOrPractice({ graph, point, session, atom, inputType }) {
   const atoms = getPointAtoms(graph, point.id);
   const completed = unique(session.completed_atom_ids.concat(atom?.id || []));
-  const nextAtom = atoms.find((item) => !completed.includes(item.id) && item.id !== point.atoms?.at(-1)?.id);
+  const currentIndex = atoms.findIndex((item) => item.id === atom?.id);
+  const finalAtomId = atoms.at(-1)?.id;
+  const nextAtom = atoms
+    .slice(Math.max(0, currentIndex + 1))
+    .find((item) => !completed.includes(item.id) && item.id !== finalAtomId);
 
   if (nextAtom) {
     const nextSession = {
@@ -496,7 +503,7 @@ function makeRepairMessage(atom, errorTag) {
   if (errorTag === ErrorTag.NO_RESPONSE) return "没关系，问题太大了。我们只回答半句：先看哪里？";
   if (errorTag === ErrorTag.LANGUAGE_MISREAD) return "我把题目换成更口语的话。你先说：题里让我们找什么？";
   if (errorTag === ErrorTag.CALCULATION_SLIP) return "这像是小计算滑了一下。我们只检查这一步，不重讲整题。";
-  if (errorTag === ErrorTag.EXPRESSION_WEAK) return "你会做了，我们补一句原因。你可以接着说：因为...";
+  if (errorTag === ErrorTag.EXPRESSION_WEAK) return "你说出了结果，还要补一句原因。你可以接着说：因为...";
   return `这个小台阶再切小一点：${atom?.atom_name || "先看第一步"}。你先说一个词也可以。`;
 }
 
@@ -521,6 +528,15 @@ function errorTagToChildSignal(errorTag) {
 
 function looksLikeNoResponse(normalized) {
   return !normalized || ["不知道", "不会", "不懂", "没懂", "讲不出来", "不知道怎么说"].some((item) => normalized.includes(item));
+}
+
+function looksInvalidForLearning(normalized) {
+  if (!normalized) return true;
+  if (normalized.length <= 1 && !/\d/.test(normalized)) return true;
+  if (!/[\u4e00-\u9fa5a-z0-9]/i.test(normalized)) return true;
+  if (/^(.)\1{2,}$/.test(normalized)) return true;
+  if (/^(啊|嗯|额|呃|哦|哈|呵){1,4}$/.test(normalized)) return true;
+  return false;
 }
 
 function mentionsOnlyResult(normalized, resultKeywords) {

@@ -27,8 +27,8 @@ export const pilotKnowledgeModules = [
           {
             id: "g1a-atom-number-bond-10",
             atom_name: "10的分与合",
-            is_entry: true,
             can_do_statement: "孩子能说出几和几能合成10。",
+            check_keywords: ["合成10", "凑成10", "1和9", "2和8", "3和7", "4和6", "5和5", "差1", "还差1"],
             dependencies: [],
             common_error_tags: [ErrorTag.CONCEPT_GAP, ErrorTag.NO_RESPONSE],
             assessment_targets: ["能补出10的朋友数", "能把10看成两个数合起来"],
@@ -38,7 +38,9 @@ export const pilotKnowledgeModules = [
           {
             id: "g1a-atom-make-ten-from-9",
             atom_name: "看到9先想差1到10",
+            is_entry: true,
             can_do_statement: "孩子看到9加几时，能先想到9还差1就是10。",
+            check_keywords: ["9差1", "还差1", "差1到10", "凑成10", "拿1", "借1"],
             dependencies: [
               makeDependency("g1a-atom-number-bond-10", DependencyStrength.STRONG, "不知道10的分与合，就很难理解凑十。"),
             ],
@@ -51,6 +53,7 @@ export const pilotKnowledgeModules = [
             id: "g1a-atom-split-addend",
             atom_name: "把另一个数拆成1和剩下的数",
             can_do_statement: "孩子能把4拆成1和3，把6拆成1和5。",
+            check_keywords: ["4拆成1和3", "1和3", "6拆成1和5", "1和5", "7拆成1和6", "拆出1"],
             dependencies: [
               makeDependency("g1a-atom-make-ten-from-9", DependencyStrength.STRONG, "先知道拿1给9，才知道另一个数为什么要拆。"),
             ],
@@ -63,6 +66,8 @@ export const pilotKnowledgeModules = [
             id: "g1a-atom-combine-ten-rest",
             atom_name: "10再加剩下的数",
             can_do_statement: "孩子能算出9+4就是10+3等于13。",
+            check_keywords: ["10加3", "十加三", "13", "十三", "还剩3", "剩下3"],
+            accepts_final_answer: true,
             dependencies: [
               makeDependency("g1a-atom-split-addend", DependencyStrength.STRONG, "拆完后要把剩下的数接回主算式。"),
             ],
@@ -75,6 +80,7 @@ export const pilotKnowledgeModules = [
             id: "g1a-atom-explain-make-ten",
             atom_name: "说清为什么这样算",
             can_do_statement: "孩子能用自己的话说出先凑10是因为10加几更好算。",
+            check_keywords: ["10更好算", "先凑10", "凑十好算", "9差1", "先拿1"],
             dependencies: [
               makeDependency("g1a-atom-combine-ten-rest", DependencyStrength.STRONG, "会做之后才能解释做法。"),
             ],
@@ -120,8 +126,8 @@ export const pilotKnowledgeModules = [
           {
             id: "g1b-atom-know-yuan-jiao",
             atom_name: "认识元和角",
-            is_entry: true,
             can_do_statement: "孩子能分清元和角是人民币的不同单位。",
+            check_keywords: ["元", "角", "单位", "钱", "人民币", "不一样"],
             dependencies: [],
             common_error_tags: [ErrorTag.CONCEPT_GAP, ErrorTag.LANGUAGE_MISREAD],
             assessment_targets: ["能认出元和角", "能听懂几元几角"],
@@ -131,7 +137,9 @@ export const pilotKnowledgeModules = [
           {
             id: "g1b-atom-one-yuan-ten-jiao",
             atom_name: "1元等于10角",
+            is_entry: true,
             can_do_statement: "孩子能说出1元就是10角。",
+            check_keywords: ["1元10角", "一元十角", "1元等于10角", "一元等于十角", "10角", "十角"],
             dependencies: [
               makeDependency("g1b-atom-know-yuan-jiao", DependencyStrength.STRONG, "不分清单位，就不能做换算。"),
             ],
@@ -144,6 +152,7 @@ export const pilotKnowledgeModules = [
             id: "g1b-atom-convert-yuan-to-jiao",
             atom_name: "把几元换成几十角",
             can_do_statement: "孩子能把3元换成30角。",
+            check_keywords: ["3元30角", "三元三十角", "3元是30角", "三元是三十角", "30角", "三十角"],
             dependencies: [
               makeDependency("g1b-atom-one-yuan-ten-jiao", DependencyStrength.STRONG, "换算必须先知道1元=10角。"),
             ],
@@ -156,6 +165,8 @@ export const pilotKnowledgeModules = [
             id: "g1b-atom-add-leftover-jiao",
             atom_name: "再加原来的几角",
             can_do_statement: "孩子能算出3元5角是30角加5角等于35角。",
+            check_keywords: ["35角", "三十五角", "30加5", "三十加五", "30角加5角", "三十角加五角"],
+            accepts_final_answer: true,
             dependencies: [
               makeDependency("g1b-atom-convert-yuan-to-jiao", DependencyStrength.STRONG, "先把元换成角，再加原来的角。"),
             ],
@@ -168,6 +179,7 @@ export const pilotKnowledgeModules = [
             id: "g1b-atom-explain-same-unit",
             atom_name: "说清为什么先换单位",
             can_do_statement: "孩子能说出元和角不一样，要先换成同一种单位再合起来。",
+            check_keywords: ["单位不同", "元和角不一样", "先换成角", "同一种单位", "不能直接说35元"],
             dependencies: [
               makeDependency("g1b-atom-add-leftover-jiao", DependencyStrength.STRONG, "会换算之后才能解释为什么换。"),
             ],
@@ -215,6 +227,7 @@ export const pilotKnowledgeModules = [
             atom_name: "每组同样多",
             is_entry: true,
             can_do_statement: "孩子能看出每一组数量一样。",
+            check_keywords: ["每组一样", "同样多", "每盘4个", "每盘一样", "每组4个"],
             dependencies: [],
             common_error_tags: [ErrorTag.CONCEPT_GAP, ErrorTag.LANGUAGE_MISREAD],
             assessment_targets: ["能判断是不是每组同样多", "能说出每组有几个"],
@@ -225,6 +238,7 @@ export const pilotKnowledgeModules = [
             id: "g2a-atom-count-groups",
             atom_name: "数有几组",
             can_do_statement: "孩子能说出有几组。",
+            check_keywords: ["3组", "三组", "3盘", "三盘", "有3个组", "有三组"],
             dependencies: [
               makeDependency("g2a-atom-equal-groups", DependencyStrength.STRONG, "乘法来自几个同样多的组。"),
             ],
@@ -237,6 +251,7 @@ export const pilotKnowledgeModules = [
             id: "g2a-atom-repeat-add",
             atom_name: "用连加表示几个几",
             can_do_statement: "孩子能把3个4说成4+4+4。",
+            check_keywords: ["4+4+4", "四加四加四", "3个4", "三个4", "连加"],
             dependencies: [
               makeDependency("g2a-atom-count-groups", DependencyStrength.STRONG, "要先知道有几组，每组几个。"),
             ],
@@ -249,6 +264,8 @@ export const pilotKnowledgeModules = [
             id: "g2a-atom-multiply-expression",
             atom_name: "用乘法表示几个几",
             can_do_statement: "孩子能把3个4写成3x4或4x3，并说出意义。",
+            check_keywords: ["3乘4", "4乘3", "3x4", "4x3", "3个4", "乘法"],
+            accepts_final_answer: true,
             dependencies: [
               makeDependency("g2a-atom-repeat-add", DependencyStrength.STRONG, "乘法是同数连加的简便写法。"),
             ],
