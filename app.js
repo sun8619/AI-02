@@ -662,6 +662,10 @@ const curriculumBlueprints = [
     lesson: "简单购物",
     node: "用人民币解决简单购物问题",
     problem: "一本本子 4 元，付 5 元，应找回多少钱？",
+    initialContext: "购物找钱先分清商品价格和付出去的钱。",
+    initialMessage: "我们先只看价格：一本本子要多少钱？",
+    initialStep: "小台阶 1：看清商品价格",
+    stepHint: "先看商品价格，再看付了多少钱，最后用付的钱减去价格。",
     microSteps: ["看清商品价格", "看清付了多少钱", "用付的钱减去价格"],
     commonGaps: ["分不清付出和找回", "把价格和找回相加", "单位元角混用"],
     keywords: ["购物", "找钱", "付钱", "价格", "人民币"],
@@ -1057,10 +1061,10 @@ function createCurriculumLesson(spec) {
     lesson: spec.lesson,
     node: spec.node,
     problem: spec.problem,
-    initialContext: `${spec.node} 的学习从一个小问题开始。`,
-    initialMessage: `我们先学「${spec.node}」。先看这题：${spec.problem}`,
-    initialStep: `小台阶 1：${spec.microSteps[0]}`,
-    stepHint: spec.microSteps[0],
+    initialContext: spec.initialContext || `${spec.node} 的学习从一个小问题开始。`,
+    initialMessage: spec.initialMessage || `我们先学「${spec.node}」。先看这题：${spec.problem}`,
+    initialStep: spec.initialStep || `小台阶 1：${spec.microSteps[0]}`,
+    stepHint: spec.stepHint || spec.microSteps[0],
     teachbackPrompt: `这次换你当小老师，讲给我听：${spec.node} 这题应该先想什么？`,
     repairPrompt: `没关系，我们换个更小的说法。先看图，再说：${spec.microSteps[0]}。`,
     doneMessage: "你讲清楚了。你不是只说答案，还说出了怎么想。",
@@ -1136,6 +1140,7 @@ function createAnswerRules(spec) {
 }
 
 function createVisualTitle(spec) {
+  if (spec.id === "g1b-simple-shopping") return "看价格、看付出，再找回";
   if (spec.visualType === "number-line") return "在数线上一步一步看";
   if (spec.visualType === "ten-frame") return "用十格图看数量变化";
   if (spec.visualType === "place-value") return "按数位拆开看";
@@ -1147,6 +1152,14 @@ function createVisualTitle(spec) {
 }
 
 function createImagePrompt(spec) {
+  if (spec.id === "g1b-simple-shopping") {
+    return [
+      "为小学一年级孩子生成一张帮助理解购物找钱的生活情景图。",
+      "画面只表现：一本本子价格4元，孩子付5元，售货员找回1元。",
+      "画面要像清楚的儿童教学插图，主体大、背景简单、颜色柔和。",
+      "不要写复杂文字，不要写错误算式，不要真实品牌，不要真实货币细节，不要出现其他数学内容。",
+    ];
+  }
   return [
     "为小学低年级孩子生成一张帮助理解数学知识点的生活情景图。",
     `教材范围：人教版${spec.grade}${spec.unit}。`,
@@ -1438,16 +1451,17 @@ function renderVisualPlaceholder() {
 }
 
 function renderVoiceDock() {
+  const locked = state.voiceStatus === "processing";
   return `
     <section class="voice-dock" aria-label="语音输入区">
       ${state.showKeyboard ? renderKeyboardComposer() : ""}
       <div class="dock-actions">
-        <button class="dock-mini" data-action="camera">${icon("camera")}拍照</button>
-        <button class="voice-button ${state.recording ? "is-recording" : ""} ${state.voiceStatus === "processing" ? "is-processing" : ""}" data-action="voice" aria-label="按住说话，松开结束">
+        <button class="dock-mini" data-action="camera" ${locked ? "disabled" : ""}>${icon("camera")}拍照</button>
+        <button class="voice-button ${state.recording ? "is-recording" : ""} ${locked ? "is-processing" : ""}" data-action="voice" aria-label="按住说话，松开结束" ${locked ? "disabled" : ""}>
           ${icon("mic")}
           <span>${renderVoiceButtonLabel()}</span>
         </button>
-        <button class="dock-mini" data-action="toggle-keyboard">${icon("keyboard")}键盘输入</button>
+        <button class="dock-mini" data-action="toggle-keyboard" ${locked ? "disabled" : ""}>${icon("keyboard")}键盘输入</button>
       </div>
       <p class="dock-note">${escapeText(renderDockNote())}</p>
     </section>
@@ -1502,10 +1516,11 @@ function renderDockNote() {
 }
 
 function renderKeyboardComposer() {
+  const locked = state.voiceStatus === "processing";
   return `
     <form class="keyboard-composer" data-form="typed-answer">
-      <input name="answer" autocomplete="off" placeholder="也可以打字，例如：我想换知识点" />
-      <button class="btn btn-primary" type="submit">发送</button>
+      <input name="answer" autocomplete="off" placeholder="也可以打字，例如：我想换知识点" ${locked ? "disabled" : ""} />
+      <button class="btn btn-primary" type="submit" ${locked ? "disabled" : ""}>发送</button>
     </form>
   `;
 }
@@ -1535,6 +1550,7 @@ function renderLearningVisual() {
 }
 
 function renderLessonSvg(lesson) {
+  if (lesson.id === "g1b-simple-shopping") return renderShoppingSvg(lesson);
   if (lesson.visualType === "money") return renderMoneySvg(lesson);
   if (lesson.visualType === "perimeter") return renderPerimeterSvg(lesson);
   if (lesson.visualType === "time") return renderTimeSvg(lesson);
@@ -1894,6 +1910,70 @@ function renderMoneySvg(lesson) {
       <text x="118" y="202" class="svg-win">${isRate ? "先会说 1 元 = 10 角" : isConvert ? "3 元 = 30 角" : "30 角 + 5 角 = 35 角"}</text>
     </svg>
   `;
+}
+
+function renderShoppingSvg(lesson) {
+  const { price, paid, change, item } = getShoppingVisualNumbers(lesson);
+  const atom = normalizeText(state.currentAtomName || "");
+  const step = normalizeText(state.currentStep || "");
+  const isPrice = atom.includes("价格") || step.includes("价格");
+  const isPaid = atom.includes("付了多少钱") || step.includes("付了多少钱");
+  const isChange = atom.includes("找回") || atom.includes("减法") || step.includes("找回") || step.includes("减法") || step.includes("闯关");
+  const title = isPrice
+    ? `先看价格：${item}${price}元`
+    : isPaid
+      ? `再看付出：付了${paid}元`
+      : isChange
+        ? `用付的钱减价格：${paid} - ${price}`
+        : lesson.visualTitle;
+  const noteColor = isPrice ? "#65d6ad" : "#d7f0ff";
+  const paidColor = isPaid ? "#65d6ad" : "#d7f0ff";
+  const changeColor = isChange ? "#ffcf6d" : "#f4f8fb";
+
+  return `
+    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="购物找回多少钱">
+      <text x="26" y="30" class="svg-title">${escapeText(title)}</text>
+      <g transform="translate(42 58)">
+        <rect x="0" y="0" width="132" height="72" rx="12" fill="#f7fbff" stroke="#244056" stroke-width="3"/>
+        <path d="M20 22h62M20 42h48" stroke="#8eb3c7" stroke-width="5" stroke-linecap="round"/>
+        <rect x="76" y="16" width="70" height="40" rx="10" fill="${noteColor}" stroke="#244056" stroke-width="3"/>
+        <text x="91" y="43" class="svg-label">${price}元</text>
+        <text x="22" y="98" class="svg-note">商品价格</text>
+      </g>
+      <g transform="translate(218 60)">
+        <rect x="0" y="0" width="102" height="54" rx="12" fill="${paidColor}" stroke="#244056" stroke-width="3"/>
+        <text x="26" y="36" class="svg-label">${paid}元</text>
+        <text x="9" y="94" class="svg-note">付出去的钱</text>
+      </g>
+      <path d="M340 88c34 18 52 42 56 72" fill="none" stroke="#ffb72b" stroke-width="6" stroke-linecap="round"/>
+      <path d="m383 154 16 17 12-21" fill="none" stroke="#ffb72b" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <g transform="translate(390 126)">
+        <rect x="0" y="0" width="88" height="48" rx="12" fill="${changeColor}" stroke="#244056" stroke-width="3"/>
+        <text x="24" y="32" class="svg-label">${change}元</text>
+        <text x="9" y="74" class="svg-note">找回</text>
+      </g>
+      <text x="126" y="190" class="svg-win">${paid}元 - ${price}元 = ${change}元</text>
+    </svg>
+  `;
+}
+
+function getShoppingVisualNumbers(lesson) {
+  const source = normalizeText(`${state.aiMessage || ""} ${state.currentStep || ""} ${lesson.problem || ""}`);
+  const itemMatch = source.match(/(?:买|一本|一个)?(本子|橡皮|铅笔|尺子|贴纸|商品)/);
+  const priceMatch = source.match(/(?:本子|橡皮|铅笔|尺子|贴纸|商品|价格|要)(\d+)元/);
+  const paidMatch = source.match(/(?:付|付了|给|给了)(\d+)元/);
+  const yuanNumbers = Array.from(source.matchAll(/(\d+)元/g)).map((match) => Number(match[1])).filter(Number.isFinite);
+  const paid = paidMatch ? Number(paidMatch[1]) : yuanNumbers.length > 1 ? yuanNumbers[1] : 5;
+  let price = priceMatch ? Number(priceMatch[1]) : yuanNumbers[0] || 4;
+  if (price === paid && yuanNumbers.length > 1) {
+    price = yuanNumbers.find((value) => value !== paid) || price;
+  }
+  return {
+    item: itemMatch?.[1] || "商品",
+    price,
+    paid,
+    change: Math.max(0, paid - price),
+  };
 }
 
 function moneyNote(x, y, label, color) {
@@ -2982,6 +3062,11 @@ function getSimulatedTranscript() {
 }
 
 function handleChildInput(text, inputType) {
+  if (state.voiceStatus === "processing") {
+    toastMessage("老师正在回复，等这句说完再继续。");
+    return;
+  }
+
   if (!text) {
     toastMessage("先说一句或打几个字，我再继续。");
     return;

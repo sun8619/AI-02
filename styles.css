@@ -1044,6 +1044,17 @@ button {
   font-weight: 830;
 }
 
+.dock-mini:disabled,
+.voice-button:disabled,
+.keyboard-composer input:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.keyboard-composer input:disabled {
+  background: #f2f6f9;
+}
+
 .voice-button {
   display: inline-flex;
   min-width: 205px;
