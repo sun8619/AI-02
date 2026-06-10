@@ -1890,6 +1890,7 @@ function renderTimeSvg(lesson) {
 
 function renderMoneySvg(lesson) {
   const money = getMoneyVisualNumbers(lesson);
+  if (money.decomposeJiao) return renderJiaoDecomposeSvg(lesson, money);
   const atom = normalizeText(state.currentAtomName || "");
   const step = normalizeText(state.currentStep || "");
   const isRate = atom.includes("1元等于10角") || step.includes("1元等于10角");
@@ -1935,11 +1936,47 @@ function renderMoneySvg(lesson) {
   `;
 }
 
+function renderJiaoDecomposeSvg(lesson, money) {
+  const fullYuan = Math.floor(money.decomposeJiao / 10);
+  const restJiao = money.decomposeJiao % 10;
+  const groups = Array.from({ length: Math.max(1, fullYuan) }, (_, index) => {
+    const x = 54 + index * 146;
+    return `
+      <g transform="translate(${x} 70)">
+        <rect x="0" y="0" width="112" height="46" rx="12" fill="#65d6ad" stroke="#244056" stroke-width="3"/>
+        <text x="24" y="30" class="svg-label">10角</text>
+        <text x="20" y="82" class="svg-note">换成1元</text>
+      </g>
+    `;
+  }).join("");
+  const rest = restJiao
+    ? `
+      <g transform="translate(${62 + Math.max(1, fullYuan) * 146} 70)">
+        <rect x="0" y="0" width="96" height="46" rx="12" fill="#ffd36a" stroke="#244056" stroke-width="3"/>
+        <text x="22" y="30" class="svg-label">${restJiao}角</text>
+        <text x="12" y="82" class="svg-note">剩下${restJiao}角</text>
+      </g>
+    `
+    : "";
+  return `
+    <svg class="lesson-svg money-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+      <text x="26" y="30" class="svg-title">把 ${money.decomposeJiao} 角拆成几元几角</text>
+      <text x="44" y="58" class="svg-note">先每10角圈成1元，再看还剩几角</text>
+      ${groups}
+      ${rest}
+      <rect x="118" y="166" width="284" height="34" rx="12" fill="#fff4d8"/>
+      <text x="150" y="190" class="svg-win">${money.decomposeJiao}角 = ?元?角</text>
+    </svg>
+  `;
+}
+
 function getMoneyVisualNumbers(lesson) {
   const source = normalizeText(`${state.aiMessage || ""} ${state.currentStep || ""} ${lesson.problem || ""}`);
+  const decomposeMatch = source.match(/(\d+)角(?:里面|里|可以|能)?.{0,8}几元几角/);
   const yuanJiaoMatch = source.match(/(\d+)元(\d+)角/);
   const pureYuanQuestion = /(\d+)元是几角/.test(source);
   const yuanOnlyMatch = source.match(/(\d+)元/);
+  const decomposeJiao = decomposeMatch ? Number(decomposeMatch[1]) : 0;
   const yuan = yuanJiaoMatch ? Number(yuanJiaoMatch[1]) : pureYuanQuestion && yuanOnlyMatch ? Number(yuanOnlyMatch[1]) : yuanOnlyMatch ? Number(yuanOnlyMatch[1]) : 3;
   const jiao = yuanJiaoMatch ? Number(yuanJiaoMatch[2]) : 0;
   return {
@@ -1948,6 +1985,7 @@ function getMoneyVisualNumbers(lesson) {
     yuanJiao: (Number.isFinite(yuan) && yuan > 0 ? yuan : 3) * 10,
     totalJiao: (Number.isFinite(yuan) && yuan > 0 ? yuan : 3) * 10 + (Number.isFinite(jiao) && jiao > 0 ? jiao : 0),
     isPureYuanQuestion: pureYuanQuestion,
+    decomposeJiao: Number.isFinite(decomposeJiao) && decomposeJiao > 0 ? decomposeJiao : 0,
   };
 }
 
