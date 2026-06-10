@@ -91,10 +91,10 @@ export const pilotKnowledgeModules = [
           },
         ],
         assessment_templates: [
-          question("g1a-add-9-plus-d1", direct, "9+3等于几？你可以先凑成10。", ["g1a-atom-make-ten-from-9", "g1a-atom-split-addend", "g1a-atom-combine-ten-rest"], ["12", "十二", "10加2"]),
-          question("g1a-add-9-plus-d2", direct, "9+6等于几？", ["g1a-atom-make-ten-from-9", "g1a-atom-split-addend", "g1a-atom-combine-ten-rest"], ["15", "十五", "10加5"]),
-          question("g1a-add-9-plus-v1", variant, "有9颗糖，又来了5颗，一共有几颗？", ["g1a-atom-make-ten-from-9", "g1a-atom-combine-ten-rest"], ["14", "十四", "10加4"]),
-          question("g1a-add-9-plus-v2", variant, "算9+7时，7要拆成1和几？", ["g1a-atom-split-addend"], ["6", "六", "1和6"]),
+          question("g1a-add-9-plus-d1", direct, "9+3等于几？你可以先凑成10。", ["g1a-atom-make-ten-from-9", "g1a-atom-split-addend", "g1a-atom-combine-ten-rest"], ["12", "十二", "10加2"], { kind: "number", value: 12 }),
+          question("g1a-add-9-plus-d2", direct, "9+6等于几？", ["g1a-atom-make-ten-from-9", "g1a-atom-split-addend", "g1a-atom-combine-ten-rest"], ["15", "十五", "10加5"], { kind: "number", value: 15 }),
+          question("g1a-add-9-plus-v1", variant, "有9颗糖，又来了5颗，一共有几颗？", ["g1a-atom-make-ten-from-9", "g1a-atom-combine-ten-rest"], ["14", "十四", "10加4"], { kind: "number", value: 14 }),
+          question("g1a-add-9-plus-v2", variant, "算9+7时，7要拆成1和几？", ["g1a-atom-split-addend"], ["6", "六", "1和6"], { kind: "number", value: 6 }),
           question("g1a-add-9-plus-r1", reasoning, "为什么9加几时，我们常常先把9凑成10？", ["g1a-atom-explain-make-ten"], ["10更好算", "凑成10", "9差1"]),
         ],
         remediation_rules: [
@@ -190,10 +190,10 @@ export const pilotKnowledgeModules = [
           },
         ],
         assessment_templates: [
-          question("g1b-money-d1", direct, "2元是几角？", ["g1b-atom-one-yuan-ten-jiao", "g1b-atom-convert-yuan-to-jiao"], ["20角", "二十角", "20"]),
-          question("g1b-money-d2", direct, "4元3角一共是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["43角", "四十三角", "43"]),
-          question("g1b-money-v1", variant, "买铅笔要1元6角，如果全用角来数，是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["16角", "十六角", "16"]),
-          question("g1b-money-v2", variant, "25角里面有几元几角？", ["g1b-atom-one-yuan-ten-jiao", "g1b-atom-convert-yuan-to-jiao"], ["2元5角", "二元五角", "两元五角", "二元5角", "两元5角"]),
+          question("g1b-money-d1", direct, "2元是几角？", ["g1b-atom-one-yuan-ten-jiao", "g1b-atom-convert-yuan-to-jiao"], ["20角", "二十角", "20"], { kind: "money_jiao", totalJiao: 20 }),
+          question("g1b-money-d2", direct, "4元3角一共是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["43角", "四十三角", "43"], { kind: "money_jiao", totalJiao: 43 }),
+          question("g1b-money-v1", variant, "买铅笔要1元6角，如果全用角来数，是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["16角", "十六角", "16"], { kind: "money_jiao", totalJiao: 16 }),
+          question("g1b-money-v2", variant, "25角里面有几元几角？", ["g1b-atom-one-yuan-ten-jiao", "g1b-atom-convert-yuan-to-jiao"], ["2元5角", "二元五角", "两元五角", "二元5角", "两元5角"], { kind: "money_decompose", yuan: 2, jiao: 5, totalJiao: 25 }),
           question("g1b-money-r1", reasoning, "为什么3元5角不能直接说成35元？", ["g1b-atom-explain-same-unit"], ["单位不同", "先换成角", "元和角不一样"]),
         ],
         remediation_rules: [
@@ -281,10 +281,10 @@ export const pilotKnowledgeModules = [
           },
         ],
         assessment_templates: [
-          question("g1b-shop-d1", direct, "买橡皮2元，付5元，应找回多少钱？", ["g1b-shop-atom-read-price", "g1b-shop-atom-subtract-change"], ["3", "3元", "三元", "5减2"]),
-          question("g1b-shop-d2", direct, "买铅笔3元，付5元，应找回多少钱？", ["g1b-shop-atom-read-paid", "g1b-shop-atom-subtract-change"], ["2", "2元", "二元", "5减3"]),
-          question("g1b-shop-v1", variant, "买尺子6元，付10元，应找回多少钱？", ["g1b-shop-atom-change-means-left", "g1b-shop-atom-subtract-change"], ["4", "4元", "四元", "10减6"]),
-          question("g1b-shop-v2", variant, "买贴纸4元，付10元，应找回多少钱？", ["g1b-shop-atom-change-means-left", "g1b-shop-atom-subtract-change"], ["6", "6元", "六元", "10减4"]),
+          question("g1b-shop-d1", direct, "买橡皮2元，付5元，应找回多少钱？", ["g1b-shop-atom-read-price", "g1b-shop-atom-subtract-change"], ["3", "3元", "三元", "5减2"], { kind: "money_yuan", yuan: 3 }),
+          question("g1b-shop-d2", direct, "买铅笔3元，付5元，应找回多少钱？", ["g1b-shop-atom-read-paid", "g1b-shop-atom-subtract-change"], ["2", "2元", "二元", "5减3"], { kind: "money_yuan", yuan: 2 }),
+          question("g1b-shop-v1", variant, "买尺子6元，付10元，应找回多少钱？", ["g1b-shop-atom-change-means-left", "g1b-shop-atom-subtract-change"], ["4", "4元", "四元", "10减6"], { kind: "money_yuan", yuan: 4 }),
+          question("g1b-shop-v2", variant, "买贴纸4元，付10元，应找回多少钱？", ["g1b-shop-atom-change-means-left", "g1b-shop-atom-subtract-change"], ["6", "6元", "六元", "10减4"], { kind: "money_yuan", yuan: 6 }),
           question("g1b-shop-r1", reasoning, "为什么找回的钱要用付的钱减价格？", ["g1b-shop-atom-explain-change"], ["付的钱", "花掉", "剩下", "减"]),
         ],
         remediation_rules: [
@@ -368,10 +368,10 @@ export const pilotKnowledgeModules = [
           },
         ],
         assessment_templates: [
-          question("g2a-mul-d1", direct, "4组，每组2个，一共有几个？", ["g2a-atom-equal-groups", "g2a-atom-repeat-add"], ["8", "八", "4个2"]),
-          question("g2a-mul-d2", direct, "5个3可以写成哪个连加式？", ["g2a-atom-count-groups", "g2a-atom-repeat-add"], ["3+3+3+3+3", "五个3", "5个3"]),
-          question("g2a-mul-v1", variant, "有6行小星星，每行2颗，一共有几颗？", ["g2a-atom-equal-groups", "g2a-atom-multiply-expression"], ["12", "十二", "6个2"]),
-          question("g2a-mul-v2", variant, "2+2+2+2表示几个几？", ["g2a-atom-count-groups", "g2a-atom-repeat-add"], ["4个2", "四个2"]),
+          question("g2a-mul-d1", direct, "4组，每组2个，一共有几个？", ["g2a-atom-equal-groups", "g2a-atom-repeat-add"], ["8", "八", "4个2"], { kind: "number", value: 8 }),
+          question("g2a-mul-d2", direct, "5个3可以写成哪个连加式？", ["g2a-atom-count-groups", "g2a-atom-repeat-add"], ["3+3+3+3+3", "五个3", "5个3"], { kind: "repeat_add", addend: 3, count: 5 }),
+          question("g2a-mul-v1", variant, "有6行小星星，每行2颗，一共有几颗？", ["g2a-atom-equal-groups", "g2a-atom-multiply-expression"], ["12", "十二", "6个2"], { kind: "number", value: 12 }),
+          question("g2a-mul-v2", variant, "2+2+2+2表示几个几？", ["g2a-atom-count-groups", "g2a-atom-repeat-add"], ["4个2", "四个2"], { kind: "groups_of", count: 4, each: 2 }),
           question("g2a-mul-r1", reasoning, "为什么3个4可以用乘法表示？", ["g2a-atom-multiply-expression"], ["同样多", "3个4", "相同加数", "连加"]),
         ],
         remediation_rules: [
@@ -389,12 +389,13 @@ export const pilotKnowledgeModules = [
   },
 ];
 
-function question(id, dimension, prompt, atomIds, expectedKeywords = []) {
+function question(id, dimension, prompt, atomIds, expectedKeywords = [], expected = {}) {
   return {
     id,
     dimension,
     prompt,
     expected_keywords: expectedKeywords,
+    expected,
     primary_atom_id: atomIds[0],
     secondary_atom_ids: atomIds.slice(1),
   };
