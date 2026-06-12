@@ -1458,6 +1458,74 @@ function getLessonLadderSteps(lesson) {
   return Array.isArray(lesson.microSteps) ? lesson.microSteps : [];
 }
 
+function syncLadderProgress(payload = {}) {
+  const lesson = currentLesson();
+  const ladderSteps = getLessonLadderSteps(lesson);
+  if (!ladderSteps.length) return;
+
+  const teachingState = payload.teachingState || state.teachingState;
+  const stageText = normalizeText(`${payload.currentStep || ""} ${state.currentStep || ""} ${payload.bestStrategy || ""} ${state.bestStrategy || ""}`);
+  if (
+    ["PRACTICE_SET", "FEYNMAN_EXPLAIN", "FEYNMAN_EVAL", "MASTERED"].includes(teachingState) ||
+    state.phase === "summary" ||
+    stageText.includes("闯关检验")
+  ) {
+    state.completedSteps = ladderSteps.length;
+    return;
+  }
+
+  const activeIndex = findActiveLadderIndex(lesson, payload);
+  if (activeIndex >= 0) {
+    state.completedSteps = Math.max(0, Math.min(activeIndex, ladderSteps.length - 1));
+  }
+}
+
+function findActiveLadderIndex(lesson, payload = {}) {
+  const ladderSteps = getLessonLadderSteps(lesson);
+  const source = normalizeText(
+    [
+      payload.currentAtomName,
+      payload.currentStep,
+      state.currentAtomName,
+      state.currentStep,
+      payload.aiMessage,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+  if (!source) return -1;
+
+  const mapped = findMappedLadderIndex(lesson, source);
+  if (mapped >= 0) return mapped;
+
+  return ladderSteps.findIndex((step) => {
+    const normalizedStep = normalizeText(step);
+    if (!normalizedStep) return false;
+    return source.includes(normalizedStep) || normalizedStep.includes(source);
+  });
+}
+
+function findMappedLadderIndex(lesson, source) {
+  if (lesson.id === "renminbi-conversion") {
+    if (source.includes("认识元和角") || source.includes("认识元角分")) return 0;
+    if (source.includes("1元等于10角") || source.includes("一元等于十角")) return 1;
+    if (source.includes("1角等于10分") || source.includes("一角等于十分")) return 2;
+    if (source.includes("换成几十角") || source.includes("把元换成角")) return 3;
+    if (source.includes("再加原来的几角") || source.includes("加原来的角")) return 4;
+    if (source.includes("说清为什么") || source.includes("先换单位")) return 5;
+  }
+
+  if (lesson.id === "g1b-simple-shopping") {
+    if (source.includes("看清商品价格") || source.includes("价格")) return 0;
+    if (source.includes("看清付了多少钱") || source.includes("付")) return 1;
+    if (source.includes("找回")) return 2;
+    if (source.includes("减法")) return 3;
+    if (source.includes("说清为什么")) return 4;
+  }
+
+  return -1;
+}
+
 function renderInteractionPanel(actionButtons) {
   return `
     <section class="interaction-panel">
@@ -3315,7 +3383,7 @@ function applyGatewayTutor(payload, inputType) {
   state.bestStrategy = payload.bestStrategy || state.bestStrategy;
 
   if (nextPhase === "teachback") {
-    state.completedSteps = Math.max(state.completedSteps, 2);
+    state.completedSteps = getLessonLadderSteps(lesson).length;
     state.mastery = Math.max(state.mastery, 74);
     state.currentStep = payload.currentStep || "小台阶 3：讲给老师听";
   }
@@ -3329,7 +3397,7 @@ function applyGatewayTutor(payload, inputType) {
   }
 
   if (nextPhase === "summary") {
-    state.completedSteps = lesson.microSteps.length;
+    state.completedSteps = getLessonLadderSteps(lesson).length;
     state.mastery = Math.max(state.mastery, 86);
     state.currentStep = payload.currentStep || "完成：能讲清楚原因";
     state.canExplainWhy = true;
@@ -3337,6 +3405,7 @@ function applyGatewayTutor(payload, inputType) {
     if (!payload.aiMessage) state.aiMessage = lesson.doneMessage;
   }
 
+  syncLadderProgress(payload);
   resetGeneratedVisualForTurn();
   addEvidence(
     payload.evidenceSignal || "AI 评估",
@@ -3364,7 +3433,7 @@ function evaluateAttempt(text, inputType) {
   if (knowsProcess && picksAnswer) {
     state.phase = "teachback";
     state.mastery = Math.max(state.mastery, 74);
-    state.completedSteps = Math.max(2, Math.min(lesson.microSteps.length - 1, 2));
+    state.completedSteps = getLessonLadderSteps(lesson).length;
     state.currentStep = "小台阶 3：讲给老师听";
     state.aiContext = "你已经会做这一步了。";
     state.aiMessage = "这次换你当小老师，讲给我听一遍。";
@@ -3399,7 +3468,7 @@ function evaluateTeachback(text, inputType) {
   if (mentionsConcept && explainsWhy && comparesResult) {
     state.phase = "summary";
     state.mastery = 86;
-    state.completedSteps = lesson.microSteps.length;
+    state.completedSteps = getLessonLadderSteps(lesson).length;
     state.currentStep = "完成：能讲清楚原因";
     state.aiContext = "你讲清楚了关键原因。";
     state.aiMessage = lesson.doneMessage;
