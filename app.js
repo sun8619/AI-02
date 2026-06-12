@@ -1051,22 +1051,42 @@ function buildLessonCatalog() {
     const custom = customById.get(spec.id);
     const generatedLesson = createCurriculumLesson(spec);
     return custom
-      ? {
-          ...generatedLesson,
-          ...custom,
-          prerequisites: custom.prerequisites?.length ? custom.prerequisites : generatedLesson.prerequisites,
-          microSteps: custom.microSteps?.length ? custom.microSteps : generatedLesson.microSteps,
-          commonGaps: custom.commonGaps?.length ? custom.commonGaps : generatedLesson.commonGaps,
-          knowledgeLayers: generatedLesson.knowledgeLayers,
-          substeps: generatedLesson.substeps,
-          masterySignals: generatedLesson.masterySignals,
-          diagnosticFocus: generatedLesson.diagnosticFocus,
-          curriculumKeywords: spec.keywords,
-        }
+      ? mergeCustomLessonWithCurriculum(custom, generatedLesson, spec)
       : generatedLesson;
   });
   const generatedIds = new Set(generated.map((lesson) => lesson.id));
   return generated.concat(customLessons.filter((lesson) => !generatedIds.has(lesson.id)));
+}
+
+function mergeCustomLessonWithCurriculum(custom, generatedLesson, spec) {
+  return {
+    ...generatedLesson,
+    ...custom,
+    grade: generatedLesson.grade,
+    unit: generatedLesson.unit,
+    lesson: generatedLesson.lesson,
+    node: generatedLesson.node,
+    problem: generatedLesson.problem,
+    initialContext: generatedLesson.initialContext,
+    initialMessage: generatedLesson.initialMessage,
+    initialStep: generatedLesson.initialStep,
+    stepHint: generatedLesson.stepHint,
+    teachbackPrompt: generatedLesson.teachbackPrompt,
+    repairPrompt: generatedLesson.repairPrompt,
+    doneMessage: generatedLesson.doneMessage,
+    prerequisites: generatedLesson.prerequisites,
+    microSteps: generatedLesson.microSteps,
+    commonGaps: generatedLesson.commonGaps,
+    knowledgeLayers: generatedLesson.knowledgeLayers,
+    substeps: generatedLesson.substeps,
+    masterySignals: generatedLesson.masterySignals,
+    diagnosticFocus: generatedLesson.diagnosticFocus,
+    strategies: generatedLesson.strategies,
+    summary: generatedLesson.summary,
+    explainSummary: generatedLesson.explainSummary,
+    nextSuggestion: generatedLesson.nextSuggestion,
+    curriculumKeywords: spec.keywords,
+  };
 }
 
 function mergeCurriculumBlueprints(overrides, fallback) {
@@ -1406,6 +1426,7 @@ function groupLessonsByGrade() {
 
 function renderStepPanel() {
   const lesson = currentLesson();
+  const ladderSteps = getLessonLadderSteps(lesson);
   return `
     <section class="step-panel compact-panel">
       <div class="panel-head">
@@ -1416,7 +1437,7 @@ function renderStepPanel() {
       <p>${escapeText(renderStepHint())}</p>
       ${state.currentAtomName ? `<p class="atom-note">现在只看：${escapeText(state.currentAtomName)}</p>` : ""}
       <div class="step-ladder" aria-label="学习小台阶">
-        ${lesson.microSteps
+        ${ladderSteps
           .map(
             (step, index) => `
               <div class="ladder-step ${index < state.completedSteps ? "is-done" : ""} ${index === state.completedSteps ? "is-now" : ""}">
@@ -1429,6 +1450,12 @@ function renderStepPanel() {
       </div>
     </section>
   `;
+}
+
+function getLessonLadderSteps(lesson) {
+  const substeps = Array.isArray(lesson.substeps) ? lesson.substeps.filter(Boolean) : [];
+  if (substeps.length > 3) return substeps;
+  return Array.isArray(lesson.microSteps) ? lesson.microSteps : [];
 }
 
 function renderInteractionPanel(actionButtons) {
