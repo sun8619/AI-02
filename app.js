@@ -329,7 +329,7 @@ const customLessons = [
   },
 ];
 
-const curriculumBlueprints = [
+const legacyCurriculumBlueprints = [
   {
     id: "g1a-count-objects",
     grade: "一年级上册",
@@ -1038,16 +1038,49 @@ const curriculumBlueprints = [
   },
 ];
 
+const curriculumBlueprints = mergeCurriculumBlueprints(
+  Array.isArray(window.gradeOneTwoKnowledgeCards) ? window.gradeOneTwoKnowledgeCards : [],
+  legacyCurriculumBlueprints,
+);
+
 const lessons = buildLessonCatalog();
 
 function buildLessonCatalog() {
   const customById = new Map(customLessons.map((lesson) => [lesson.id, lesson]));
   const generated = curriculumBlueprints.map((spec) => {
     const custom = customById.get(spec.id);
-    return custom ? { ...custom, curriculumKeywords: spec.keywords } : createCurriculumLesson(spec);
+    const generatedLesson = createCurriculumLesson(spec);
+    return custom
+      ? {
+          ...generatedLesson,
+          ...custom,
+          prerequisites: custom.prerequisites?.length ? custom.prerequisites : generatedLesson.prerequisites,
+          microSteps: custom.microSteps?.length ? custom.microSteps : generatedLesson.microSteps,
+          commonGaps: custom.commonGaps?.length ? custom.commonGaps : generatedLesson.commonGaps,
+          knowledgeLayers: generatedLesson.knowledgeLayers,
+          substeps: generatedLesson.substeps,
+          masterySignals: generatedLesson.masterySignals,
+          diagnosticFocus: generatedLesson.diagnosticFocus,
+          curriculumKeywords: spec.keywords,
+        }
+      : generatedLesson;
   });
   const generatedIds = new Set(generated.map((lesson) => lesson.id));
   return generated.concat(customLessons.filter((lesson) => !generatedIds.has(lesson.id)));
+}
+
+function mergeCurriculumBlueprints(overrides, fallback) {
+  const byId = new Map(fallback.map((item) => [item.id, item]));
+  for (const override of overrides) {
+    if (!override?.id || !byId.has(override.id)) continue;
+    byId.set(override.id, {
+      ...byId.get(override.id),
+      ...override,
+      keywords: uniqueKeywords([...(byId.get(override.id).keywords || []), ...(override.keywords || [])]),
+      answerKeywords: uniqueKeywords([...(byId.get(override.id).answerKeywords || []), ...(override.answerKeywords || [])]),
+    });
+  }
+  return Array.from(byId.values());
 }
 
 function createCurriculumLesson(spec) {
@@ -1071,6 +1104,10 @@ function createCurriculumLesson(spec) {
     prerequisites: createPrerequisites(spec),
     microSteps: spec.microSteps,
     commonGaps: spec.commonGaps,
+    knowledgeLayers: spec.knowledgeLayers || ["识别层", "理解层", "操作层", "表达层", "迁移层"],
+    substeps: spec.substeps || spec.microSteps,
+    masterySignals: spec.masterySignals || [],
+    diagnosticFocus: spec.diagnosticFocus || spec.masterySignals || spec.commonGaps || [],
     strategies,
     answer: createAnswerRules(spec),
     visualType: spec.visualType || "generic",
@@ -1130,10 +1167,10 @@ function createPrerequisites(spec) {
 function createAnswerRules(spec) {
   const base = spec.answerKeywords || [];
   return {
-    attemptKeywords: uniqueKeywords(base.concat(spec.microSteps, spec.keywords || [])),
+    attemptKeywords: uniqueKeywords(base.concat(spec.microSteps, spec.masterySignals || [], spec.keywords || [])),
     answerKeywords: uniqueKeywords(base),
     conceptKeywords: uniqueKeywords([spec.node, spec.lesson, spec.unit].concat(spec.keywords || [])),
-    whyKeywords: uniqueKeywords(spec.microSteps.concat(["因为", "所以", "先", "再", "最后"])),
+    whyKeywords: uniqueKeywords(spec.microSteps.concat(spec.masterySignals || [], ["因为", "所以", "先", "再", "最后"])),
     ownWordsKeywords: uniqueKeywords(["我想", "先", "再", "图上", "生活里", "可以"].concat(spec.keywords || [])),
     resultKeywords: uniqueKeywords(base.concat(spec.microSteps.slice(-1))),
   };
@@ -2182,6 +2219,14 @@ function renderParentView() {
               <h3>常见卡点</h3>
               <ul>${lesson.commonGaps.map((item) => `<li>${escapeText(item)}</li>`).join("")}</ul>
             </div>
+            <div>
+              <h3>掌握标志</h3>
+              <ul>${(lesson.masterySignals || []).map((item) => `<li>${escapeText(item)}</li>`).join("")}</ul>
+            </div>
+            <div>
+              <h3>五层目标</h3>
+              <ul>${(lesson.knowledgeLayers || []).map((item) => `<li>${escapeText(item)}</li>`).join("")}</ul>
+            </div>
           </div>
         </article>
 
@@ -3202,6 +3247,10 @@ async function askGatewayTutor(text, inputType) {
           prerequisites: lesson.prerequisites,
           microSteps: lesson.microSteps,
           commonGaps: lesson.commonGaps,
+          knowledgeLayers: lesson.knowledgeLayers,
+          substeps: lesson.substeps,
+          masterySignals: lesson.masterySignals,
+          diagnosticFocus: lesson.diagnosticFocus,
           answerSignals: lesson.answer,
           teachingStrategies: lesson.strategies.map((strategy) => strategy.label),
         },
