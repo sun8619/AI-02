@@ -149,6 +149,19 @@ export const pilotKnowledgeModules = [
             teaching_actions: [TeachingAction.EXPLAIN, TeachingAction.MICRO_PRACTICE],
           },
           {
+            id: "g1b-atom-one-jiao-ten-fen",
+            atom_name: "1角等于10分",
+            can_do_statement: "孩子能说出1角就是10分，知道元、角、分是一级一级换的。",
+            check_keywords: ["10", "十", "1角10分", "一角十分", "1角等于10分", "一角等于十分", "10分", "十分"],
+            dependencies: [
+              makeDependency("g1b-atom-know-yuan-jiao", DependencyStrength.MEDIUM, "认识角之后，再知道角和分的关系。"),
+            ],
+            common_error_tags: [ErrorTag.CONCEPT_GAP, ErrorTag.PREREQUISITE_GAP],
+            assessment_targets: ["能说出1角=10分", "知道元角分是不同单位"],
+            remediation_targets: ["画10个1分组成1角"],
+            teaching_actions: [TeachingAction.EXPLAIN, TeachingAction.MICRO_PRACTICE],
+          },
+          {
             id: "g1b-atom-convert-yuan-to-jiao",
             atom_name: "把几元换成几十角",
             can_do_statement: "孩子能把3元换成30角。",
@@ -194,7 +207,7 @@ export const pilotKnowledgeModules = [
           question("g1b-money-d2", direct, "4元3角一共是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["43角", "四十三角", "43"], { kind: "money_jiao", totalJiao: 43 }),
           question("g1b-money-v1", variant, "买铅笔要1元6角，如果全用角来数，是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["16角", "十六角", "16"], { kind: "money_jiao", totalJiao: 16 }),
           question("g1b-money-v2", variant, "25角里面有几元几角？", ["g1b-atom-one-yuan-ten-jiao", "g1b-atom-convert-yuan-to-jiao"], ["2元5角", "二元五角", "两元五角", "二元5角", "两元5角"], { kind: "money_decompose", yuan: 2, jiao: 5, totalJiao: 25 }),
-          question("g1b-money-r1", reasoning, "为什么3元5角不能直接说成35元？", ["g1b-atom-explain-same-unit"], ["单位不同", "先换成角", "元和角不一样"]),
+          question("g1b-money-r1", reasoning, "只说原因：元和角单位一样吗？所以要先换成什么单位？", ["g1b-atom-explain-same-unit"], ["单位不同", "先换成角", "元和角不一样", "单位不一样", "换成同一种单位"]),
         ],
         remediation_rules: [
           remediation("g1b-money-r-unit", ErrorTag.LANGUAGE_MISREAD, "g1b-atom-know-yuan-jiao", "先用购物故事重说元和角。"),

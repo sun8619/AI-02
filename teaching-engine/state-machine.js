@@ -202,7 +202,7 @@ function advanceAtomOrPractice({ graph, point, session, atom, inputType }) {
     session: nextSession,
     phase: "guiding",
     aiContext: "进入掌握检验。先做直接题，再做变式题和说理题。",
-    aiMessage: `我们来做一个小闯关。第一题：${firstQuestion?.prompt || point.entry_question}`,
+    aiMessage: makeAssessmentPromptMessage(firstQuestion, "我们来做一个小闯关。第一题："),
     currentStep: "闯关检验 1/5",
     evidenceSignal: "进入掌握检验",
     evidenceText: "当前知识点的核心小台阶已走完，开始做直接题、变式题和说理题。",
@@ -286,7 +286,7 @@ function evaluateAssessment({ graph, point, session, text, inputType }) {
       },
       phase: "guiding",
       aiContext: "继续掌握检验。",
-      aiMessage: `这一题过了。下一题：${nextQuestion.prompt}`,
+      aiMessage: makeAssessmentPromptMessage(nextQuestion, "这一题过了。下一题："),
       currentStep: `闯关检验 ${nextIndex + 1}/${templates.length}`,
       evidenceSignal: "检验题通过",
       evidenceText: `孩子通过 ${current?.prompt || "当前检验题"}`,
@@ -459,6 +459,14 @@ function getCurrentAssessment(point, session) {
   return templates[session.assessment_index] || null;
 }
 
+function makeAssessmentPromptMessage(template, prefix = "") {
+  if (!template) return `${prefix}先看这一小问。`;
+  if (template.id === "g1b-money-r1" || template.primary_atom_id === "g1b-atom-explain-same-unit") {
+    return `${prefix}只说原因：元和角单位一样吗？所以要先换成什么单位？`;
+  }
+  return `${prefix}${template.prompt}`;
+}
+
 function returnToAssessmentQuestion({ point, session, atom, assessment, inputType }) {
   const nextSession = {
     ...session,
@@ -472,7 +480,7 @@ function returnToAssessmentQuestion({ point, session, atom, assessment, inputTyp
     session: nextSession,
     phase: "guiding",
     aiContext: "补救小台阶已通过，回到刚才没稳的题，不继续跑偏。",
-    aiMessage: `这一小步补上了。我们回到刚才这题：${assessment.prompt}`,
+    aiMessage: makeAssessmentPromptMessage(assessment, "这一小步补上了。回到刚才这题："),
     currentStep: `回到闯关：${assessment.prompt}`,
     evidenceSignal: "补完后回到原题",
     evidenceText: `孩子已补上 ${atom?.atom_name || point.point_name}，回到 ${assessment.prompt}`,
@@ -598,6 +606,9 @@ function makeDiagnosis(passed, errorTag = "", confidence = 0.5, evidence = "") {
 function makeClarifyAssessmentMessage(template, atom, point) {
   const prompt = normalizeText(template?.prompt || "");
   const atomName = atom?.atom_name || "";
+  if (template?.id === "g1b-money-r1" || atomName.includes("说清为什么先换单位")) {
+    return "我没听清原因。请只回答：元和角单位一样吗？要先换成什么单位？";
+  }
   if (prompt.includes("25角")) return "我没听清。你是想说2元5角吗？请只说：几元几角。";
   if (prompt.includes("几角") || atomName.includes("元等于10角") || atomName.includes("换成几十角")) return "我没听清。请只说一个答案：是几角？";
   if (prompt.includes("找回")) return "我没听清。请只说找回多少钱，比如：3元。";
@@ -616,9 +627,10 @@ function makeAssessmentRepairMessage(template, atom, point, diagnosis = {}) {
     if (normalizeText(prompt).includes("25角")) return "先补最小台阶：1元等于几角？";
     return "我们先补一小问：1元等于几角？";
   }
+  if (atomName.includes("1角等于10分")) return "我们先补一小问：1角等于几分？";
   if (atomName.includes("换成几十角")) return "我们只补换算这一步：几元就有几个10角。你先说，2元是几角？";
   if (atomName.includes("再加原来的几角")) return "我们只补最后一小步：先换成角，再加原来的几角。你先说，30角加5角是多少？";
-  if (atomName.includes("说清为什么先换单位")) return "这题不是只要答案，还要说原因。你先接一句：因为元和角...";
+  if (atomName.includes("说清为什么先换单位")) return "还差原因。请只补这句：因为元和角单位不一样，所以要先换成角。";
   if (atomName.includes("看清商品价格")) return "我们先只看商品价格。题里说商品要多少钱？";
   if (atomName.includes("看清付了多少钱")) return "我们先只看付出去的钱。题里说付了多少钱？";
   if (atomName.includes("找回就是剩下的钱")) return "找回的钱是剩下的钱。你先说：找回是剩下，还是再付？";
@@ -686,9 +698,10 @@ function makeTeachMessage(atom) {
   if (!atom) return "我们先看一个很小的问题。";
   const atomName = atom.atom_name || "";
   if (atomName.includes("1元等于10角")) return "我们先只看1元。1元等于几角？";
+  if (atomName.includes("1角等于10分")) return "再看角和分：1角等于几分？";
   if (atomName.includes("换成几十角")) return "现在只换整元：3元是几角？";
   if (atomName.includes("再加原来的几角")) return "现在把换好的角和原来的角合起来。30角加5角是多少？";
-  if (atomName.includes("说清为什么先换单位")) return "你试着说一句：为什么要先把元换成角？";
+  if (atomName.includes("说清为什么先换单位")) return "只说原因：元和角单位一样吗？所以要先换成什么单位？";
   if (atomName.includes("看清商品价格")) return "先只看价格：商品多少钱？";
   if (atomName.includes("看清付了多少钱")) return "再只看付出去的钱：付了多少钱？";
   if (atomName.includes("找回就是剩下的钱")) return "找回的钱，是付出去后剩下的钱，还是还要再付的钱？";
@@ -730,8 +743,10 @@ function makeRepairMessage(atom, errorTag, point) {
 function makeNoResponseMessage(atom, point) {
   const atomName = atom?.atom_name || "";
   if (atomName.includes("1元等于10角")) return "没关系。我们只回答一个数：1元等于几角？";
+  if (atomName.includes("1角等于10分")) return "没关系。只回答一个数：1角等于几分？";
   if (atomName.includes("换成几十角")) return "没关系。先只看3元：1元是10角，3元是几个10角？";
   if (atomName.includes("再加原来的几角")) return "没关系。只算最后一小步：30角加5角是多少？";
+  if (atomName.includes("说清为什么先换单位")) return "没关系。照着补半句：因为元和角单位不一样，所以要先换成角。";
   if (atomName.includes("看清商品价格")) return "没关系。先只看价格：本子要多少钱？";
   if (atomName.includes("看清付了多少钱")) return "没关系。先只看付出去的钱：付了多少钱？";
   if (atomName.includes("用减法算找回")) return "没关系。只算一小步：5减4等于几？";
@@ -748,8 +763,10 @@ function makeNoResponseMessage(atom, point) {
 function makeReturnToQuestionMessage(atom, point) {
   const atomName = atom?.atom_name || "";
   if (atomName.includes("1元等于10角")) return "这句还没有回答题目。我们回到这一小问：1元等于几角？";
+  if (atomName.includes("1角等于10分")) return "这句还没有回答题目。我们回到这一小问：1角等于几分？";
   if (atomName.includes("换成几十角")) return "这句还没有回答题目。现在只看3元：3元是几角？";
   if (atomName.includes("再加原来的几角")) return "这句还没有回答题目。现在只算：30角加5角是多少？";
+  if (atomName.includes("说清为什么先换单位")) return "这句还没有回答原因。请只回答：元和角单位一样吗？要先换成什么单位？";
   if (atomName.includes("看清商品价格")) return "这句还没有回答题目。先只看价格：本子要多少钱？";
   if (atomName.includes("看清付了多少钱")) return "这句还没有回答题目。先只看付了多少钱？";
   if (atomName.includes("找回就是剩下的钱")) return "这句还没有回答题目。找回的钱，是剩下的钱，还是又要付的钱？";
