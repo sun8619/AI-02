@@ -1038,12 +1038,103 @@ const legacyCurriculumBlueprints = [
   },
 ];
 
+const questionBankLessonAliases = {
+  "G1V1-U5-KP01": "g1a-carry-add-20",
+  "G1V2-U5-KP01": "renminbi-conversion",
+  "G1V2-U5-KP02": "g1b-simple-shopping",
+  "G2V1-U4-KP01": "g2a-multiply-meaning",
+  "G2V2-U2-KP01": "g2b-division-meaning",
+};
+
+const questionBankBlueprints = buildQuestionBankBlueprints(window.gradeOneTwoQuestionBank);
+const baseCurriculumBlueprints = questionBankBlueprints.length ? questionBankBlueprints : legacyCurriculumBlueprints;
 const curriculumBlueprints = mergeCurriculumBlueprints(
   Array.isArray(window.gradeOneTwoKnowledgeCards) ? window.gradeOneTwoKnowledgeCards : [],
-  legacyCurriculumBlueprints,
+  baseCurriculumBlueprints,
 );
 
 const lessons = buildLessonCatalog();
+
+function buildQuestionBankBlueprints(bank) {
+  const points = Array.isArray(bank?.points) ? bank.points : [];
+  return points.map((point) => {
+    const questions = normalizeLessonQuestions(point.questions || []);
+    const typical = normalizeQuestion(point.typicalQuestion) || questions[0] || null;
+    const primaryQuestion = typical || questions[0] || null;
+    const id = questionBankLessonAliases[point.id] || point.id.toLowerCase();
+    const microSteps = normalizeTextList(point.microSteps || point.substeps, [
+      "先读懂题目在问什么",
+      "只做当前小台阶",
+      "说出答案和原因",
+    ]);
+    const questionAnswerKeywords = primaryQuestion?.answerKeywords || [];
+    return {
+      id,
+      sourceQuestionBankId: point.id,
+      subject: "数学",
+      edition: "人教版",
+      grade: point.grade || point.volume || "",
+      unit: point.unit || "",
+      lesson: point.lesson || point.title || point.node || "",
+      node: point.node || point.title || point.lesson || "",
+      problem: primaryQuestion?.prompt || point.description || point.title || "",
+      initialContext: point.description || `${point.title || "这个知识点"} 从一道小题开始。`,
+      initialMessage: `我们先学「${point.title || point.node}」。先看这一题：${primaryQuestion?.prompt || point.description || ""}`,
+      initialStep: `小台阶 1：${microSteps[0]}`,
+      stepHint: point.description || microSteps[0],
+      microSteps,
+      commonGaps: normalizeTextList(point.commonGaps, ["只报答案不说原因", "漏看题目条件", "换题后不稳"]),
+      keywords: normalizeTextList(point.keywords, [point.title, point.unit]).concat(point.questionTypes || []),
+      answerKeywords: uniqueKeywords(questionAnswerKeywords.concat(point.answerKeywords || [])),
+      masterySignals: normalizeTextList(point.masterySignals, ["能做直接题", "能做变式题", "能说出原因", "能讲给老师听"]),
+      diagnosticFocus: normalizeTextList(point.commonGaps, []),
+      substeps: normalizeTextList(point.substeps || point.microSteps, microSteps),
+      visualType: point.visualType || "generic",
+      questionBank: questions,
+      useQuestionBankTutor: true,
+      activeQuestionId: primaryQuestion?.id || "",
+      questionCursor: Math.max(0, questions.findIndex((question) => question.id === primaryQuestion?.id)),
+      questionTypes: point.questionTypes || [],
+      variationRules: point.variationRules || [],
+      teachingMethods: point.teachingMethods || [],
+      questionBankStats: {
+        sourceId: point.id,
+        questionCount: Number(point.questionCount || questions.length),
+        typicalCount: questions.filter((question) => question.kind === "typical").length,
+        variantCount: questions.filter((question) => question.kind === "variant").length,
+      },
+    };
+  });
+}
+
+function normalizeLessonQuestions(questions) {
+  return (Array.isArray(questions) ? questions : [])
+    .map(normalizeQuestion)
+    .filter(Boolean);
+}
+
+function normalizeQuestion(question) {
+  if (!question || typeof question !== "object") return null;
+  const prompt = String(question.prompt || "").trim();
+  if (!prompt) return null;
+  return {
+    id: String(question.id || prompt).trim(),
+    kind: question.kind || "variant",
+    title: question.title || "",
+    type: question.type || "",
+    prompt,
+    answer: String(question.answer || "").trim(),
+    explanation: String(question.explanation || "").trim(),
+    answerKeywords: normalizeTextList(question.answerKeywords, [question.answer]).filter(Boolean),
+    hasVisualMarkup: Boolean(question.hasVisualMarkup && question.visualMarkup),
+    visualMarkup: String(question.visualMarkup || "").trim(),
+  };
+}
+
+function normalizeTextList(items, fallback = []) {
+  const source = Array.isArray(items) ? items : fallback;
+  return uniqueKeywords(source.map((item) => String(item || "").trim()).filter(Boolean));
+}
 
 function buildLessonCatalog() {
   const customById = new Map(customLessons.map((lesson) => [lesson.id, lesson]));
@@ -1067,6 +1158,14 @@ function mergeCustomLessonWithCurriculum(custom, generatedLesson, spec) {
     lesson: generatedLesson.lesson,
     node: generatedLesson.node,
     problem: generatedLesson.problem,
+    activeQuestion: generatedLesson.activeQuestion,
+    questionBank: generatedLesson.questionBank,
+    useQuestionBankTutor: generatedLesson.useQuestionBankTutor,
+    questionCursor: generatedLesson.questionCursor,
+    questionBankStats: generatedLesson.questionBankStats,
+    variationRules: generatedLesson.variationRules,
+    teachingMethods: generatedLesson.teachingMethods,
+    sourceQuestionBankId: generatedLesson.sourceQuestionBankId,
     initialContext: generatedLesson.initialContext,
     initialMessage: generatedLesson.initialMessage,
     initialStep: generatedLesson.initialStep,
@@ -1082,9 +1181,18 @@ function mergeCustomLessonWithCurriculum(custom, generatedLesson, spec) {
     masterySignals: generatedLesson.masterySignals,
     diagnosticFocus: generatedLesson.diagnosticFocus,
     strategies: generatedLesson.strategies,
+    answer: generatedLesson.answer,
+    visualType: generatedLesson.visualType,
+    visualLabel: generatedLesson.visualLabel,
+    visualTitle: generatedLesson.visualTitle,
+    visualCardTitle: generatedLesson.visualCardTitle,
+    visualCardHint: generatedLesson.visualCardHint,
+    imagePrompt: generatedLesson.imagePrompt,
+    generatedCaption: generatedLesson.generatedCaption,
     summary: generatedLesson.summary,
     explainSummary: generatedLesson.explainSummary,
     nextSuggestion: generatedLesson.nextSuggestion,
+    simulated: generatedLesson.simulated,
     curriculumKeywords: spec.keywords,
   };
 }
@@ -1105,6 +1213,12 @@ function mergeCurriculumBlueprints(overrides, fallback) {
 
 function createCurriculumLesson(spec) {
   const strategies = createStrategiesForSpec(spec);
+  const questionBank = normalizeLessonQuestions(spec.questionBank || spec.questions || []);
+  const activeQuestion =
+    questionBank.find((question) => question.id === spec.activeQuestionId) ||
+    questionBank[Math.max(0, Number(spec.questionCursor || 0))] ||
+    null;
+  const problem = activeQuestion?.prompt || spec.problem;
   return {
     id: spec.id,
     subject: "数学",
@@ -1113,9 +1227,17 @@ function createCurriculumLesson(spec) {
     unit: spec.unit,
     lesson: spec.lesson,
     node: spec.node,
-    problem: spec.problem,
+    problem,
+    activeQuestion,
+    questionBank,
+    useQuestionBankTutor: Boolean(spec.useQuestionBankTutor && questionBank.length),
+    questionCursor: Math.max(0, questionBank.findIndex((question) => question.id === activeQuestion?.id)),
+    questionBankStats: spec.questionBankStats || null,
+    variationRules: spec.variationRules || [],
+    teachingMethods: spec.teachingMethods || [],
+    sourceQuestionBankId: spec.sourceQuestionBankId || "",
     initialContext: spec.initialContext || `${spec.node} 的学习从一个小问题开始。`,
-    initialMessage: spec.initialMessage || `我们先学「${spec.node}」。先看这题：${spec.problem}`,
+    initialMessage: spec.initialMessage || `我们先学「${spec.node}」。先看这题：${problem}`,
     initialStep: spec.initialStep || `小台阶 1：${spec.microSteps[0]}`,
     stepHint: spec.stepHint || spec.microSteps[0],
     teachbackPrompt: `这次换你当小老师，讲给我听：${spec.node} 这题应该先想什么？`,
@@ -1129,13 +1251,13 @@ function createCurriculumLesson(spec) {
     masterySignals: spec.masterySignals || [],
     diagnosticFocus: spec.diagnosticFocus || spec.masterySignals || spec.commonGaps || [],
     strategies,
-    answer: createAnswerRules(spec),
+    answer: createAnswerRules(spec, activeQuestion),
     visualType: spec.visualType || "generic",
     visualLabel: "程序辅助理解",
     visualTitle: createVisualTitle(spec),
     visualCardTitle: "AI 生活图",
     visualCardHint: `需要时可以画一个“${spec.lesson}”的生活例子。`,
-    imagePrompt: createImagePrompt(spec),
+    imagePrompt: createImagePrompt({ ...spec, problem }),
     generatedCaption: "这张图用于生活类比；精确数量关系以上面的程序图为准。",
     summary: `${spec.node}：${spec.microSteps.join("，")}。`,
     explainSummary: `孩子能用自己的话说出「${spec.node}」的关键步骤。`,
@@ -1184,16 +1306,29 @@ function createPrerequisites(spec) {
   return [gradeStart, "能按顺序观察题目条件", "愿意用一句话说出自己的想法"];
 }
 
-function createAnswerRules(spec) {
-  const base = spec.answerKeywords || [];
+function createAnswerRules(spec, activeQuestion = null) {
+  const activeAnswerKeywords = normalizeTextList(activeQuestion?.answerKeywords, []);
+  const base = activeAnswerKeywords.length ? activeAnswerKeywords : spec.answerKeywords || [];
+  const explanationKeywords = extractKeyPhrases(activeQuestion?.explanation || "");
   return {
-    attemptKeywords: uniqueKeywords(base.concat(spec.microSteps, spec.masterySignals || [], spec.keywords || [])),
+    attemptKeywords: uniqueKeywords(explanationKeywords.concat(spec.microSteps, spec.masterySignals || [], spec.keywords || [])),
     answerKeywords: uniqueKeywords(base),
     conceptKeywords: uniqueKeywords([spec.node, spec.lesson, spec.unit].concat(spec.keywords || [])),
-    whyKeywords: uniqueKeywords(spec.microSteps.concat(spec.masterySignals || [], ["因为", "所以", "先", "再", "最后"])),
+    whyKeywords: uniqueKeywords(explanationKeywords.concat(spec.microSteps, spec.masterySignals || [], ["因为", "所以", "先", "再", "最后"])),
     ownWordsKeywords: uniqueKeywords(["我想", "先", "再", "图上", "生活里", "可以"].concat(spec.keywords || [])),
-    resultKeywords: uniqueKeywords(base.concat(spec.microSteps.slice(-1))),
+    resultKeywords: uniqueKeywords(base.concat(explanationKeywords, spec.microSteps.slice(-1))),
   };
+}
+
+function extractKeyPhrases(text) {
+  const value = String(text || "").replace(/[，。；、,.!?！？：:]/g, " ");
+  return uniqueKeywords(
+    value
+      .split(/\s+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length >= 2)
+      .slice(0, 16),
+  );
 }
 
 function createVisualTitle(spec) {
@@ -1269,6 +1404,7 @@ let state = {
   teachingState: "GUIDED_STEP",
   currentAtomName: "",
   engineSession: null,
+  passedQuestionIds: [],
   parentSignals: null,
   feynmanStatus: "还没开始讲",
   canExplainWhy: false,
@@ -1303,6 +1439,71 @@ function currentLesson() {
 function lessonStrategy(index = state.strategyIndex) {
   const lesson = currentLesson();
   return lesson.strategies[index] || lesson.strategies[0];
+}
+
+function getLessonQuestionBank(lesson = currentLesson()) {
+  return Array.isArray(lesson?.questionBank) ? lesson.questionBank.filter(Boolean) : [];
+}
+
+function getQuestionBankSample(lesson = currentLesson()) {
+  return getLessonQuestionBank(lesson)
+    .slice(0, 6)
+    .map((question) => ({
+      id: question.id,
+      kind: question.kind,
+      type: question.type,
+      prompt: question.prompt,
+      answer: question.answer,
+      explanation: question.explanation,
+      answerKeywords: question.answerKeywords,
+    }));
+}
+
+function activateLessonQuestion(lesson, question, cursor = 0) {
+  if (!lesson || !question) return false;
+  lesson.activeQuestion = question;
+  lesson.questionCursor = Math.max(0, cursor);
+  lesson.problem = question.prompt;
+  lesson.answer = createAnswerRules(lesson, question);
+  lesson.visualTitle = createVisualTitle(lesson);
+  lesson.imagePrompt = createImagePrompt(lesson);
+  lesson.generatedCaption = question.explanation
+    ? `这张图对应当前题：${question.explanation}`
+    : "这张图用于生活类比；精确数量关系以上面的程序图为准。";
+  return true;
+}
+
+function advanceLessonQuestion(reason = "换一道同类题") {
+  const lesson = currentLesson();
+  const bank = getLessonQuestionBank(lesson);
+  if (bank.length <= 1) {
+    toastMessage("这个知识点暂时没有更多同类题。");
+    return false;
+  }
+
+  const nextCursor = ((Number(lesson.questionCursor) || 0) + 1) % bank.length;
+  const nextQuestion = bank[nextCursor];
+  activateLessonQuestion(lesson, nextQuestion, nextCursor);
+
+  state.phase = "guiding";
+  state.completedSteps = 0;
+  state.mastery = Math.max(58, Math.min(state.mastery, 70));
+  state.strategyIndex = 0;
+  state.showVisual = true;
+  state.showLessonPicker = false;
+  state.lastStudentText = "";
+  state.transcript = "";
+  state.engineSession = null;
+  state.teachingState = "GUIDED_STEP";
+  state.currentAtomName = "";
+  state.currentStep = `小台阶 1：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0] || "先读题"}`;
+  state.aiContext = reason;
+  state.aiMessage = `换一道同类题：${nextQuestion.prompt} 你先说第一步就行。`;
+  resetGeneratedVisualForTurn();
+  addEvidence("换同类题", `从题库切到：${nextQuestion.prompt}`, "变式练习");
+  render();
+  speakCurrentMessage();
+  return true;
 }
 
 function render() {
@@ -1345,6 +1546,7 @@ function renderChildView() {
       : [
           ["dont-understand", "我没懂", "light"],
           ["repeat", "再说一遍", "repeat"],
+          ["new-example", "换道题", "repeat"],
           ["change-lesson", "换知识点", "book"],
         ];
 
@@ -1589,7 +1791,7 @@ function renderVoiceDock() {
       ${state.showKeyboard ? renderKeyboardComposer() : ""}
       <div class="dock-actions">
         <button class="dock-mini" data-action="camera" ${locked ? "disabled" : ""}>${icon("camera")}拍照</button>
-        <button class="voice-button ${state.recording ? "is-recording" : ""} ${locked ? "is-processing" : ""}" data-action="voice" aria-label="按住说话，松开结束" ${locked ? "disabled" : ""}>
+        <button class="voice-button ${state.recording ? "is-recording" : ""} ${locked ? "is-processing" : ""}" data-action="voice" aria-label="${escapeText(renderVoiceButtonAriaLabel())}" ${locked ? "disabled" : ""}>
           ${icon("mic")}
           <span>${renderVoiceButtonLabel()}</span>
         </button>
@@ -1601,10 +1803,17 @@ function renderVoiceDock() {
 }
 
 function renderVoiceButtonLabel() {
-  if (state.recording) return "松开结束";
+  if (state.recording) return "结束说话";
   if (state.voiceStatus === "processing") return "正在想";
-  if (state.phase === "teachback") return "讲给老师听";
-  return "按住说";
+  if (state.phase === "teachback") return "开始讲";
+  return "开始说";
+}
+
+function renderVoiceButtonAriaLabel() {
+  if (state.recording) return "点击结束说话";
+  if (state.voiceStatus === "processing") return "老师正在思考";
+  if (state.phase === "teachback") return "点击开始讲给老师听";
+  return "点击开始说话";
 }
 
 function renderStepHint() {
@@ -1650,7 +1859,7 @@ function renderDockNote() {
   if (state.phase === "teachback") return "像小老师一样讲给老师听，说不完整也没关系。";
   if (state.phase === "repair") return "可以看着图说，不用一次讲完整。";
   if (state.phase === "summary") return "这一题已经完成，可以换知识点或去家长页看记录。";
-  return "按住说话，松开后老师会接着讲。也可以直接说“换知识点”。";
+  return "点一下开始说话，说完再点一下结束。也可以直接说“换知识点”。";
 }
 
 function renderKeyboardComposer() {
@@ -1669,10 +1878,10 @@ function renderLearningVisual() {
     <div class="visual-panel">
       <div class="panel-head">
         <span>${icon("image")}看图想一想</span>
-        <strong>${escapeText(lesson.visualLabel)}</strong>
+        <strong>${escapeText(lesson.activeQuestion?.visualMarkup ? "当前题图" : lesson.visualLabel)}</strong>
       </div>
       ${renderLessonSvg(lesson)}
-      <p class="visual-turn-note">本轮图示：${escapeText(renderChildStepTitle(state.currentStep))}${state.currentAtomName ? ` · ${escapeText(state.currentAtomName)}` : ""}</p>
+      <p class="visual-turn-note">本轮题目：${escapeText(lesson.activeQuestion?.prompt || lesson.problem)}${state.currentAtomName ? ` · ${escapeText(state.currentAtomName)}` : ""}</p>
       <div class="ai-visual-card">
         <div>
           <strong>${escapeText(lesson.visualCardTitle)}</strong>
@@ -1688,6 +1897,7 @@ function renderLearningVisual() {
 }
 
 function renderLessonSvg(lesson) {
+  if (lesson.activeQuestion?.visualMarkup) return renderQuestionVisualMarkup(lesson);
   if (lesson.id === "g1b-simple-shopping") return renderShoppingSvg(lesson);
   if (lesson.visualType === "money") return renderMoneySvg(lesson);
   if (lesson.visualType === "perimeter") return renderPerimeterSvg(lesson);
@@ -1711,6 +1921,14 @@ function renderLessonSvg(lesson) {
   }
   if (lesson.visualType !== "fraction") return renderGenericStepSvg(lesson);
   return renderFractionSvg(lesson);
+}
+
+function renderQuestionVisualMarkup(lesson) {
+  return `
+    <div class="question-visual-markup" role="img" aria-label="${escapeAttr(lesson.activeQuestion?.prompt || lesson.node)}">
+      ${lesson.activeQuestion.visualMarkup}
+    </div>
+  `;
 }
 
 function renderPrimaryThinkingSvg(lesson) {
@@ -2254,7 +2472,7 @@ function renderGeneratedImage() {
 
 function getVisualInteractionKey() {
   const lesson = currentLesson();
-  return [lesson.id, state.phase, state.currentStep, state.currentAtomName, state.aiMessage, state.lastStudentText].join("|");
+  return [lesson.id, lesson.activeQuestion?.id, lesson.problem, state.phase, state.currentStep, state.currentAtomName, state.aiMessage, state.lastStudentText].join("|");
 }
 
 function resetGeneratedVisualForTurn() {
@@ -2487,16 +2705,7 @@ function bindEvents() {
     node.addEventListener("click", handleAction);
   });
   document.querySelectorAll("[data-action='voice']").forEach((node) => {
-    node.addEventListener("pointerdown", startHoldVoice);
-    node.addEventListener("pointerup", stopHoldVoice);
-    node.addEventListener("pointercancel", stopHoldVoice);
-    node.addEventListener("pointerleave", stopHoldVoice);
-    node.addEventListener("keydown", (event) => {
-      if (event.key === " " || event.key === "Enter") startHoldVoice(event);
-    });
-    node.addEventListener("keyup", (event) => {
-      if (event.key === " " || event.key === "Enter") stopHoldVoice(event);
-    });
+    node.addEventListener("click", toggleVoiceInput);
   });
   document.querySelectorAll("[data-form='typed-answer']").forEach((form) => {
     form.addEventListener("submit", (event) => {
@@ -2508,20 +2717,10 @@ function bindEvents() {
   });
 }
 
-async function startHoldVoice(event) {
+async function toggleVoiceInput(event) {
   event.preventDefault();
-  if (state.recording || state.voiceStatus === "processing") return;
-  window.addEventListener("pointerup", stopHoldVoice, { once: true });
-  window.addEventListener("pointercancel", stopHoldVoice, { once: true });
+  if (state.voiceStatus === "processing") return;
   await handleVoiceButton();
-}
-
-function stopHoldVoice(event) {
-  event.preventDefault();
-  window.removeEventListener("pointerup", stopHoldVoice);
-  window.removeEventListener("pointercancel", stopHoldVoice);
-  if (!state.recording) return;
-  stopVoiceInput();
 }
 
 async function handleAction(event) {
@@ -2594,7 +2793,7 @@ async function handleAction(event) {
   }
 
   if (action === "new-example") {
-    changeLesson("孩子想换一个知识点。");
+    advanceLessonQuestion("孩子想换一道同类题。");
     return;
   }
 
@@ -2644,6 +2843,7 @@ function changeLesson(reason, targetIndex = null) {
   state.teachingState = "GUIDED_STEP";
   state.currentAtomName = "";
   state.engineSession = null;
+  state.passedQuestionIds = [];
   state.parentSignals = null;
   state.feynmanStatus = "还没开始讲";
   state.canExplainWhy = false;
@@ -2670,6 +2870,7 @@ function startTeachback() {
 
 async function generateStoryImage() {
   const lesson = currentLesson();
+  const activeQuestion = lesson.activeQuestion || null;
   const interactionKey = getVisualInteractionKey();
   state.imageJob = { status: "loading", url: "", message: "", lessonId: lesson.id, interactionKey };
   render();
@@ -2677,7 +2878,9 @@ async function generateStoryImage() {
   const prompt = [
     ...lesson.imagePrompt,
     `当前知识点：${lesson.node}`,
-    `当前题目：${lesson.problem}`,
+    `当前题目：${activeQuestion?.prompt || lesson.problem}`,
+    activeQuestion?.answer ? `这道题的正确答案：${activeQuestion.answer}` : "",
+    activeQuestion?.explanation ? `这道题的正确思路：${activeQuestion.explanation}` : "",
     `当前小台阶：${state.currentStep}`,
     `老师正在讲：${state.aiMessage}`,
     state.lastStudentText ? `孩子刚才说：${state.lastStudentText}` : "",
@@ -2937,7 +3140,7 @@ function handleRealtimeVoiceMessage(raw) {
     if (!transcript) state.lastStudentText = "";
     render();
     if (transcript) handleChildInput(transcript, "voice");
-    else toastMessage("没有听清楚，可以再按住说一次。");
+    else toastMessage("没有听清楚，可以再点一下重说。");
     return;
   }
   if (payload.type === "error") {
@@ -3028,7 +3231,7 @@ function startBrowserSpeechRecognition() {
     render();
     if (text) handleChildInput(text, "voice");
     else {
-      toastMessage("没有听清楚，可以再按住说一次。");
+      toastMessage("没有听清楚，可以再点一下重说。");
     }
   };
 
@@ -3315,6 +3518,13 @@ function handleChildInput(text, inputType) {
 
 async function askGatewayTutor(text, inputType) {
   const lesson = currentLesson();
+  if (lesson.useQuestionBankTutor) {
+    evaluateLocally(text, inputType);
+    state.voiceStatus = "idle";
+    render();
+    return;
+  }
+
   if (window.location.protocol === "file:") {
     evaluateLocally(text, inputType);
     state.voiceStatus = "idle";
@@ -3339,6 +3549,8 @@ async function askGatewayTutor(text, inputType) {
           textbook: `${lesson.edition} ${lesson.grade} ${lesson.unit}`,
           node: lesson.node,
           lessonName: lesson.lesson,
+          useQuestionBankTutor: lesson.useQuestionBankTutor,
+          sourceQuestionBankId: lesson.sourceQuestionBankId,
           prerequisites: lesson.prerequisites,
           microSteps: lesson.microSteps,
           commonGaps: lesson.commonGaps,
@@ -3348,6 +3560,21 @@ async function askGatewayTutor(text, inputType) {
           diagnosticFocus: lesson.diagnosticFocus,
           answerSignals: lesson.answer,
           teachingStrategies: lesson.strategies.map((strategy) => strategy.label),
+          currentQuestion: lesson.activeQuestion
+            ? {
+                id: lesson.activeQuestion.id,
+                kind: lesson.activeQuestion.kind,
+                type: lesson.activeQuestion.type,
+                prompt: lesson.activeQuestion.prompt,
+                answer: lesson.activeQuestion.answer,
+                explanation: lesson.activeQuestion.explanation,
+                answerKeywords: lesson.activeQuestion.answerKeywords,
+              }
+            : null,
+          questionBankSample: getQuestionBankSample(lesson),
+          questionBankStats: lesson.questionBankStats,
+          variationRules: lesson.variationRules,
+          teachingMethods: lesson.teachingMethods,
         },
       }),
     });
@@ -3365,10 +3592,20 @@ async function askGatewayTutor(text, inputType) {
 }
 
 function applyGatewayTutor(payload, inputType) {
-  const nextPhase = ["guiding", "teachback", "repair", "summary"].includes(payload.nextPhase)
+  let nextPhase = ["guiding", "teachback", "repair", "summary"].includes(payload.nextPhase)
     ? payload.nextPhase
     : state.phase;
   const lesson = currentLesson();
+  const unclearChildText = isUnclearChildText(normalizeText(state.lastStudentText));
+  if (unclearChildText && ["teachback", "summary"].includes(nextPhase)) {
+    nextPhase = "guiding";
+    payload.aiContext = "孩子输入不完整，前端已阻止误判通过。";
+    payload.aiMessage = `我没听清。我们只看这题：${lesson.activeQuestion?.prompt || lesson.problem}`;
+    payload.teachingState = "GUIDED_STEP";
+    payload.currentStep = `小台阶 1：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0] || "先读题"}`;
+    payload.evidenceSignal = "输入不完整";
+    payload.evidenceText = "孩子没有给出可判断的回答，系统没有推进掌握状态。";
+  }
 
   state.phase = nextPhase;
   state.aiContext = payload.aiContext || state.aiContext;
@@ -3427,8 +3664,23 @@ function evaluateLocally(text, inputType) {
 function evaluateAttempt(text, inputType) {
   const lesson = currentLesson();
   const normalized = normalizeText(text);
+  const activeQuestion = lesson.activeQuestion || null;
   const knowsProcess = includesAny(normalized, lesson.answer.attemptKeywords);
   const picksAnswer = includesAny(normalized, lesson.answer.answerKeywords);
+  const unclear = isUnclearChildText(normalized);
+
+  if (unclear) {
+    state.phase = "guiding";
+    state.mastery = Math.max(48, state.mastery - 1);
+    state.currentStep = `小台阶 1：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0] || "先读题"}`;
+    state.aiContext = "孩子输入不完整，先拉回当前题。";
+    state.aiMessage = `我没听清。我们只看这题：${activeQuestion?.prompt || lesson.problem}`;
+    state.showVisual = true;
+    resetGeneratedVisualForTurn();
+    addEvidence("输入不完整", "孩子没有给出可判断的回答，AI 没有默认判对。", inputType === "voice" ? "语音回答" : "键盘回答");
+    speakCurrentMessage();
+    return;
+  }
 
   if (knowsProcess && picksAnswer) {
     state.phase = "teachback";
@@ -3444,17 +3696,86 @@ function evaluateAttempt(text, inputType) {
     return;
   }
 
+  if (picksAnswer) {
+    state.phase = "teachback";
+    state.mastery = Math.max(state.mastery, 70);
+    state.completedSteps = Math.max(state.completedSteps, Math.min(1, getLessonLadderSteps(lesson).length));
+    state.currentStep = "小台阶：说清原因";
+    state.aiContext = "孩子答案对了，但还没有说明原因。";
+    state.aiMessage = `答案对了。你再说一句：为什么是${formatExpectedAnswer(activeQuestion, lesson)}？`;
+    state.feynmanStatus = "会做，等待说理";
+    resetGeneratedVisualForTurn();
+    addEvidence("答案正确，追问原因", `孩子答出了「${formatExpectedAnswer(activeQuestion, lesson)}」，继续检查是否会说理。`, inputType === "voice" ? "语音回答" : "键盘回答");
+    speakCurrentMessage();
+    return;
+  }
+
+  if (knowsProcess) {
+    state.phase = "guiding";
+    state.mastery = Math.max(56, state.mastery);
+    state.currentStep = "小台阶：检查答案";
+    state.aiContext = "孩子说到了一部分方法，但答案还不稳。";
+    state.aiMessage = `想法有一点对。现在只回答这题：${activeQuestion?.prompt || lesson.problem}`;
+    state.showVisual = true;
+    resetGeneratedVisualForTurn();
+    addEvidence("方法部分正确", "孩子说到过程词，但还没有答出当前题答案。", inputType === "voice" ? "语音回答" : "键盘回答");
+    speakCurrentMessage();
+    return;
+  }
+
   state.phase = "repair";
   state.mastery = Math.max(52, state.mastery - 2);
-  state.aiContext = "你已经说出了一部分，我们换个方法。";
-  state.aiMessage = lesson.repairPrompt;
-  state.currentStep = "小台阶 2：看图再想";
+  state.aiContext = "孩子回答和当前题不匹配，先给一个更小提示。";
+  state.aiMessage = `这次先不急。看这题：${activeQuestion?.prompt || lesson.problem}。你可以先说：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0]}。`;
+  state.currentStep = "小台阶 1：先找题目条件";
   state.showVisual = true;
   state.strategyIndex = 1;
   state.bestStrategy = lesson.strategies[1]?.label || "画图";
   resetGeneratedVisualForTurn();
-  addEvidence("需要换讲法", "孩子回答还没有说清楚过程或答案，AI 切到看图讲法。", "画图");
+  addEvidence("答非所问或答案不稳", "孩子回答没有匹配当前题答案，AI 拉回当前题并给更小提示。", "小提示");
   speakCurrentMessage();
+}
+
+function isUnclearChildText(normalizedText) {
+  if (!normalizedText || normalizedText.length < 1) return true;
+  return ["好", "好的", "嗯", "啊", "哦", "可以", "行", "不知道", "不会", "没听清"].includes(normalizedText);
+}
+
+function formatExpectedAnswer(question, lesson) {
+  return question?.answer || lesson.answer.answerKeywords?.[0] || "这个答案";
+}
+
+function recordQuestionPass(lesson = currentLesson()) {
+  const id = lesson.activeQuestion?.id || lesson.problem;
+  if (!id) return;
+  state.passedQuestionIds = uniqueKeywords([...(state.passedQuestionIds || []), id]);
+}
+
+function maybeContinueWithVariantAfterTeachback(inputType) {
+  const lesson = currentLesson();
+  const bank = getLessonQuestionBank(lesson);
+  if (!lesson.useQuestionBankTutor || bank.length <= 1) return false;
+  if ((state.passedQuestionIds || []).length >= 3) return false;
+
+  const nextCursor = ((Number(lesson.questionCursor) || 0) + 1) % bank.length;
+  const nextQuestion = bank[nextCursor];
+  activateLessonQuestion(lesson, nextQuestion, nextCursor);
+
+  state.phase = "guiding";
+  state.completedSteps = 0;
+  state.mastery = Math.max(state.mastery, 76);
+  state.strategyIndex = 0;
+  state.currentStep = `变式练习：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0] || "先读题"}`;
+  state.aiContext = "孩子讲清楚了一题，进入同知识点变式题。";
+  state.aiMessage = `你讲清楚了。我们换一道同类题：${nextQuestion.prompt}`;
+  state.feynmanStatus = "已讲清一题，继续变式";
+  state.showVisual = true;
+  state.lastStudentText = "";
+  state.engineSession = null;
+  resetGeneratedVisualForTurn();
+  addEvidence("进入变式题", `已通过 ${state.passedQuestionIds.length} 道，继续：${nextQuestion.prompt}`, inputType === "voice" ? "语音复述" : "打字复述");
+  speakCurrentMessage();
+  return true;
 }
 
 function evaluateTeachback(text, inputType) {
@@ -3466,6 +3787,9 @@ function evaluateTeachback(text, inputType) {
   const comparesResult = includesAny(normalized, lesson.answer.resultKeywords);
 
   if (mentionsConcept && explainsWhy && comparesResult) {
+    recordQuestionPass(lesson);
+    if (maybeContinueWithVariantAfterTeachback(inputType)) return;
+
     state.phase = "summary";
     state.mastery = 86;
     state.completedSteps = getLessonLadderSteps(lesson).length;

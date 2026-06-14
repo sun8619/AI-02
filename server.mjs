@@ -349,6 +349,8 @@ async function handleLearningTurn(request, response) {
   const lessonTextbook = String(lesson.textbook || "人教版 三年级上册 分数的初步认识");
   const lessonNode = String(lesson.node || "异分母分数比较");
   const lessonName = String(lesson.lessonName || "");
+  const currentQuestion = lesson.currentQuestion && typeof lesson.currentQuestion === "object" ? lesson.currentQuestion : null;
+  const questionBankSample = Array.isArray(lesson.questionBankSample) ? lesson.questionBankSample.slice(0, 6) : [];
 
   if (!userText) {
     sendJson(response, 400, { error: "Missing text" });
@@ -381,8 +383,12 @@ async function handleLearningTurn(request, response) {
           "先判断孩子是否卡在前置知识；如果是，先补前置知识，不要硬往后讲。",
           "孩子说想换知识点、换题、学习另一个内容时，要尊重孩子意图，不要把它套进当前题继续讲。",
           "如果孩子回答和当前题目无关，要温和拉回当前小问题，不能当作正确答案。",
-          "如果孩子已经答对，要邀请孩子当小老师讲一遍。",
+          "如果孩子只答出结果但没说原因，要先追问一句“为什么”，不要直接标记完全掌握。",
+          "如果孩子已经答对并能说出原因，再邀请孩子当小老师讲一遍。",
           "如果孩子讲不清，不批评，换一种讲法：画图、生活类比、举例或更小步骤。",
+          "必须围绕 currentQuestion 提问和判断；currentQuestion 为空时才使用 problem。",
+          "questionBankSample 只用于换题或举例，不要把题库内容一次展示给孩子。",
+          "不要提前把当前题完整答案和完整推理都说出来。优先只问一个孩子能回答的小问题。",
           "优先参考 lesson.substeps、lesson.masterySignals 和 lesson.diagnosticFocus 判断下一步，不要把整个知识点一次讲完。",
           "孩子只说无关内容、寒暄或不完整词语时，要先拉回当前小问题，不要默认答对。",
           "每次 aiMessage 只包含老师要对孩子说的话，最多 80 个汉字，优先问一个小问题。",
@@ -408,6 +414,11 @@ async function handleLearningTurn(request, response) {
           diagnosticFocus: Array.isArray(lesson.diagnosticFocus) ? lesson.diagnosticFocus : [],
           answerSignals: lesson.answerSignals || {},
           teachingStrategies: Array.isArray(lesson.teachingStrategies) ? lesson.teachingStrategies : [],
+          currentQuestion,
+          questionBankSample,
+          questionBankStats: lesson.questionBankStats || null,
+          variationRules: Array.isArray(lesson.variationRules) ? lesson.variationRules : [],
+          teachingMethods: Array.isArray(lesson.teachingMethods) ? lesson.teachingMethods : [],
           currentPhase: phase,
           currentContext: context,
           currentStep: step,
