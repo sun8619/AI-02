@@ -1161,7 +1161,7 @@ function createInitialGuidedMessage(point, primaryQuestion, microSteps) {
     },
     0,
   );
-  return `我们先学「${point.title || point.node}」。看这题：${prompt} ${starter.prompt}`;
+  return `我们先学「${point.title || point.node}」。先看这题：${prompt} 我只问一步：${formatChildStepPrompt(starter)}`;
 }
 
 function childFacingPrompt(prompt) {
@@ -1278,8 +1278,8 @@ function createGenericGuidedSteps(lesson) {
       .filter((keyword) => !["因为", "所以", "先", "再", "最后"].includes(normalizeText(keyword))),
   );
   return [
-    guidedStep("先看题目", `看这题：${prompt} 你先说答案。`, answerKeywords),
-    guidedStep("说一句原因", `你刚才说得对。再说一句：你是怎么想的？`, reasonKeywords, { isReason: true, isFinal: true }),
+    guidedStep("先看题目", `看这题：${prompt} 你只说答案就行。`, answerKeywords),
+    guidedStep("说一句原因", "再说一句：你刚才是怎么想的？", reasonKeywords, { isReason: true, isFinal: true }),
   ];
 }
 
@@ -1291,6 +1291,28 @@ function guidedStep(label, prompt, answerKeywords, options = {}) {
     isReason: Boolean(options.isReason),
     isFinal: Boolean(options.isFinal),
   };
+}
+
+function formatChildStepPrompt(plan) {
+  const prompt = String(plan?.prompt || "").trim();
+  if (!prompt) return "你先说一个小答案。";
+  if (plan?.isReason) return `${prompt} 只说一句原因就行。`;
+  if (/为什么|怎么想|怎么知道|怎么比较|怎么检查/.test(prompt)) return `${prompt} 只说一句话就行。`;
+  if (/先说|先答|先看|再答|最后|答案是多少|是多少|几/.test(prompt)) return prompt;
+  return `${prompt} 你只说一个小答案就行。`;
+}
+
+function teacherAdvanceMessage(nextPlan) {
+  return `对，这一步过了。下一步：${formatChildStepPrompt(nextPlan)}`;
+}
+
+function teacherRepairMessage(prefix, plan) {
+  const lead = String(prefix || "这次还没对上。").replace(/[。！？!?]*$/, "。");
+  return `${lead}我们先停在这一小步：${formatChildStepPrompt(plan)}`;
+}
+
+function teacherReasonMessage(reasonPlan) {
+  return `答案对了。现在只补一句原因：${formatChildStepPrompt(reasonPlan)}`;
 }
 
 function parseMoneyQuestion(question) {
@@ -2187,7 +2209,7 @@ function advanceLessonQuestion(reason = "换一道同类题") {
   state.currentAtomName = starter.label;
   state.currentStep = `小台阶 1：${starter.label}`;
   state.aiContext = reason;
-  state.aiMessage = `换个问法再确认一次。看这题：${childFacingPrompt(nextQuestion.prompt)} ${starter.prompt}`;
+  state.aiMessage = `换个问法再确认一次。看这题：${childFacingPrompt(nextQuestion.prompt)} 我只问一步：${formatChildStepPrompt(starter)}`;
   resetGeneratedVisualForTurn();
   addEvidence("换同类题", `从题库切到：${nextQuestion.prompt}`, "变式练习");
   render();
@@ -2484,16 +2506,17 @@ function renderVisualPlaceholder() {
 
 function renderVoiceDock() {
   const locked = state.voiceStatus === "processing";
+  const inputLocked = state.recording || locked;
   return `
     <section class="voice-dock" aria-label="语音输入区">
       ${state.showKeyboard ? renderKeyboardComposer() : ""}
       <div class="dock-actions">
-        <button class="dock-mini" data-action="camera" ${locked ? "disabled" : ""}>${icon("camera")}拍照</button>
+        <button class="dock-mini" data-action="camera" ${inputLocked ? "disabled" : ""}>${icon("camera")}拍照</button>
         <button class="voice-button ${state.recording ? "is-recording" : ""} ${locked ? "is-processing" : ""}" data-action="voice" aria-label="${escapeText(renderVoiceButtonAriaLabel())}" ${locked ? "disabled" : ""}>
           ${icon("mic")}
           <span>${renderVoiceButtonLabel()}</span>
         </button>
-        <button class="dock-mini" data-action="toggle-keyboard" ${locked ? "disabled" : ""}>${icon("keyboard")}键盘输入</button>
+        <button class="dock-mini" data-action="toggle-keyboard" ${inputLocked ? "disabled" : ""}>${icon("keyboard")}键盘输入</button>
       </div>
       <p class="dock-note">${escapeText(renderDockNote())}</p>
     </section>
@@ -2517,7 +2540,7 @@ function renderVoiceButtonAriaLabel() {
 function renderStepHint() {
   const lesson = currentLesson();
   if (lesson.useQuestionBankTutor && ["guiding", "repair"].includes(state.phase)) {
-    return `现在只回答：${createGuidedStepPlan(lesson, state.completedSteps).prompt}`;
+    return `现在只回答：${formatChildStepPrompt(createGuidedStepPlan(lesson, state.completedSteps))}`;
   }
   if (state.teachingState === "PRACTICE_SET") return "现在不是新讲解，是小闯关。答错也没关系，老师会只补那一个小地方。";
   if (state.teachingState === "REMEDIATION_TEACH" || state.teachingState === "REMEDIATION_RECHECK") return "我们只补刚才没稳的小台阶，不会整章重来。";
@@ -2564,7 +2587,7 @@ function renderDockNote() {
 }
 
 function renderKeyboardComposer() {
-  const locked = state.voiceStatus === "processing";
+  const locked = state.voiceStatus === "processing" || state.recording;
   return `
     <form class="keyboard-composer" data-form="typed-answer">
       <input name="answer" autocomplete="off" placeholder="也可以打字，例如：我想换知识点" ${locked ? "disabled" : ""} />
@@ -2579,7 +2602,7 @@ function renderLearningVisual() {
     <div class="visual-panel">
       <div class="panel-head">
         <span>${icon("image")}看图想一想</span>
-        <strong>${escapeText(lesson.activeQuestion?.visualMarkup ? "当前题图" : lesson.visualLabel)}</strong>
+        <strong>${escapeText(getVisualPanelLabel(lesson))}</strong>
       </div>
       ${renderLessonSvg(lesson)}
       <p class="visual-turn-note">本轮题目：${escapeText(lesson.activeQuestion?.prompt || lesson.problem)}${state.currentAtomName ? ` · ${escapeText(state.currentAtomName)}` : ""}</p>
@@ -2597,8 +2620,32 @@ function renderLearningVisual() {
   `;
 }
 
+function getVisualPanelLabel(lesson) {
+  const programTypes = new Set([
+    "money",
+    "perimeter",
+    "time",
+    "clock",
+    "ten-frame",
+    "number-line",
+    "place-value",
+    "shape",
+    "ruler",
+    "angle",
+    "array",
+    "sharing",
+    "data",
+    "pattern",
+    "motion",
+    "mass",
+    "logic",
+  ]);
+  if (lesson.id === "g1b-simple-shopping" || programTypes.has(lesson.visualType)) return "按当前小台阶绘制";
+  if (lesson.activeQuestion?.visualMarkup) return "当前题图";
+  return lesson.visualLabel;
+}
+
 function renderLessonSvg(lesson) {
-  if (lesson.activeQuestion?.visualMarkup) return renderQuestionVisualMarkup(lesson);
   if (lesson.id === "g1b-simple-shopping") return renderShoppingSvg(lesson);
   if (lesson.visualType === "money") return renderMoneySvg(lesson);
   if (lesson.visualType === "perimeter") return renderPerimeterSvg(lesson);
@@ -2617,6 +2664,7 @@ function renderLessonSvg(lesson) {
   if (lesson.visualType === "motion") return renderMotionSvg(lesson);
   if (lesson.visualType === "mass") return renderMassSvg(lesson);
   if (lesson.visualType === "logic") return renderLogicSvg(lesson);
+  if (lesson.activeQuestion?.visualMarkup) return renderQuestionVisualMarkup(lesson);
   if (lesson.visualType === "count" || lesson.visualType === "compare" || lesson.visualType === "position") {
     return renderPrimaryThinkingSvg(lesson);
   }
@@ -2955,34 +3003,38 @@ function renderMoneySvg(lesson) {
         ? `再加原来的 ${money.jiao} 角`
         : lesson.visualTitle;
   const noteCount = isRate ? 1 : Math.max(1, Math.min(4, money.yuan));
-  const coinCount = isRate ? 10 : isConvert || money.isPureYuanQuestion ? 0 : Math.max(0, Math.min(5, money.jiao));
-  const leftText = isRate ? "1张1元" : `${money.yuan}张1元`;
-  const middleText = isRate ? "可以换成" : isConvert || money.isPureYuanQuestion ? "先换成" : `${money.yuanJiao}角`;
-  const rightText = isRate ? "几个1角？" : isConvert || money.isPureYuanQuestion ? "几角？" : "+";
   const promptText = isRate
-    ? "1元 = ? 角"
+    ? "1 元 = ? 角"
     : money.isPureYuanQuestion || isConvert
-      ? `${money.yuan}元 = ? 角`
-      : `${money.yuanJiao}角 + ${money.jiao}角 = ?`;
-  const coinGroup = coinCount
-    ? `<g transform="translate(${isRate ? 244 : 312} ${isRate ? 62 : 104})">${renderMoneyCoins(coinCount)}</g>
-      <text x="${isRate ? 282 : 326}" y="${isRate ? 158 : 156}" class="svg-note">${escapeText(isRate ? "10个1角" : `原来的${money.jiao}角`)}</text>`
-    : "";
+      ? `${money.yuan} 元 = ? 角`
+      : `${money.yuanJiao} 角 + ${money.jiao} 角 = ? 角`;
+  const notes = Array.from({ length: noteCount }, (_, index) => moneyNote(index * 24, index * 8, "1元", "#65d6ad")).join("");
+  const extraNote = !isRate && money.yuan > 4 ? `<text x="370" y="96" class="svg-note">共 ${money.yuan} 张</text>` : "";
+  const rightSide = isRate
+    ? `<g transform="translate(286 64)">${renderMoneyCoins(10)}</g><text x="318" y="154" class="svg-note">10 个 1 角</text>`
+    : isAdd
+      ? `<rect x="318" y="70" width="86" height="50" rx="12" fill="#ffd36a" stroke="#244056" stroke-width="3"/>
+         <text x="338" y="103" class="svg-label">${money.jiao}角</text>
+         <text x="310" y="148" class="svg-note">原来的几角</text>`
+      : `<rect x="312" y="70" width="118" height="50" rx="12" fill="#fff4d8" stroke="#244056" stroke-width="3"/>
+         <text x="334" y="103" class="svg-label">?角</text>
+         <text x="306" y="148" class="svg-note">先换成角</text>`;
+  const middleLabel = isRate ? "换成" : isAdd ? "再加" : "换算";
+  const leftLabel = isRate ? "1 张 1 元" : `${money.yuan} 元`;
   return `
-    <svg class="lesson-svg money-svg" viewBox="0 0 520 214" role="img" aria-label="把元和角换成同一种单位">
+    <svg class="lesson-svg money-svg" viewBox="0 0 520 238" role="img" aria-label="把元和角换成同一种单位">
       <text x="26" y="30" class="svg-title">${escapeText(title)}</text>
-      <g transform="translate(44 48)">
-        ${Array.from({ length: noteCount }, (_, index) => moneyNote(index * 98, 0, "1元", "#65d6ad")).join("")}
+      <g transform="translate(42 62)">
+        ${notes}
       </g>
-      ${coinGroup}
-      <g transform="translate(48 114)">
-        <text x="0" y="20" class="svg-note">${escapeText(leftText)}</text>
-        <path d="M96 13h66" fill="none" stroke="#244056" stroke-width="4" stroke-linecap="round"/>
-        <text x="174" y="20" class="svg-note">${escapeText(middleText)}</text>
-        <text x="306" y="20" class="svg-note">${escapeText(rightText)}</text>
-      </g>
-      <rect x="118" y="166" width="284" height="34" rx="12" fill="#fff4d8"/>
-      <text x="164" y="190" class="svg-win">${escapeText(promptText)}</text>
+      ${extraNote}
+      <text x="58" y="148" class="svg-note">${escapeText(leftLabel)}</text>
+      <path d="M218 92h48" fill="none" stroke="#244056" stroke-width="5" stroke-linecap="round"/>
+      <path d="m256 80 16 12-16 12" fill="none" stroke="#244056" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="220" y="128" class="svg-note">${escapeText(middleLabel)}</text>
+      ${rightSide}
+      <rect x="92" y="178" width="336" height="40" rx="14" fill="#fff4d8"/>
+      <text x="134" y="204" class="svg-win">${escapeText(promptText)}</text>
     </svg>
   `;
 }
@@ -4198,7 +4250,7 @@ function blobToDataUrl(blob) {
 }
 
 function handleChildInput(text, inputType) {
-  if (state.voiceStatus === "processing") {
+  if (state.voiceStatus === "processing" || state.recording) {
     toastMessage("老师正在回复，等这句说完再继续。");
     return;
   }
@@ -4374,6 +4426,12 @@ function applyGatewayTutor(payload, inputType) {
 }
 
 function evaluateLocally(text, inputType) {
+  const lesson = currentLesson();
+  if (lesson.useQuestionBankTutor && state.phase !== "teachback") {
+    evaluateQuestionBankAttempt(text, inputType);
+    return;
+  }
+
   if (state.phase === "teachback" || state.phase === "repair") {
     evaluateTeachback(text, inputType);
   } else {
@@ -4481,13 +4539,27 @@ function evaluateQuestionBankAttempt(text, inputType) {
     return;
   }
 
+  if (isLikelyOffTopicAnswer(normalized, lesson, plan)) {
+    keepOnCurrentGuidedStep(lesson, plan, "这个和当前小问题还没连上。", inputType, "答非所问");
+    return;
+  }
+
   if (stepMatched || (plan.isReason && looksLikeReason(normalized))) {
     advanceGuidedStepOrComplete(lesson, plan, inputType);
     return;
   }
 
   if (fullAnswerMatched) {
-    askReasonAfterFullAnswer(lesson, inputType);
+    if (plan.isFinal || plan.index >= plan.totalSteps - 1) {
+      completeQuestionBankRound(lesson, inputType);
+    } else {
+      keepOnCurrentGuidedStep(lesson, plan, "你已经在说结果了，但老师要确认这一小步也稳。", inputType, "跳步回答");
+    }
+    return;
+  }
+
+  if (looksLikeShortAnswer(normalized)) {
+    keepOnCurrentGuidedStep(lesson, plan, "这个答案还不对。", inputType, "答案错误");
     return;
   }
 
@@ -4508,7 +4580,7 @@ function advanceGuidedStepOrComplete(lesson, plan, inputType) {
   state.currentAtomName = nextPlan.label;
   state.currentStep = `小台阶 ${nextPlan.index + 1}：${nextPlan.label}`;
   state.aiContext = "孩子通过了当前小台阶，进入下一步。";
-  state.aiMessage = `对。${nextPlan.prompt}`;
+  state.aiMessage = teacherAdvanceMessage(nextPlan);
   state.showVisual = true;
   resetGeneratedVisualForTurn();
   addEvidence("小台阶通过", `已通过：${plan.label}，继续：${nextPlan.label}`, inputType === "voice" ? "语音回答" : "键盘回答");
@@ -4526,7 +4598,7 @@ function askReasonAfterFullAnswer(lesson, inputType) {
   state.currentAtomName = reasonPlan.label;
   state.currentStep = `小台阶 ${reasonPlan.index + 1}：${reasonPlan.label}`;
   state.aiContext = "孩子答出了结果，继续检查是否能说原因。";
-  state.aiMessage = `答案对了。再补一句原因：${reasonPlan.prompt}`;
+  state.aiMessage = teacherReasonMessage(reasonPlan);
   state.feynmanStatus = "会做，等待说理";
   state.showVisual = true;
   resetGeneratedVisualForTurn();
@@ -4574,13 +4646,36 @@ function keepOnCurrentGuidedStep(lesson, plan, prefix, inputType, signal) {
   state.currentAtomName = plan.label;
   state.currentStep = `小台阶 ${plan.index + 1}：${plan.label}`;
   state.aiContext = "孩子还没答到当前小问题，继续停在这一小步。";
-  state.aiMessage = `${prefix}现在只回答这个小问题：${plan.prompt}`;
+  state.aiMessage = teacherRepairMessage(prefix, plan);
   state.showVisual = true;
   state.strategyIndex = Math.max(state.strategyIndex, 1);
   state.bestStrategy = lesson.strategies[1]?.label || "画图";
   resetGeneratedVisualForTurn();
   addEvidence(signal, `停在当前小台阶：${plan.label}，不默认判对。`, inputType === "voice" ? "语音回答" : "键盘回答");
   speakCurrentMessage();
+}
+
+function isLikelyOffTopicAnswer(normalizedText, lesson, plan) {
+  if (!normalizedText) return true;
+  if (matchesGuidedKeywords(normalizedText, plan.answerKeywords)) return false;
+  if (plan.isReason && looksLikeReason(normalizedText)) return false;
+  const question = lesson.activeQuestion || null;
+  const text = normalizeText(`${question?.prompt || ""} ${lesson.node || ""} ${lesson.lesson || ""} ${plan.label || ""} ${plan.prompt || ""}`);
+  const hasMoneyContext = /元|角|分|钱|人民币/.test(text);
+  if (hasMoneyContext) {
+    const hasMoneyAnswer = /元|角|分|钱|人民币|\d|一|二|三|四|五|六|七|八|九|十|百/.test(normalizedText);
+    return !hasMoneyAnswer;
+  }
+  const hasMathSignal = /\d|一|二|三|四|五|六|七|八|九|十|百|大|小|多|少|等|加|减|乘|除|平均|一共|还剩|因为|所以/.test(normalizedText);
+  return normalizedText.length > 8 && !hasMathSignal;
+}
+
+function looksLikeShortAnswer(normalizedText) {
+  if (!normalizedText) return false;
+  if (normalizedText.length <= 8 && /[\d一二三四五六七八九十百千万元角分个只本支块张条朵面位人米厘米克千克<>＝=大小多少]/.test(normalizedText)) {
+    return true;
+  }
+  return false;
 }
 
 function getTargetQuestionPassCount(lesson) {
@@ -4685,7 +4780,7 @@ function maybeContinueWithVariantAfterTeachback(inputType) {
   state.currentAtomName = starter.label;
   state.currentStep = `小台阶 1：${starter.label}`;
   state.aiContext = "孩子讲清楚了一题，进入同知识点变式题。";
-  state.aiMessage = `你讲清楚了。换个问法再确认一次：${childFacingPrompt(nextQuestion.prompt)} ${starter.prompt}`;
+  state.aiMessage = `你讲清楚了。换个问法再确认一次：${childFacingPrompt(nextQuestion.prompt)} 我只问一步：${formatChildStepPrompt(starter)}`;
   state.feynmanStatus = "已讲清一题，继续变式";
   state.showVisual = true;
   state.lastStudentText = "";
