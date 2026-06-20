@@ -2698,3 +2698,428 @@ button {
     display: none;
   }
 }
+
+/* Child learning screen v4: fit the full learning surface into one viewport. */
+.app-shell.is-child .kid-classroom {
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.kid-topbar {
+  min-height: 78px;
+  padding: 0 30px;
+}
+
+.kid-brand {
+  gap: 16px;
+}
+
+.kid-brand strong {
+  font-size: clamp(28px, 2.4vw, 38px);
+}
+
+.kid-top-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 14px;
+}
+
+.kid-lesson-switch {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #cfe3f4;
+  border-radius: 999px;
+  background: #fff;
+  color: #276fbf;
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 900;
+  padding: 0 16px;
+  box-shadow: 0 8px 18px rgba(55, 105, 151, 0.08);
+}
+
+.kid-lesson-switch svg {
+  width: 20px;
+  height: 20px;
+}
+
+.kid-day-pill {
+  min-height: 48px;
+  padding: 0 22px;
+}
+
+.kid-day-pill strong {
+  font-size: 19px;
+}
+
+.kid-progress-dot {
+  width: 28px;
+  height: 28px;
+  border-width: 4px;
+}
+
+.kid-progress {
+  gap: 22px;
+}
+
+.kid-progress-dot:not(:last-child)::after {
+  left: calc(100% + 6px);
+  width: 24px;
+}
+
+.kid-workspace {
+  height: calc(100svh - 78px);
+  min-height: 0;
+  grid-template-columns: minmax(330px, 31vw) minmax(0, 1fr);
+}
+
+.kid-coach {
+  height: 100%;
+  align-content: start;
+  gap: 12px;
+  padding: 12px 28px 18px;
+}
+
+.kid-teacher-avatar {
+  width: min(230px, 45vh);
+  height: min(258px, 46vh);
+}
+
+.kid-teacher-avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.kid-teacher-mini {
+  width: 52px;
+  height: 52px;
+}
+
+.kid-speech-bubble {
+  max-height: 245px;
+  overflow: auto;
+  border-radius: 22px;
+  padding: 24px 26px;
+}
+
+.kid-speech-bubble::before {
+  top: -13px;
+  left: 76px;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px 0 0 0;
+}
+
+.kid-speech-bubble p {
+  font-size: clamp(24px, 1.9vw, 34px);
+  line-height: 1.18;
+}
+
+.kid-last-answer {
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.kid-last-answer span {
+  font-size: 15px;
+  padding: 6px 10px;
+}
+
+.kid-last-answer strong {
+  margin-top: 6px;
+  font-size: 20px;
+}
+
+.kid-input-panel {
+  gap: 8px;
+}
+
+.kid-primary-voice {
+  min-height: 72px;
+  gap: 16px;
+  border-radius: 16px;
+}
+
+.kid-primary-voice svg {
+  width: 38px;
+  height: 38px;
+}
+
+.kid-primary-voice span {
+  font-size: 27px;
+}
+
+.kid-type-trigger {
+  min-height: 50px;
+  border-radius: 14px;
+}
+
+.kid-type-trigger svg {
+  width: 21px;
+  height: 21px;
+}
+
+.kid-type-trigger span {
+  font-size: 20px;
+}
+
+.kid-keyboard-wrap .keyboard-composer input,
+.kid-keyboard-wrap .keyboard-composer .btn {
+  min-height: 52px;
+  border-radius: 12px;
+  font-size: 18px;
+}
+
+.kid-input-panel p {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.kid-help-row {
+  gap: 12px;
+}
+
+.kid-help-button {
+  min-height: 58px;
+  border-radius: 14px;
+  gap: 10px;
+}
+
+.kid-help-button span {
+  font-size: 22px;
+}
+
+.kid-help-button svg {
+  width: 26px;
+  height: 26px;
+}
+
+.kid-help-button strong {
+  font-size: 20px;
+}
+
+.kid-board {
+  height: 100%;
+  padding: 48px 24px 18px;
+}
+
+.kid-board-ribbon {
+  top: 28px;
+  left: 64px;
+  font-size: clamp(20px, 2vw, 28px);
+  padding: 8px 24px;
+}
+
+.kid-board .lesson-picker {
+  top: 78px;
+  left: 54px;
+  right: 28px;
+  max-height: calc(100svh - 126px);
+}
+
+.kid-board-card {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  align-content: center;
+  overflow: hidden;
+  padding: 48px 36px 28px;
+}
+
+.kid-board-card-generic {
+  align-content: start;
+}
+
+.kid-board-head {
+  margin-bottom: 12px;
+}
+
+.kid-board-head span {
+  font-size: 19px;
+}
+
+.kid-board-head span svg {
+  width: 24px;
+  height: 24px;
+}
+
+.kid-board-head strong {
+  font-size: 17px;
+  padding: 9px 13px;
+}
+
+.kid-board-card h2 {
+  margin: 12px 0 18px;
+  font-size: clamp(28px, 2.7vw, 42px);
+}
+
+.kid-board-card-generic .lesson-svg,
+.kid-board-card-generic .fraction-svg {
+  width: min(760px, 92%);
+  max-height: 48vh;
+  min-height: 0;
+}
+
+.kid-money-layout {
+  grid-template-columns: minmax(190px, 0.86fr) 70px minmax(300px, 1.18fr);
+  gap: 22px;
+}
+
+.kid-money-box {
+  min-height: min(310px, 45vh);
+  border-radius: 20px;
+  padding: 24px 22px 58px;
+}
+
+.kid-money-box > strong {
+  bottom: -24px;
+  min-width: 98px;
+  font-size: 26px;
+  padding: 8px 18px;
+}
+
+.kid-money-notes {
+  gap: 12px;
+}
+
+.kid-money-note {
+  width: 185px;
+  height: 58px;
+  padding-left: 22px;
+}
+
+.kid-money-note::before {
+  top: 8px;
+  right: 26px;
+  width: 34px;
+  height: 42px;
+}
+
+.kid-money-note em {
+  font-size: 28px;
+}
+
+.kid-money-note small {
+  font-size: 14px;
+}
+
+.kid-money-arrow {
+  width: 64px;
+  height: 20px;
+}
+
+.kid-money-arrow::after {
+  right: -18px;
+  border-top-width: 23px;
+  border-bottom-width: 23px;
+  border-left-width: 28px;
+}
+
+.kid-coin-grid {
+  grid-template-columns: repeat(5, 54px);
+  gap: 15px 18px;
+}
+
+.kid-coin {
+  width: 54px;
+  height: 54px;
+  font-size: 16px;
+}
+
+.kid-think-box {
+  width: min(640px, 86%);
+  min-height: 70px;
+  grid-template-columns: auto 1fr 92px;
+  gap: 16px;
+  margin: 44px auto 0;
+  border-radius: 14px;
+  padding: 13px 20px;
+}
+
+.kid-think-box svg {
+  width: 32px;
+  height: 32px;
+}
+
+.kid-think-box strong {
+  font-size: clamp(19px, 1.55vw, 25px);
+}
+
+.kid-think-box i {
+  width: 86px;
+  height: 50px;
+}
+
+@media (max-height: 820px) and (min-width: 861px) {
+  .kid-topbar {
+    min-height: 68px;
+  }
+
+  .kid-workspace {
+    height: calc(100svh - 68px);
+    min-height: 0;
+  }
+
+  .kid-teacher-avatar {
+    width: 190px;
+    height: 212px;
+  }
+
+  .kid-speech-bubble {
+    max-height: 195px;
+    padding: 20px 22px;
+  }
+
+  .kid-primary-voice {
+    min-height: 62px;
+  }
+
+  .kid-type-trigger,
+  .kid-help-button {
+    min-height: 48px;
+  }
+
+  .kid-board {
+    padding-top: 42px;
+  }
+
+  .kid-board-card {
+    padding: 42px 30px 24px;
+  }
+
+  .kid-money-box {
+    min-height: 270px;
+  }
+
+  .kid-think-box {
+    margin-top: 34px;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 861px) {
+  .kid-money-layout {
+    grid-template-columns: minmax(180px, 0.8fr) 54px minmax(270px, 1fr);
+    gap: 16px;
+  }
+
+  .kid-money-note {
+    width: 162px;
+  }
+
+  .kid-coin-grid {
+    grid-template-columns: repeat(5, 45px);
+    gap: 12px;
+  }
+
+  .kid-coin {
+    width: 45px;
+    height: 45px;
+    font-size: 13px;
+  }
+}
