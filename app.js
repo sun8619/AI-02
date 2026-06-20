@@ -2247,40 +2247,199 @@ function renderTopbar() {
 
 function renderChildView() {
   const lesson = currentLesson();
-  const actionButtons =
-    state.phase === "summary"
-      ? [
-          ["next-lesson", "下一个知识点", "arrow"],
-          ["change-lesson", "自己选择", "book"],
-          ["repeat", "再听一遍", "repeat"],
-        ]
-      : state.phase === "teachback" || state.phase === "repair"
-      ? [
-          ["teach", "我来讲", "star"],
-          ["cant-explain", "我讲不出来", "light"],
-          ["show-visual", "再给我看图", "image"],
-        ]
-      : [
-          ["dont-understand", "我没懂", "light"],
-          ["repeat", "再说一遍", "repeat"],
-          ["new-example", "换道题", "repeat"],
-          ["change-lesson", "换知识点", "book"],
-        ];
 
   return `
-    <main class="child-stage">
-      <section class="learning-scene" aria-label="孩子学习区">
-        <div class="scene-left">
-          ${renderKnowledgeSelector()}
-          ${renderStepPanel()}
-          ${renderInteractionPanel(actionButtons)}
-        </div>
-
-        <aside class="scene-right">
-          ${renderVisualArea()}
+    <main class="child-stage kid-classroom">
+      ${renderKidTopbar(lesson)}
+      <section class="kid-workspace" aria-label="孩子学习区">
+        <aside class="kid-coach" aria-label="老师引导区">
+          ${renderKidTeacherAvatar("large")}
+          ${renderKidQuestionBubble(lesson)}
+          ${renderKidVoicePanel()}
+          ${renderKidHelpButtons()}
         </aside>
+
+        <section class="kid-board" aria-label="看图想一想">
+          <button class="kid-board-ribbon" data-action="toggle-lesson-picker" aria-expanded="${state.showLessonPicker ? "true" : "false"}">
+            ${escapeText(lesson.node)}
+          </button>
+          ${state.showLessonPicker ? renderLessonPicker() : ""}
+          ${renderKidBoardVisual(lesson)}
+        </section>
       </section>
     </main>
+  `;
+}
+
+function renderKidTopbar(lesson) {
+  return `
+    <header class="kid-topbar" aria-label="乐之老师">
+      <button class="kid-brand" data-action="child-home" aria-label="返回学习页">
+        ${renderKidTeacherAvatar("mini")}
+        <strong>乐之老师</strong>
+      </button>
+      ${renderKidProgressDots(lesson)}
+      <div class="kid-day-pill" aria-label="今天只学一小步">
+        <span aria-hidden="true">🌱</span>
+        <strong>今天只学一小步</strong>
+      </div>
+    </header>
+  `;
+}
+
+function renderKidProgressDots(lesson) {
+  const ladder = getLessonLadderSteps(lesson);
+  const total = Math.max(3, Math.min(5, ladder.length || 3));
+  const current = state.phase === "summary" ? total - 1 : Math.max(0, Math.min(total - 1, Math.floor((state.completedSteps / Math.max(1, ladder.length)) * total)));
+  return `
+    <div class="kid-progress" aria-label="学习进度">
+      ${Array.from({ length: total })
+        .map((_, index) => `<span class="kid-progress-dot ${index < current ? "is-done" : ""} ${index === current ? "is-current" : ""}"></span>`)
+        .join("")}
+    </div>
+  `;
+}
+
+function renderKidQuestionBubble(lesson) {
+  const plan = createGuidedStepPlan(lesson, state.completedSteps);
+  const problem = childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem);
+  const shortPrompt = formatChildStepPrompt(plan).replace(/^看这题[:：]\s*/, "");
+  const message =
+    state.phase === "summary"
+      ? "这一步学会了。你可以换下一个知识点，也可以再练一题。"
+      : state.phase === "teachback" || state.phase === "repair"
+        ? state.aiMessage
+        : `看这题：${problem} ${shortPrompt}`;
+
+  return `
+    <section class="kid-speech-bubble" aria-label="老师提问">
+      <p>${escapeText(message)}</p>
+      ${state.lastStudentText ? `<div class="kid-last-answer"><span>刚才你说</span><strong>${escapeText(state.lastStudentText)}</strong></div>` : ""}
+    </section>
+  `;
+}
+
+function renderKidVoicePanel() {
+  const locked = state.voiceStatus === "processing";
+  const inputLocked = state.recording || locked;
+  return `
+    <section class="kid-input-panel" aria-label="回答区">
+      <button class="kid-primary-voice ${state.recording ? "is-recording" : ""} ${locked ? "is-processing" : ""}" data-action="voice" ${locked ? "disabled" : ""}>
+        ${icon("mic")}
+        <span>${state.recording ? "说完了" : locked ? "老师在想" : "按一下开始说"}</span>
+      </button>
+      <button class="kid-type-trigger" data-action="toggle-keyboard" ${inputLocked ? "disabled" : ""}>
+        ${icon("keyboard")}
+        <span>也可以打字</span>
+      </button>
+      ${state.showKeyboard ? `<div class="kid-keyboard-wrap">${renderKeyboardComposer()}</div>` : ""}
+      <p>${escapeText(renderDockNote())}</p>
+    </section>
+  `;
+}
+
+function renderKidHelpButtons() {
+  const explainAction = state.phase === "teachback" || state.phase === "repair" ? "cant-explain" : "dont-understand";
+  return `
+    <div class="kid-help-row" aria-label="求助按钮">
+      <button class="kid-help-button" data-action="${explainAction}">
+        <span aria-hidden="true">🤔</span>
+        <strong>${state.phase === "teachback" ? "我讲不出" : "我不懂"}</strong>
+      </button>
+      <button class="kid-help-button" data-action="show-visual">
+        ${icon("image")}
+        <strong>看图</strong>
+      </button>
+      <button class="kid-help-button kid-help-secondary" data-action="change-lesson">
+        ${icon("book")}
+        <strong>换知识点</strong>
+      </button>
+    </div>
+  `;
+}
+
+function renderKidBoardVisual(lesson) {
+  if (lesson.visualType === "money" || lesson.id === "renminbi-conversion") {
+    return renderKidMoneyBoard(lesson);
+  }
+  return `
+    <div class="kid-board-card kid-board-card-generic">
+      <div class="kid-board-head">
+        <span>${icon("image")}看图想一想</span>
+        <strong>程序辅助理解</strong>
+      </div>
+      <h2>${escapeText(lesson.visualTitle || "把题目拆成小台阶")}</h2>
+      <div class="kid-board-fallback">${renderLessonSvg(lesson)}</div>
+      <div class="kid-think-box">
+        <span>${icon("light")}</span>
+        <strong>${escapeText(getKidBoardPrompt(lesson))}</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderKidMoneyBoard(lesson) {
+  const money = getMoneyVisualNumbers(lesson);
+  const prompt = getKidBoardPrompt(lesson);
+  const yuanCount = Math.max(1, Math.min(4, money.yuan || 3));
+  const extraJiao = Math.max(0, Math.min(9, money.jiao || 0));
+  return `
+    <div class="kid-board-card kid-money-board">
+      <div class="kid-money-layout">
+        <div class="kid-money-box kid-money-yuan-box">
+          <div class="kid-money-notes">
+            ${Array.from({ length: yuanCount })
+              .map((_, index) => `<span class="kid-money-note" style="--note-index:${index}"><em>1</em><small>元</small></span>`)
+              .join("")}
+          </div>
+          <strong>${money.yuan || yuanCount}元</strong>
+        </div>
+        <div class="kid-money-arrow" aria-hidden="true"></div>
+        <div class="kid-money-box kid-money-jiao-box">
+          <div class="kid-coin-grid">
+            ${Array.from({ length: 10 })
+              .map(() => `<span class="kid-coin kid-coin-silver">1角</span>`)
+              .join("")}
+            ${extraJiao ? `<span class="kid-coin kid-coin-copper">${extraJiao}角</span>` : ""}
+          </div>
+          <strong>${money.yuan ? money.yuan * 10 : 10}角${extraJiao ? ` + ${extraJiao}角` : ""}</strong>
+        </div>
+      </div>
+      <div class="kid-think-box">
+        <span>${icon("light")}</span>
+        <strong>想一想：${escapeText(prompt)}</strong>
+        <i aria-hidden="true"></i>
+      </div>
+    </div>
+  `;
+}
+
+function getKidBoardPrompt(lesson) {
+  const plan = createGuidedStepPlan(lesson, state.completedSteps);
+  const prompt = String(plan?.prompt || lesson.problem || "").trim();
+  const money = getMoneyVisualNumbers(lesson);
+  if (/1元等于几角|1元是几角|1元等于多少角/.test(prompt)) return "1元是（  ）角？";
+  if (/1角等于几分|1角是几分|1角等于多少分/.test(prompt)) return "1角是（  ）分？";
+  const yuanQuestion = prompt.match(/(\d+)元.*?几角/);
+  if (yuanQuestion) return `${yuanQuestion[1]}元是（  ）角？`;
+  if (/再加|一共|最后|合起来/.test(prompt) && money.jiao > 0) return `${money.yuanJiao}角 + ${money.jiao}角 = （  ）角？`;
+  if (lesson.visualType === "money" || lesson.id === "renminbi-conversion") return `${money.yuan || 3}元是（  ）角？`;
+  return childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem);
+}
+
+function renderKidTeacherAvatar(size = "large") {
+  return `
+    <div class="kid-teacher-avatar kid-teacher-${size}" aria-hidden="true">
+      <div class="kid-teacher-hair"></div>
+      <div class="kid-teacher-face">
+        <span class="kid-teacher-glasses left"></span>
+        <span class="kid-teacher-glasses right"></span>
+        <span class="kid-teacher-smile"></span>
+      </div>
+      <div class="kid-teacher-body"></div>
+      <div class="kid-teacher-book"></div>
+      <div class="kid-teacher-hand"></div>
+    </div>
   `;
 }
 

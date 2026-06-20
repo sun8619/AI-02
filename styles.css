@@ -1347,6 +1347,332 @@ button {
   transform: translateY(0);
 }
 
+/* Child learning screen v2: match the approved two-column teacher workspace. */
+.app-shell.is-child .topbar {
+  display: none;
+}
+
+.app-shell.is-child .child-stage {
+  min-height: 100vh;
+  padding: 6px 16px 0;
+}
+
+.app-shell.is-child .learning-scene {
+  width: 100%;
+  max-width: none;
+  grid-template-columns: minmax(560px, 1fr) minmax(560px, 1fr);
+  gap: 24px;
+  align-items: start;
+  justify-self: stretch;
+}
+
+.app-shell.is-child .scene-left,
+.app-shell.is-child .scene-right {
+  gap: 18px;
+}
+
+.app-shell.is-child .knowledge-select-panel,
+.app-shell.is-child .step-panel,
+.app-shell.is-child .interaction-panel,
+.app-shell.is-child .visual-panel {
+  border-color: #d3e6f2;
+  border-radius: 10px;
+  box-shadow: 0 8px 22px rgba(40, 90, 122, 0.06);
+}
+
+.app-shell.is-child .knowledge-current {
+  min-height: 176px;
+  padding: 22px 26px;
+}
+
+.app-shell.is-child .knowledge-current span {
+  gap: 12px;
+  font-size: 21px;
+  line-height: 1.15;
+}
+
+.app-shell.is-child .knowledge-current svg,
+.app-shell.is-child .panel-head svg {
+  width: 28px;
+  height: 28px;
+}
+
+.app-shell.is-child .knowledge-current strong {
+  margin-top: 10px;
+  font-size: 31px;
+  font-weight: 920;
+  line-height: 1.12;
+}
+
+.app-shell.is-child .knowledge-current em {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 850;
+}
+
+.app-shell.is-child .knowledge-current small {
+  margin-top: 8px;
+  font-size: 22px;
+  font-weight: 850;
+  line-height: 1.42;
+}
+
+.app-shell.is-child .step-panel {
+  padding: 24px;
+}
+
+.app-shell.is-child .panel-head span {
+  gap: 12px;
+  font-size: 23px;
+}
+
+.app-shell.is-child .panel-head strong {
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.app-shell.is-child .step-panel h2 {
+  margin: 28px 0 10px;
+  font-size: 30px;
+  font-weight: 930;
+  line-height: 1.12;
+}
+
+.app-shell.is-child .step-panel p {
+  font-size: 22px;
+  font-weight: 780;
+  line-height: 1.42;
+}
+
+.app-shell.is-child .step-panel .atom-note {
+  margin-top: 12px;
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.app-shell.is-child .step-ladder {
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.app-shell.is-child .ladder-step {
+  min-height: 64px;
+  grid-template-columns: 54px 1fr;
+  align-items: center;
+  gap: 18px;
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.app-shell.is-child .ladder-step span {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 24px;
+}
+
+.app-shell.is-child .ladder-step em {
+  font-size: 23px;
+  font-weight: 860;
+}
+
+.app-shell.is-child .interaction-panel {
+  gap: 18px;
+  padding: 20px 22px 24px;
+}
+
+.app-shell.is-child .tutor-wrap {
+  min-height: 384px;
+}
+
+.app-shell.is-child .tutor-card {
+  grid-template-columns: 255px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.app-shell.is-child .ice-princess {
+  transform: scale(1.42);
+  transform-origin: center center;
+}
+
+.app-shell.is-child .speech-card {
+  min-height: 372px;
+  display: grid;
+  align-items: center;
+  padding: 28px 30px;
+}
+
+.app-shell.is-child .dialogue-card {
+  gap: 20px;
+}
+
+.app-shell.is-child .dialogue-line span {
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 23px;
+}
+
+.app-shell.is-child .dialogue-line strong {
+  font-size: clamp(32px, 2.55vw, 48px);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.app-shell.is-child .dialogue-line p {
+  font-size: 26px;
+  font-weight: 850;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+.app-shell.is-child .student-line {
+  padding-top: 18px;
+}
+
+.app-shell.is-child .quick-actions {
+  gap: 16px;
+}
+
+.app-shell.is-child .help-button {
+  min-height: 78px;
+  min-width: 168px;
+  border-radius: 10px;
+  gap: 12px;
+  padding: 16px 22px;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.app-shell.is-child .help-button svg {
+  width: 28px;
+  height: 28px;
+}
+
+.app-shell.is-child .voice-dock {
+  border-radius: 10px;
+  padding: 28px 26px;
+}
+
+.app-shell.is-child .dock-actions {
+  gap: 22px;
+}
+
+.app-shell.is-child .dock-mini {
+  min-width: 186px;
+  min-height: 78px;
+  border-radius: 10px;
+  gap: 12px;
+  font-size: 25px;
+  font-weight: 900;
+}
+
+.app-shell.is-child .dock-mini svg {
+  width: 30px;
+  height: 30px;
+}
+
+.app-shell.is-child .voice-button {
+  min-width: 350px;
+  min-height: 88px;
+  border-radius: 10px;
+  gap: 18px;
+  font-size: 35px;
+}
+
+.app-shell.is-child .voice-button svg {
+  width: 36px;
+  height: 36px;
+}
+
+.app-shell.is-child .dock-note {
+  margin-top: 20px;
+  font-size: 21px;
+  font-weight: 760;
+}
+
+.app-shell.is-child .keyboard-composer {
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.app-shell.is-child .keyboard-composer input {
+  min-height: 70px;
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 24px;
+}
+
+.app-shell.is-child .keyboard-composer .btn {
+  min-height: 70px;
+  border-radius: 10px;
+  padding: 14px 24px;
+  font-size: 24px;
+}
+
+.app-shell.is-child .visual-panel {
+  min-height: 655px;
+  padding: 24px;
+}
+
+.app-shell.is-child .visual-panel .panel-head span {
+  font-size: 24px;
+}
+
+.app-shell.is-child .lesson-svg,
+.app-shell.is-child .fraction-svg {
+  height: 430px;
+  margin-top: 16px;
+}
+
+.app-shell.is-child .question-visual-markup {
+  min-height: 430px;
+}
+
+.app-shell.is-child .svg-title {
+  font-size: 28px;
+}
+
+.app-shell.is-child .svg-label,
+.app-shell.is-child .svg-note {
+  font-size: 24px;
+}
+
+.app-shell.is-child .svg-win {
+  font-size: 27px;
+}
+
+.app-shell.is-child .visual-turn-note {
+  margin: 4px 0 12px;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 20px;
+}
+
+.app-shell.is-child .ai-visual-card {
+  gap: 24px;
+  margin-top: 12px;
+  padding-top: 20px;
+}
+
+.app-shell.is-child .ai-visual-card strong {
+  font-size: 26px;
+}
+
+.app-shell.is-child .ai-visual-card p {
+  font-size: 20px;
+}
+
+.app-shell.is-child .ai-visual-card .btn {
+  min-height: 72px;
+  border-radius: 10px;
+  padding: 18px 28px;
+  font-size: 25px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1485,5 +1811,890 @@ button {
   .parent-hero h1,
   .summary-sheet h1 {
     font-size: 30px;
+  }
+}
+
+/* Child learning screen v3: classroom desk layout from the approved reference. */
+.app-shell.is-child .kid-classroom {
+  min-height: 100vh;
+  padding: 0;
+  background:
+    linear-gradient(90deg, rgba(214, 235, 250, 0.82) 0 31%, rgba(255, 255, 255, 0) 31%),
+    linear-gradient(rgba(92, 151, 215, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 151, 215, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, #f8fcff 0%, #eef8ff 100%);
+  background-size:
+    auto,
+    31px 31px,
+    31px 31px,
+    auto;
+}
+
+.kid-topbar {
+  display: grid;
+  min-height: 112px;
+  align-items: center;
+  grid-template-columns: 1fr auto 1fr;
+  border-bottom: 1px solid #d7eafb;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 28px rgba(59, 116, 170, 0.08);
+  padding: 0 32px;
+}
+
+.kid-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 24px;
+  background: transparent;
+  color: #142436;
+  cursor: pointer;
+  padding: 0;
+}
+
+.kid-brand strong {
+  font-size: 42px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.kid-progress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+}
+
+.kid-progress-dot {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 34px;
+  border: 5px solid #fff;
+  border-radius: 999px;
+  background: #d7dce3;
+  box-shadow:
+    0 0 0 3px #d7dfe8,
+    0 8px 16px rgba(35, 75, 112, 0.14);
+}
+
+.kid-progress-dot:not(:last-child)::after {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  width: 28px;
+  height: 3px;
+  border-radius: 99px;
+  background: #d5dce6;
+  content: "";
+  transform: translateY(-50%);
+}
+
+.kid-progress-dot.is-current,
+.kid-progress-dot.is-done {
+  background: #24c28e;
+  box-shadow:
+    0 0 0 3px #d7f5eb,
+    0 8px 18px rgba(26, 162, 113, 0.22);
+}
+
+.kid-day-pill {
+  display: inline-flex;
+  min-height: 58px;
+  align-items: center;
+  justify-self: end;
+  gap: 10px;
+  border-radius: 999px;
+  background: #d8f8e9;
+  color: #14805a;
+  cursor: pointer;
+  padding: 0 28px;
+}
+
+.kid-day-pill strong {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.kid-workspace {
+  display: grid;
+  min-height: calc(100vh - 112px);
+  grid-template-columns: minmax(360px, 31vw) minmax(720px, 1fr);
+}
+
+.kid-coach {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  padding: 8px 32px 28px;
+}
+
+.kid-teacher-avatar {
+  position: relative;
+  width: 300px;
+  height: 330px;
+  justify-self: center;
+  filter: drop-shadow(0 20px 22px rgba(44, 81, 115, 0.16));
+}
+
+.kid-teacher-mini {
+  width: 70px;
+  height: 70px;
+  filter: none;
+}
+
+.kid-teacher-hair {
+  position: absolute;
+  top: 26px;
+  left: 64px;
+  width: 150px;
+  height: 132px;
+  border-radius: 56% 52% 44% 46%;
+  background: linear-gradient(135deg, #5c382b, #281915 70%);
+  transform: rotate(-7deg);
+}
+
+.kid-teacher-face {
+  position: absolute;
+  top: 66px;
+  left: 82px;
+  width: 132px;
+  height: 124px;
+  border-radius: 48% 48% 46% 46%;
+  background: linear-gradient(180deg, #ffe4cf, #ffd0bb);
+  border: 4px solid rgba(77, 47, 34, 0.1);
+}
+
+.kid-teacher-face::before,
+.kid-teacher-face::after {
+  position: absolute;
+  top: 62px;
+  width: 11px;
+  height: 18px;
+  border-radius: 99px;
+  background: #263445;
+  content: "";
+}
+
+.kid-teacher-face::before {
+  left: 40px;
+}
+
+.kid-teacher-face::after {
+  right: 40px;
+}
+
+.kid-teacher-glasses {
+  position: absolute;
+  top: 48px;
+  width: 42px;
+  height: 36px;
+  border: 4px solid #223345;
+  border-radius: 999px;
+}
+
+.kid-teacher-glasses.left {
+  left: 22px;
+}
+
+.kid-teacher-glasses.right {
+  right: 22px;
+}
+
+.kid-teacher-glasses.left::after {
+  position: absolute;
+  top: 15px;
+  left: 38px;
+  width: 14px;
+  height: 4px;
+  border-radius: 4px;
+  background: #223345;
+  content: "";
+}
+
+.kid-teacher-smile {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  width: 42px;
+  height: 22px;
+  border-bottom: 5px solid #263445;
+  border-radius: 0 0 99px 99px;
+  transform: translateX(-50%);
+}
+
+.kid-teacher-body {
+  position: absolute;
+  left: 56px;
+  bottom: 18px;
+  width: 178px;
+  height: 138px;
+  border-radius: 55px 55px 34px 34px;
+  background: linear-gradient(160deg, #bfe8ff 0%, #74c6f4 50%, #5086f3 100%);
+  border: 5px solid #244056;
+}
+
+.kid-teacher-body::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 72px;
+  height: 88px;
+  border-radius: 48px 0 58px 0;
+  background: rgba(255, 255, 255, 0.46);
+  content: "";
+}
+
+.kid-teacher-book {
+  position: absolute;
+  left: 92px;
+  bottom: 20px;
+  width: 126px;
+  height: 104px;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #eefbff, #72c7f6 45%, #5b79f5 100%);
+  border: 5px solid #244056;
+}
+
+.kid-teacher-book::before,
+.kid-teacher-book::after {
+  position: absolute;
+  color: #fff;
+  content: "✦";
+}
+
+.kid-teacher-book::before {
+  top: 22px;
+  left: 32px;
+  font-size: 27px;
+}
+
+.kid-teacher-book::after {
+  right: 28px;
+  bottom: 20px;
+  font-size: 25px;
+}
+
+.kid-teacher-hand {
+  position: absolute;
+  right: 14px;
+  bottom: 68px;
+  width: 42px;
+  height: 86px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 14%, #ffe69d 0 18px, transparent 19px),
+    radial-gradient(circle at 50% 48%, #ffe69d 0 18px, transparent 19px),
+    radial-gradient(circle at 50% 82%, #ffe69d 0 18px, transparent 19px);
+  border-right: 5px solid #244056;
+}
+
+.kid-teacher-mini .kid-teacher-hair {
+  top: 5px;
+  left: 12px;
+  width: 42px;
+  height: 38px;
+}
+
+.kid-teacher-mini .kid-teacher-face {
+  top: 16px;
+  left: 17px;
+  width: 38px;
+  height: 36px;
+  border-width: 2px;
+}
+
+.kid-teacher-mini .kid-teacher-face::before,
+.kid-teacher-mini .kid-teacher-face::after {
+  top: 18px;
+  width: 3px;
+  height: 6px;
+}
+
+.kid-teacher-mini .kid-teacher-face::before {
+  left: 12px;
+}
+
+.kid-teacher-mini .kid-teacher-face::after {
+  right: 12px;
+}
+
+.kid-teacher-mini .kid-teacher-glasses {
+  top: 14px;
+  width: 13px;
+  height: 11px;
+  border-width: 1.6px;
+}
+
+.kid-teacher-mini .kid-teacher-glasses.left {
+  left: 7px;
+}
+
+.kid-teacher-mini .kid-teacher-glasses.right {
+  right: 7px;
+}
+
+.kid-teacher-mini .kid-teacher-glasses.left::after,
+.kid-teacher-mini .kid-teacher-book,
+.kid-teacher-mini .kid-teacher-hand {
+  display: none;
+}
+
+.kid-teacher-mini .kid-teacher-smile {
+  bottom: 5px;
+  width: 14px;
+  height: 7px;
+  border-bottom-width: 2px;
+}
+
+.kid-teacher-mini .kid-teacher-body {
+  left: 13px;
+  bottom: 5px;
+  width: 44px;
+  height: 28px;
+  border-width: 2px;
+  border-radius: 16px 16px 12px 12px;
+}
+
+.kid-speech-bubble {
+  position: relative;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow:
+    0 12px 24px rgba(54, 107, 156, 0.1),
+    inset 0 0 0 1px #d8e8f6;
+  padding: 36px 38px;
+}
+
+.kid-speech-bubble::before {
+  position: absolute;
+  top: -18px;
+  left: 86px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px 0 0 0;
+  background: #fff;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.kid-speech-bubble p {
+  position: relative;
+  margin: 0;
+  color: #142436;
+  font-size: clamp(29px, 2.35vw, 42px);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.kid-last-answer {
+  position: relative;
+  margin-top: 20px;
+  border-top: 1px solid #dbeaf5;
+  padding-top: 16px;
+}
+
+.kid-last-answer span {
+  display: inline-block;
+  border-radius: 12px;
+  background: #eaf5ff;
+  color: #2272c8;
+  font-size: 18px;
+  font-weight: 900;
+  padding: 8px 12px;
+}
+
+.kid-last-answer strong {
+  display: block;
+  margin-top: 10px;
+  color: #637485;
+  font-size: 25px;
+  line-height: 1.45;
+}
+
+.kid-input-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.kid-primary-voice,
+.kid-type-trigger,
+.kid-help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d3e5f4;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease;
+}
+
+.kid-primary-voice {
+  min-height: 102px;
+  gap: 24px;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #46d392, #19be83);
+  color: #fff;
+  box-shadow: 0 16px 28px rgba(30, 178, 124, 0.22);
+}
+
+.kid-primary-voice svg {
+  width: 52px;
+  height: 52px;
+}
+
+.kid-primary-voice span {
+  font-size: 34px;
+  font-weight: 950;
+}
+
+.kid-primary-voice.is-recording {
+  background: linear-gradient(180deg, #ffce5d, #ff916b);
+}
+
+.kid-primary-voice.is-processing {
+  background: linear-gradient(180deg, #cde9fb, #a5d4f4);
+  color: #1f526d;
+}
+
+.kid-type-trigger {
+  min-height: 68px;
+  gap: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #8190a0;
+  box-shadow: 0 8px 16px rgba(55, 105, 151, 0.08);
+}
+
+.kid-type-trigger svg {
+  width: 26px;
+  height: 26px;
+}
+
+.kid-type-trigger span {
+  font-size: 25px;
+  font-weight: 850;
+}
+
+.kid-keyboard-wrap .keyboard-composer {
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin: 0;
+}
+
+.kid-keyboard-wrap .keyboard-composer input {
+  min-height: 64px;
+  border-radius: 14px;
+  font-size: 22px;
+}
+
+.kid-keyboard-wrap .keyboard-composer .btn {
+  min-height: 64px;
+  border-radius: 14px;
+  font-size: 22px;
+}
+
+.kid-input-panel p {
+  margin: 0;
+  color: #77879b;
+  font-size: 19px;
+  font-weight: 760;
+  text-align: center;
+}
+
+.kid-help-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.kid-help-secondary {
+  display: none;
+}
+
+.kid-help-button {
+  min-height: 86px;
+  gap: 14px;
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #192b3e;
+  box-shadow: 0 8px 16px rgba(55, 105, 151, 0.08);
+}
+
+.kid-help-button span {
+  font-size: 29px;
+}
+
+.kid-help-button svg {
+  width: 34px;
+  height: 34px;
+  color: #36a5e9;
+}
+
+.kid-help-button strong {
+  font-size: 26px;
+  font-weight: 920;
+}
+
+.kid-board {
+  position: relative;
+  padding: 60px 30px 32px;
+}
+
+.kid-board-ribbon {
+  position: absolute;
+  top: 40px;
+  left: 72px;
+  z-index: 4;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #83c7ff, #58a9f7);
+  color: #fff;
+  cursor: pointer;
+  font-size: 28px;
+  font-weight: 950;
+  letter-spacing: 0;
+  padding: 8px 28px;
+  box-shadow:
+    0 7px 0 #82bdf1,
+    0 12px 18px rgba(67, 141, 212, 0.2);
+}
+
+.kid-board .lesson-picker {
+  position: absolute;
+  top: 92px;
+  left: 70px;
+  right: 40px;
+  z-index: 10;
+  max-height: 68vh;
+  overflow: auto;
+}
+
+.kid-board-card {
+  min-height: min(760px, calc(100vh - 180px));
+  border: 2px solid #b9dcff;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 22px 42px rgba(57, 113, 169, 0.1);
+  padding: 64px 48px 38px;
+}
+
+.kid-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #62748a;
+}
+
+.kid-board-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 23px;
+  font-weight: 920;
+}
+
+.kid-board-head span svg {
+  width: 30px;
+  height: 30px;
+  color: #2b78d2;
+}
+
+.kid-board-head strong {
+  border-radius: 13px;
+  background: #edf7ff;
+  color: #2773c6;
+  font-size: 20px;
+  font-weight: 920;
+  padding: 12px 16px;
+}
+
+.kid-board-card h2 {
+  margin: 34px 0 48px;
+  color: #20344a;
+  font-size: 38px;
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.18;
+  text-align: center;
+}
+
+.kid-money-layout {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(220px, 0.9fr) 96px minmax(340px, 1.35fr);
+  gap: 28px;
+}
+
+.kid-money-box {
+  position: relative;
+  display: grid;
+  min-height: 430px;
+  align-content: center;
+  justify-items: center;
+  border: 2px dashed #82c0ff;
+  border-radius: 24px;
+  padding: 30px 28px 72px;
+}
+
+.kid-money-jiao-box {
+  border-color: #ffbd58;
+}
+
+.kid-money-box > strong {
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  min-width: 120px;
+  border-radius: 999px;
+  background: #e8f4ff;
+  color: #1c79d2;
+  font-size: 32px;
+  font-weight: 950;
+  padding: 11px 22px;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.kid-money-jiao-box > strong {
+  background: #fff1df;
+  color: #d97518;
+}
+
+.kid-money-notes {
+  display: grid;
+  gap: 18px;
+}
+
+.kid-money-note {
+  position: relative;
+  display: grid;
+  width: 235px;
+  height: 82px;
+  align-content: center;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 84% 50%, rgba(105, 139, 86, 0.24) 0 23px, transparent 24px),
+    linear-gradient(90deg, rgba(237, 244, 220, 0.95), rgba(219, 234, 192, 0.95));
+  border: 1px solid #c9d9ad;
+  box-shadow: 0 6px 10px rgba(77, 93, 58, 0.1);
+  color: #58713d;
+  padding-left: 28px;
+}
+
+.kid-money-note::before {
+  position: absolute;
+  top: 10px;
+  right: 34px;
+  width: 48px;
+  height: 58px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 45% 36%, #90a878 0 8px, transparent 9px),
+    radial-gradient(circle at 50% 58%, #90a878 0 18px, transparent 19px);
+  opacity: 0.58;
+  content: "";
+}
+
+.kid-money-note em {
+  font-size: 38px;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.kid-money-note small {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.kid-money-arrow {
+  position: relative;
+  width: 92px;
+  height: 28px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #68b5ff, #4f9df0);
+}
+
+.kid-money-arrow::after {
+  position: absolute;
+  top: 50%;
+  right: -23px;
+  border-top: 31px solid transparent;
+  border-bottom: 31px solid transparent;
+  border-left: 36px solid #4f9df0;
+  content: "";
+  transform: translateY(-50%);
+}
+
+.kid-coin-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 72px);
+  gap: 24px 28px;
+  justify-content: center;
+}
+
+.kid-coin {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  border-radius: 999px;
+  color: #6b6f73;
+  font-size: 21px;
+  font-weight: 950;
+  box-shadow:
+    inset 0 5px 8px rgba(255, 255, 255, 0.78),
+    inset 0 -5px 8px rgba(87, 85, 82, 0.18),
+    0 8px 10px rgba(36, 64, 86, 0.12);
+}
+
+.kid-coin-silver {
+  border: 2px solid #acb5bd;
+  background: radial-gradient(circle at 35% 28%, #fff 0 10px, #d6dadf 46%, #aeb6bf 100%);
+}
+
+.kid-coin-copper {
+  border: 2px solid #c17b28;
+  background: radial-gradient(circle at 35% 28%, #ffe0a2 0 10px, #d99038 48%, #bf6a20 100%);
+  color: #91520e;
+}
+
+.kid-think-box {
+  display: grid;
+  width: min(690px, 82%);
+  min-height: 92px;
+  align-items: center;
+  grid-template-columns: auto 1fr 126px;
+  gap: 22px;
+  margin: 64px auto 0;
+  border: 2px solid #ffc258;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff8e8, #fff2d4);
+  padding: 18px 28px;
+}
+
+.kid-think-box svg {
+  width: 42px;
+  height: 42px;
+  color: #c27a10;
+}
+
+.kid-think-box strong {
+  color: #956110;
+  font-size: 25px;
+  font-weight: 950;
+}
+
+.kid-think-box i {
+  display: block;
+  width: 116px;
+  height: 68px;
+  border: 2px solid #d8e1e9;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: inset 0 2px 7px rgba(42, 74, 104, 0.08);
+}
+
+.kid-board-fallback {
+  display: grid;
+  place-items: center;
+}
+
+.kid-board-card-generic .lesson-svg,
+.kid-board-card-generic .fraction-svg {
+  width: min(760px, 94%);
+  height: auto;
+  min-height: 320px;
+}
+
+@media (max-width: 1180px) {
+  .kid-workspace {
+    grid-template-columns: minmax(320px, 36vw) minmax(0, 1fr);
+  }
+
+  .kid-money-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .kid-money-arrow {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+
+  .kid-board-card {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 860px) {
+  .kid-topbar {
+    min-height: 90px;
+    grid-template-columns: 1fr auto;
+    padding: 0 18px;
+  }
+
+  .kid-brand strong {
+    font-size: 28px;
+  }
+
+  .kid-progress {
+    display: none;
+  }
+
+  .kid-day-pill {
+    min-height: 48px;
+    padding: 0 16px;
+  }
+
+  .kid-day-pill strong {
+    font-size: 16px;
+  }
+
+  .kid-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .kid-classroom {
+    background:
+      linear-gradient(rgba(92, 151, 215, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(92, 151, 215, 0.08) 1px, transparent 1px),
+      #f4fbff;
+  }
+
+  .kid-board {
+    padding: 42px 16px 24px;
+  }
+
+  .kid-board-ribbon {
+    top: 26px;
+    left: 34px;
+    font-size: 20px;
+  }
+
+  .kid-board-card {
+    padding: 54px 20px 24px;
+  }
+
+  .kid-coin-grid {
+    grid-template-columns: repeat(5, 54px);
+    gap: 14px;
+  }
+
+  .kid-coin {
+    width: 54px;
+    height: 54px;
+    font-size: 16px;
+  }
+
+  .kid-think-box {
+    width: 100%;
+    grid-template-columns: auto 1fr;
+  }
+
+  .kid-think-box i {
+    display: none;
   }
 }
