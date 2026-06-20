@@ -3479,3 +3479,484 @@ button {
     min-height: auto;
   }
 }
+
+/* Child learning screen v7: harden topbar/avatar sizing after responsive overrides. */
+.app-shell.is-child .kid-classroom {
+  min-height: 100svh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.app-shell.is-child .kid-topbar {
+  height: 72px;
+  min-height: 72px;
+  max-height: 72px;
+  padding: 0 clamp(18px, 2vw, 28px);
+  overflow: visible;
+}
+
+.app-shell.is-child .kid-brand {
+  min-width: 0;
+  gap: 12px;
+}
+
+.app-shell.is-child .kid-brand strong {
+  font-size: clamp(26px, 2vw, 34px);
+  white-space: nowrap;
+}
+
+.app-shell.is-child .kid-brand .kid-teacher-avatar.kid-teacher-mini {
+  width: 46px;
+  min-width: 46px;
+  max-width: 46px;
+  height: 46px;
+  min-height: 46px;
+  max-height: 46px;
+  flex: 0 0 46px;
+  border-radius: 999px;
+  box-shadow: 0 8px 16px rgba(40, 89, 134, 0.13);
+}
+
+.app-shell.is-child .kid-brand .kid-teacher-mini img {
+  width: 180%;
+  height: 180%;
+  object-fit: cover;
+  object-position: 50% 15%;
+}
+
+.app-shell.is-child .kid-top-actions {
+  gap: 10px;
+}
+
+.app-shell.is-child .kid-lesson-switch,
+.app-shell.is-child .kid-day-pill {
+  min-height: 40px;
+}
+
+.app-shell.is-child .kid-workspace {
+  min-height: calc(100svh - 72px);
+  grid-template-columns: minmax(300px, 30vw) minmax(0, 1fr);
+}
+
+.app-shell.is-child .kid-coach {
+  min-height: calc(100svh - 72px);
+  gap: clamp(8px, 1.1vh, 14px);
+  padding: clamp(10px, 1.4vh, 16px) clamp(18px, 2vw, 30px) 16px;
+}
+
+.app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+  width: min(220px, 21vh);
+  min-width: 0;
+  max-width: 220px;
+  height: min(268px, 28vh);
+  min-height: 0;
+  max-height: 268px;
+  border-radius: 28px;
+}
+
+.app-shell.is-child .kid-coach > .kid-teacher-large img {
+  width: 124%;
+  height: 124%;
+  object-fit: cover;
+  object-position: 50% 17%;
+}
+
+.app-shell.is-child .kid-speech-bubble {
+  padding: clamp(16px, 1.8vh, 22px) clamp(18px, 1.8vw, 24px);
+}
+
+.app-shell.is-child .kid-speech-bubble p {
+  font-size: clamp(21px, 1.55vw, 29px);
+  line-height: 1.18;
+}
+
+.app-shell.is-child .kid-input-panel {
+  padding: clamp(10px, 1.1vh, 14px);
+}
+
+.app-shell.is-child .kid-primary-voice {
+  min-height: clamp(56px, 6vh, 66px);
+}
+
+.app-shell.is-child .kid-type-trigger,
+.app-shell.is-child .kid-help-button {
+  min-height: 46px;
+}
+
+.app-shell.is-child .kid-board {
+  min-height: calc(100svh - 72px);
+  padding: clamp(38px, 4.8vh, 54px) clamp(16px, 2vw, 26px) 14px;
+}
+
+.app-shell.is-child .kid-board-ribbon {
+  top: clamp(18px, 2.8vh, 26px);
+  left: clamp(42px, 5vw, 68px);
+  z-index: 3;
+}
+
+.app-shell.is-child .kid-board-card {
+  min-height: calc(100svh - 132px);
+  align-content: center;
+  overflow: visible;
+  padding: clamp(40px, 4.8vh, 56px) clamp(22px, 2.6vw, 36px) clamp(18px, 2.4vh, 28px);
+}
+
+.app-shell.is-child .kid-board-card-generic .lesson-svg,
+.app-shell.is-child .kid-board-card-generic .fraction-svg {
+  max-height: min(380px, 36vh);
+}
+
+.app-shell.is-child .kid-think-box {
+  margin-top: clamp(18px, 2.7vh, 32px);
+}
+
+@media (max-height: 820px) and (min-width: 861px) {
+  .app-shell.is-child .kid-topbar {
+    height: 64px;
+    min-height: 64px;
+    max-height: 64px;
+  }
+
+  .app-shell.is-child .kid-workspace,
+  .app-shell.is-child .kid-coach,
+  .app-shell.is-child .kid-board {
+    min-height: calc(100svh - 64px);
+  }
+
+  .app-shell.is-child .kid-brand .kid-teacher-avatar.kid-teacher-mini {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: min(168px, 21vh);
+    height: min(204px, 27vh);
+  }
+
+  .app-shell.is-child .kid-board-card {
+    min-height: calc(100svh - 110px);
+  }
+
+  .app-shell.is-child .kid-speech-bubble p {
+    font-size: clamp(19px, 1.42vw, 26px);
+  }
+}
+
+/* Child learning screen v8: final one-screen layout and reliable uploaded teacher portrait. */
+.app-shell.is-child,
+.app-shell.is-child .kid-classroom {
+  width: 100%;
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell.is-child .kid-topbar {
+  display: grid;
+  height: 64px;
+  min-height: 64px;
+  max-height: 64px;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(280px, 1fr);
+  gap: 16px;
+  padding: 0 24px;
+}
+
+.app-shell.is-child .kid-brand {
+  gap: 10px;
+}
+
+.app-shell.is-child .kid-brand strong {
+  font-size: clamp(24px, 2vw, 32px);
+}
+
+.app-shell.is-child .kid-progress {
+  gap: 16px;
+}
+
+.app-shell.is-child .kid-progress-dot {
+  width: 22px;
+  height: 22px;
+  border-width: 4px;
+}
+
+.app-shell.is-child .kid-progress-dot:not(:last-child)::after {
+  left: calc(100% + 5px);
+  width: 18px;
+}
+
+.app-shell.is-child .kid-day-pill,
+.app-shell.is-child .kid-lesson-switch {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.app-shell.is-child .kid-day-pill {
+  padding: 0 16px;
+}
+
+.app-shell.is-child .kid-day-pill strong {
+  font-size: 16px;
+}
+
+.app-shell.is-child .kid-lesson-switch {
+  font-size: 14px;
+  padding: 0 12px;
+}
+
+.app-shell.is-child .kid-brand .kid-teacher-avatar.kid-teacher-mini {
+  width: 42px;
+  min-width: 42px;
+  max-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  max-height: 42px;
+  flex-basis: 42px;
+}
+
+.app-shell.is-child .kid-brand .kid-teacher-mini img {
+  width: 168%;
+  height: 168%;
+  object-fit: cover;
+  object-position: 50% 15%;
+}
+
+.app-shell.is-child .kid-workspace {
+  display: grid;
+  height: calc(100svh - 64px);
+  min-height: 0;
+  grid-template-columns: minmax(300px, 31vw) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.app-shell.is-child .kid-coach,
+.app-shell.is-child .kid-board {
+  height: 100%;
+  min-height: 0;
+}
+
+.app-shell.is-child .kid-coach {
+  display: grid;
+  grid-template-rows: minmax(128px, 22vh) minmax(116px, auto) auto auto;
+  align-content: start;
+  gap: clamp(8px, 1vh, 12px);
+  overflow: hidden;
+  padding: clamp(10px, 1.4vh, 14px) clamp(18px, 2.1vw, 30px) 12px;
+}
+
+.app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+  width: min(210px, 20vh);
+  max-width: 210px;
+  height: min(230px, 22vh);
+  max-height: 230px;
+  align-self: end;
+  justify-self: center;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.app-shell.is-child .kid-coach > .kid-teacher-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 12%;
+}
+
+.app-shell.is-child .kid-speech-bubble {
+  max-height: 190px;
+  overflow: auto;
+  border-radius: 20px;
+  padding: clamp(14px, 1.5vh, 20px) clamp(16px, 1.8vw, 22px);
+}
+
+.app-shell.is-child .kid-speech-bubble::before {
+  width: 18px;
+  height: 18px;
+}
+
+.app-shell.is-child .kid-speech-bubble p {
+  font-size: clamp(20px, 1.7vw, 30px);
+  line-height: 1.18;
+}
+
+.app-shell.is-child .kid-last-answer {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.app-shell.is-child .kid-last-answer span {
+  font-size: 13px;
+  padding: 5px 8px;
+}
+
+.app-shell.is-child .kid-last-answer strong {
+  margin-top: 5px;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.app-shell.is-child .kid-input-panel {
+  gap: 7px;
+  padding: 10px;
+}
+
+.app-shell.is-child .kid-primary-voice {
+  min-height: 54px;
+  border-radius: 14px;
+}
+
+.app-shell.is-child .kid-primary-voice svg {
+  width: 28px;
+  height: 28px;
+}
+
+.app-shell.is-child .kid-primary-voice span {
+  font-size: clamp(20px, 1.9vw, 27px);
+}
+
+.app-shell.is-child .kid-type-trigger {
+  min-height: 42px;
+}
+
+.app-shell.is-child .kid-input-panel p {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.app-shell.is-child .kid-help-row {
+  gap: 9px;
+}
+
+.app-shell.is-child .kid-help-button {
+  min-height: 46px;
+  border-radius: 12px;
+}
+
+.app-shell.is-child .kid-help-button strong {
+  font-size: 16px;
+}
+
+.app-shell.is-child .kid-board {
+  overflow: hidden;
+  padding: 44px clamp(18px, 2.2vw, 30px) 16px;
+}
+
+.app-shell.is-child .kid-board-ribbon {
+  top: 22px;
+  left: clamp(42px, 5vw, 68px);
+  max-width: min(520px, calc(100% - 210px));
+  font-size: clamp(20px, 2.2vw, 30px);
+  padding: 7px 24px;
+}
+
+.app-shell.is-child .kid-board-card {
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  align-content: center;
+  padding: clamp(46px, 5.2vh, 58px) clamp(24px, 3vw, 44px) clamp(16px, 2vh, 24px);
+}
+
+.app-shell.is-child .kid-board-card h2 {
+  margin: 8px 0 14px;
+  font-size: clamp(28px, 2.9vw, 44px);
+  line-height: 1.12;
+}
+
+.app-shell.is-child .kid-board-card-generic .lesson-svg,
+.app-shell.is-child .kid-board-card-generic .fraction-svg {
+  width: min(720px, 88%);
+  max-height: min(330px, 34vh);
+}
+
+.app-shell.is-child .kid-money-layout {
+  grid-template-columns: minmax(180px, 0.86fr) 56px minmax(280px, 1.14fr);
+  gap: clamp(14px, 1.8vw, 22px);
+}
+
+.app-shell.is-child .kid-money-box {
+  min-height: min(250px, 32vh);
+  padding: 18px 18px 48px;
+}
+
+.app-shell.is-child .kid-money-note {
+  width: min(168px, 13vw);
+  height: 50px;
+}
+
+.app-shell.is-child .kid-coin-grid {
+  grid-template-columns: repeat(5, minmax(40px, 48px));
+  gap: clamp(9px, 1vw, 13px);
+}
+
+.app-shell.is-child .kid-coin {
+  width: min(48px, 4vw);
+  height: min(48px, 4vw);
+  font-size: 14px;
+}
+
+.app-shell.is-child .kid-think-box {
+  width: min(620px, 86%);
+  min-height: 58px;
+  margin-top: clamp(14px, 2vh, 24px);
+  padding: 10px 16px;
+}
+
+.app-shell.is-child .kid-think-box strong {
+  font-size: clamp(17px, 1.45vw, 23px);
+}
+
+.app-shell.is-child .kid-think-box i {
+  height: 42px;
+}
+
+@media (max-height: 760px) and (min-width: 861px) {
+  .app-shell.is-child .kid-topbar {
+    height: 56px;
+    min-height: 56px;
+    max-height: 56px;
+  }
+
+  .app-shell.is-child .kid-workspace {
+    height: calc(100svh - 56px);
+  }
+
+  .app-shell.is-child .kid-coach {
+    grid-template-rows: minmax(96px, 18vh) minmax(104px, auto) auto auto;
+    gap: 7px;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: min(170px, 18vh);
+    height: min(178px, 20vh);
+  }
+
+  .app-shell.is-child .kid-speech-bubble {
+    max-height: 154px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble p {
+    font-size: clamp(18px, 1.55vw, 25px);
+  }
+
+  .app-shell.is-child .kid-primary-voice {
+    min-height: 48px;
+  }
+
+  .app-shell.is-child .kid-board {
+    padding-top: 36px;
+  }
+
+  .app-shell.is-child .kid-board-card {
+    padding-top: 40px;
+  }
+
+  .app-shell.is-child .kid-board-card-generic .lesson-svg,
+  .app-shell.is-child .kid-board-card-generic .fraction-svg {
+    max-height: 30vh;
+  }
+}
