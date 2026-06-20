@@ -2436,51 +2436,7 @@ function getKidBoardPrompt(lesson) {
 function renderKidTeacherAvatar(size = "large") {
   return `
     <div class="kid-teacher-avatar kid-teacher-${size}" aria-hidden="true">
-      <svg viewBox="0 0 320 360" role="img" aria-label="乐之老师">
-        <defs>
-          <linearGradient id="kidHair" x1="80" y1="40" x2="240" y2="156" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#5b3529"/>
-            <stop offset="1" stop-color="#251612"/>
-          </linearGradient>
-          <linearGradient id="kidFace" x1="142" y1="90" x2="174" y2="210" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#ffe6d2"/>
-            <stop offset="1" stop-color="#ffd0bd"/>
-          </linearGradient>
-          <linearGradient id="kidSweater" x1="92" y1="205" x2="234" y2="338" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#c8f0ff"/>
-            <stop offset="0.48" stop-color="#69c7f7"/>
-            <stop offset="1" stop-color="#5b7df2"/>
-          </linearGradient>
-          <filter id="kidSoftShadow" x="-20%" y="-20%" width="140%" height="145%">
-            <feDropShadow dx="0" dy="16" stdDeviation="10" flood-color="#2d5d80" flood-opacity="0.18"/>
-          </filter>
-        </defs>
-        <ellipse cx="158" cy="333" rx="103" ry="20" fill="#d7dee6" opacity="0.55"/>
-        <g filter="url(#kidSoftShadow)">
-          <path d="M83 123c0-58 39-98 81-98 50 0 87 43 82 103-3 37-19 58-38 69H121c-24-13-38-39-38-74Z" fill="url(#kidHair)"/>
-          <path d="M96 129c4-51 36-83 74-83 37 0 68 34 69 83 1 55-32 93-72 93-41 0-75-38-71-93Z" fill="url(#kidFace)" stroke="#efb99c" stroke-width="4"/>
-          <path d="M95 121c18-54 65-70 132-46-8-34-41-55-76-51-38 5-60 39-56 97Z" fill="url(#kidHair)"/>
-          <circle cx="128" cy="151" r="28" fill="none" stroke="#23384d" stroke-width="7"/>
-          <circle cx="190" cy="151" r="28" fill="none" stroke="#23384d" stroke-width="7"/>
-          <path d="M156 151h6" stroke="#23384d" stroke-width="7" stroke-linecap="round"/>
-          <circle cx="128" cy="153" r="7" fill="#23384d"/>
-          <circle cx="190" cy="153" r="7" fill="#23384d"/>
-          <path d="M139 182c11 13 30 13 42 0" fill="none" stroke="#23384d" stroke-width="7" stroke-linecap="round"/>
-          <circle cx="113" cy="176" r="7" fill="#ffad9d" opacity="0.8"/>
-          <circle cx="205" cy="176" r="7" fill="#ffad9d" opacity="0.8"/>
-          <path d="M72 324v-51c0-55 39-88 88-88s88 33 88 88v51H72Z" fill="#b9e7ff" stroke="#244056" stroke-width="7" stroke-linejoin="round"/>
-          <path d="M105 324v-52c0-36 23-57 55-57s55 21 55 57v52H105Z" fill="url(#kidSweater)" stroke="#244056" stroke-width="7"/>
-          <path d="M105 222v68c34 0 65-24 84-65-9-7-20-10-29-10-21 0-39 9-55 7Z" fill="#ffffff" opacity="0.38"/>
-          <path d="M227 231c32 4 50 22 54 49" fill="none" stroke="#244056" stroke-width="9" stroke-linecap="round"/>
-          <g stroke="#244056" stroke-width="6">
-            <ellipse cx="279" cy="246" rx="24" ry="18" fill="#ffe59a"/>
-            <ellipse cx="285" cy="280" rx="24" ry="18" fill="#ffe59a"/>
-            <ellipse cx="276" cy="313" rx="24" ry="18" fill="#ffe59a"/>
-          </g>
-          <path d="M132 272l16 9-16 9-9 16-9-16-16-9 16-9 9-16 9 16Z" fill="#fff"/>
-          <path d="M194 302l11 6-11 6-6 11-6-11-11-6 11-6 6-11 6 11Z" fill="#fff"/>
-        </g>
-      </svg>
+      <img src="./assets/lezhi-teacher-card.png" alt="" />
     </div>
   `;
 }
