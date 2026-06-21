@@ -2594,7 +2594,6 @@ function renderKidTopbar(lesson) {
         ${renderKidTeacherAvatar("mini")}
         <strong>乐之老师</strong>
       </button>
-      ${renderKidProgressDots(lesson)}
       <div class="kid-top-actions">
         <button class="kid-lesson-switch" data-action="toggle-lesson-picker" aria-expanded="${state.showLessonPicker ? "true" : "false"}">
           ${icon("book")}
@@ -3155,15 +3154,33 @@ function renderQuestionVisualMarkup(lesson) {
 
 function renderPrimaryThinkingSvg(lesson) {
   const labels = lesson.visualType === "compare" ? ["一一配对", "看谁剩下", "说多和少"] : lesson.microSteps;
+  const stepLabels = (labels || []).slice(0, 3);
   return `
-    <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
+    <svg class="lesson-svg primary-thinking-svg" viewBox="0 0 520 238" role="img" aria-label="${escapeAttr(lesson.node)}">
       <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
       <g transform="translate(48 62)">
         ${[0, 1, 2, 3, 4, 5].map((item) => `<circle cx="${item * 46}" cy="22" r="15" fill="#65d6ad" stroke="#244056" stroke-width="3"/>`).join("")}
         ${[0, 1, 2, 3, 4].map((item) => `<rect x="${item * 46 - 15}" y="78" width="30" height="30" rx="8" fill="#4da3ff" stroke="#244056" stroke-width="3"/>`).join("")}
         <path d="M0 52h214" stroke="#ffb72b" stroke-width="5" stroke-linecap="round" stroke-dasharray="10 10"/>
       </g>
-      <text x="58" y="184" class="svg-win">${escapeText((labels || []).slice(0, 3).join(" -> "))}</text>
+      <g class="svg-step-labels" transform="translate(50 174)">
+        ${stepLabels
+          .map((label, index) => {
+            const x = index * 144;
+            const arrow = index < stepLabels.length - 1 ? `<path class="svg-step-arrow" d="M${x + 104} 21h24" marker-end="url(#primary-step-arrow)"/>` : "";
+            return `
+              <rect class="svg-step-pill" x="${x}" y="0" width="104" height="42" rx="18"/>
+              <text class="svg-step-label" x="${x + 52}" y="27" text-anchor="middle">${escapeText(shortSvgText(label, 6))}</text>
+              ${arrow}
+            `;
+          })
+          .join("")}
+      </g>
+      <defs>
+        <marker id="primary-step-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#a36900"/>
+        </marker>
+      </defs>
     </svg>
   `;
 }
