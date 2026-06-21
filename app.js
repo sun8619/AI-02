@@ -1064,10 +1064,12 @@ function buildQuestionBankBlueprints(bank) {
     const typical = normalizeQuestion(point.typicalQuestion) || questions[0] || null;
     const primaryQuestion = typical || questions[0] || null;
     const id = questionBankLessonAliases[point.id] || point.id.toLowerCase();
-    const microSteps = normalizeTextList(point.microSteps || point.substeps, [
+    const teachingProfile = createTeachingProfileForPoint(point, primaryQuestion);
+    const microSteps = normalizeTextList(teachingProfile.microSteps, [
       "先读懂题目在问什么",
       "只做当前小台阶",
-      "说出答案和原因",
+      "跟老师说一句原因",
+      "换一道同类题再试",
     ]);
     const starterLesson = {
       id,
@@ -1076,7 +1078,8 @@ function buildQuestionBankBlueprints(bank) {
       visualType: point.visualType || "generic",
       activeQuestion: primaryQuestion,
       microSteps,
-      substeps: point.substeps || microSteps,
+      substeps: teachingProfile.substeps || point.substeps || microSteps,
+      teachingProfile,
       answer: { answerKeywords: primaryQuestion?.answerKeywords || [] },
     };
     const starterStep = createGuidedStepPlan(starterLesson, 0);
@@ -1091,20 +1094,22 @@ function buildQuestionBankBlueprints(bank) {
       lesson: point.lesson || point.title || point.node || "",
       node: point.node || point.title || point.lesson || "",
       problem: primaryQuestion?.prompt || point.description || point.title || "",
-      initialContext: point.description || `${point.title || "这个知识点"} 从一道小题开始。`,
+      initialContext: teachingProfile.initialContext || point.description || `${point.title || "这个知识点"} 从一道小题开始。`,
       initialMessage: createInitialGuidedMessage(point, primaryQuestion, microSteps),
       initialStep: `小台阶 1：${starterStep.label}`,
       stepHint: starterStep.prompt || point.description || microSteps[0],
       microSteps,
-      commonGaps: normalizeTextList(point.commonGaps, ["只报答案不说原因", "漏看题目条件", "换题后不稳"]),
+      commonGaps: normalizeTextList(teachingProfile.commonGaps || point.commonGaps, ["只报答案不说原因", "漏看题目条件", "换题后不稳"]),
       keywords: normalizeTextList(point.keywords, [point.title, point.unit]).concat(point.questionTypes || []),
       answerKeywords: uniqueKeywords(questionAnswerKeywords.concat(point.answerKeywords || [])),
-      masterySignals: normalizeTextList(point.masterySignals, ["能做直接题", "能做变式题", "能说出原因", "能讲给老师听"]),
+      masterySignals: normalizeTextList(teachingProfile.masterySignals || point.masterySignals, ["能做直接题", "能做变式题", "能说出原因", "能讲给老师听"]),
       diagnosticFocus: normalizeTextList(point.commonGaps, []),
-      substeps: normalizeTextList(point.substeps || point.microSteps, microSteps),
+      substeps: normalizeTextList(teachingProfile.substeps || point.substeps || point.microSteps, microSteps),
       visualType: point.visualType || "generic",
       questionBank: questions,
       useQuestionBankTutor: true,
+      targetPassCount: teachingProfile.targetPassCount,
+      teachingProfile,
       activeQuestionId: primaryQuestion?.id || "",
       questionCursor: Math.max(0, questions.findIndex((question) => question.id === primaryQuestion?.id)),
       questionTypes: point.questionTypes || [],
@@ -1118,6 +1123,150 @@ function buildQuestionBankBlueprints(bank) {
       },
     };
   });
+}
+
+function getStandardMasterySignals() {
+  return [
+  "能独立做一道直接题",
+  "换数字或情境后还能做",
+  "能用一句话说出原因",
+  "能当小老师讲一遍",
+  ];
+}
+
+function getTeachingStandards() {
+  return {
+  money: {
+    steps: ["先认清元角分", "先换成同一种单位", "只算当前这一小步", "跟老师说一句为什么", "换一道同类题再试", "当小老师讲一遍"],
+    commonGaps: ["把元角分当成同一种单位", "只报结果不说先换单位", "忘记加上原来的几角或几分"],
+    targetPassCount: 4,
+  },
+  compare: {
+    steps: ["先看清两边分别是多少", "用数数或一一对应比较", "填大于号小于号或等号", "跟老师说一句为什么", "换一道同类题再试", "当小老师讲一遍"],
+    commonGaps: ["把符号方向看反", "只看图不说哪边多", "不会说明为什么大或小"],
+    targetPassCount: 4,
+  },
+  count: {
+    steps: ["先确定从哪里开始数", "一个一个按顺序数", "数过的做记号不重复", "说最后一个数就是总数", "换一张图再试", "当小老师讲一遍"],
+    commonGaps: ["漏数或重复数", "把第几个当成一共有几个", "数完不带单位回答"],
+    targetPassCount: 4,
+  },
+  composition: {
+    steps: ["先看总数是多少", "看已经给了哪一部分", "找另一部分是多少", "合起来检查总数不变", "换一种分法再试", "当小老师讲一遍"],
+    commonGaps: ["忘记总数", "只猜另一部分", "不会用合起来检查"],
+    targetPassCount: 4,
+  },
+  ordinal: {
+    steps: ["先确定从哪边开始数", "找到第几个的位置", "只数前面或后面那一边", "说清第几个是位置", "换方向再试", "当小老师讲一遍"],
+    commonGaps: ["方向看反", "把第几个当成总数", "前面后面没分清"],
+    targetPassCount: 4,
+  },
+  pattern: {
+    steps: ["先看相邻两个怎么变", "说出每次多几或少几", "按同样规律补下一个", "跟老师说一句规律", "换一组数再试", "当小老师讲一遍"],
+    commonGaps: ["只看最后一个数", "规律说不清", "换一组就不会接"],
+    targetPassCount: 4,
+  },
+  calculation: {
+    steps: ["先看运算符号", "只算第一小步", "写出或说出结果", "跟老师说一句怎么算", "换一道同类题再试", "当小老师讲一遍"],
+    commonGaps: ["看错加减乘除", "口算滑错", "只说结果不说方法"],
+    targetPassCount: 4,
+  },
+  application: {
+    steps: ["先看题目问什么", "找出有用条件", "判断用加减乘除哪一种", "算出结果并带单位", "跟老师说一句为什么", "换一道生活题再试", "当小老师讲一遍"],
+    commonGaps: ["没看清问题", "把条件全拿来乱算", "知道答案但说不清为什么这样算"],
+    targetPassCount: 4,
+  },
+  multiplication: {
+    steps: ["先看每组有几个", "再数一共有几组", "说成几个几", "列乘法或用口诀", "说清为什么能用乘法", "换一种排列再试", "当小老师讲一遍"],
+    commonGaps: ["组数和每组个数说反", "把几个几和总数混在一起", "只背口诀不懂意思"],
+    targetPassCount: 4,
+  },
+  division: {
+    steps: ["先看是不是平均分", "看分成几份或每份几个", "只求当前问的量", "说清每份同样多", "换一道平均分题再试", "当小老师讲一遍"],
+    commonGaps: ["没有平均分", "份数和每份数混淆", "只写答案不说平均分意思"],
+    targetPassCount: 4,
+  },
+  time: {
+    steps: ["先看短针时针", "再看长针分针", "合起来读时间", "说清先看时再看分", "换一个钟面再试", "当小老师讲一遍"],
+    commonGaps: ["时针分针看反", "半时和整时混淆", "读时间不完整"],
+    targetPassCount: 4,
+  },
+  measure: {
+    steps: ["先看用什么单位", "找起点或换算关系", "只算当前这一小步", "带单位回答", "跟老师说一句为什么", "换一道同类题再试", "当小老师讲一遍"],
+    commonGaps: ["单位选错", "量长度没从0开始", "换算时少带单位"],
+    targetPassCount: 4,
+  },
+  placeValue: {
+    steps: ["先看最高位", "按数位一个一个看", "读写或拆成几个千百十一", "说清数位不同大小不同", "换一个数再试", "当小老师讲一遍"],
+    commonGaps: ["0的读写不稳", "数位看错", "只读数字不说位值"],
+    targetPassCount: 4,
+  },
+  shape: {
+    steps: ["先看图形最明显的特征", "找边角面或能不能滚", "说出图形名称或判断", "跟老师说一句依据", "换一个图形再试", "当小老师讲一遍"],
+    commonGaps: ["只看像不像", "边角面特征说不出", "平面图形和立体图形混淆"],
+    targetPassCount: 4,
+  },
+  data: {
+    steps: ["先看按什么分类", "读表中对应的一行或一列", "数出或比较数量", "说清从哪里看出来", "换一张表再试", "当小老师讲一遍"],
+    commonGaps: ["看错行列", "分类标准不清", "只报答案不说从哪里看"],
+    targetPassCount: 4,
+  },
+  logic: {
+    steps: ["先记住已知条件", "划掉不可能的情况", "看剩下谁可能", "再检查每个条件", "跟老师说一句排除理由", "换一道推理题再试", "当小老师讲一遍"],
+    commonGaps: ["只猜不排除", "漏掉一个条件", "可能和一定混淆"],
+    targetPassCount: 4,
+  },
+  generic: {
+    steps: ["先读懂题目问什么", "只做当前小台阶", "说出答案", "跟老师说一句为什么", "换一道同类题再试", "当小老师讲一遍"],
+    commonGaps: ["看错题目意思", "中间步骤丢失", "只报答案不说原因"],
+    targetPassCount: 4,
+  },
+  };
+}
+
+function createTeachingProfileForPoint(point, primaryQuestion) {
+  const family = inferTeachingFamily(point, primaryQuestion);
+  const teachingStandards = getTeachingStandards();
+  const standard = teachingStandards[family] || teachingStandards.generic;
+  const sourceSteps = normalizeTextList(point.substeps || point.microSteps, []);
+  const selectedSourceSteps = sourceSteps
+    .filter((step) => !/换个例子|换一道|当小老师|讲一遍|复述/.test(step))
+    .slice(0, 3);
+  const substeps = uniqueKeywords([
+    ...selectedSourceSteps,
+    ...standard.steps,
+  ]).slice(0, 7);
+
+  return {
+    family,
+    microSteps: substeps.slice(0, 5),
+    substeps,
+    commonGaps: uniqueKeywords([...(point.commonGaps || []), ...(standard.commonGaps || [])]).slice(0, 6),
+    masterySignals: getStandardMasterySignals(),
+    targetPassCount: standard.targetPassCount || 4,
+    initialContext: `${point.title || point.node || "这个知识点"}按小台阶学：先会做，再会说为什么。`,
+  };
+}
+
+function inferTeachingFamily(point, question) {
+  const text = normalizeText(`${point?.visualType || ""} ${point?.title || ""} ${point?.node || ""} ${point?.lesson || ""} ${question?.type || ""} ${question?.prompt || ""} ${question?.explanation || ""}`);
+  if (/元|角|人民币|钱|找零|购物|找回|付了|应找/.test(text) || /\d+\s*分/.test(text)) return "money";
+  if (/乘法|几个几|同样多|口诀/.test(text) || point?.visualType === "array") return "multiplication";
+  if (/除法|平均分|每份/.test(text) || point?.visualType === "sharing") return "division";
+  if (/一共|还剩|找回|付了|用去|飞走|应用题/.test(text)) return "application";
+  if (/比较|大小|大于|小于|等于|符号/.test(text) || point?.visualType === "compare") return "compare";
+  if (/第几个|前面|后面|从左|从右/.test(text)) return "ordinal";
+  if (/分成|组成|合起来检查/.test(text)) return "composition";
+  if (/规律|接着填/.test(text)) return "pattern";
+  if (/计算|加法|减法|口算|连加|连减/.test(text)) return "calculation";
+  if (/钟|时间|时针|分针|几时|几分/.test(text) || point?.visualType === "clock" || point?.visualType === "time") return "time";
+  if (/厘米|米|克|千克|角的|量|长度|质量/.test(text) || ["ruler", "mass", "angle"].includes(point?.visualType)) return "measure";
+  if (/数位|读作|写作|个千|个百|个十|个位|十位|百位|千位/.test(text) || point?.visualType === "place-value") return "placeValue";
+  if (/图形|长方体|正方体|圆柱|球|长方形|正方形|三角形|圆|对称|平移|旋转/.test(text) || point?.visualType === "shape") return "shape";
+  if (/分类|统计|读表|记录表|表格|最多|最少/.test(text) || point?.visualType === "data") return "data";
+  if (/推理|排除|不是|可能|一定/.test(text) || point?.visualType === "logic") return "logic";
+  if (/数一数|一共有几个|总数/.test(text) || point?.visualType === "count") return "count";
+  return "generic";
 }
 
 function normalizeLessonQuestions(questions) {
@@ -1196,13 +1345,83 @@ function createGuidedStepPlan(lesson, requestedStepIndex = 0) {
 }
 
 function createGuidedSteps(lesson) {
+  let steps = [];
   if (lesson?.visualType === "money" || lesson?.id === "renminbi-conversion") {
     const moneySteps = createMoneyGuidedSteps(lesson);
-    if (moneySteps.length) return moneySteps;
+    if (moneySteps.length) steps = moneySteps;
   }
-  const typedSteps = createTypedGuidedSteps(lesson);
-  if (typedSteps.length) return typedSteps;
-  return createGenericGuidedSteps(lesson);
+  if (!steps.length) {
+    const typedSteps = createTypedGuidedSteps(lesson);
+    if (typedSteps.length) steps = typedSteps;
+  }
+  if (!steps.length) steps = createGenericGuidedSteps(lesson);
+  return standardizeGuidedStepsForChild(steps, lesson);
+}
+
+function standardizeGuidedStepsForChild(steps, lesson) {
+  const normalized = (Array.isArray(steps) ? steps : [])
+    .filter(Boolean)
+    .map((step) => {
+      const isReason =
+        Boolean(step.isReason) ||
+        /原因|为什么|怎么想|怎么知道|怎么比较|怎么检查|说清|理由|方法/.test(`${step.label || ""}${step.prompt || ""}`);
+      const repeatSentence = isReason
+        ? createTeacherRepeatSentenceForStep(lesson, step)
+        : step.repeatSentence || "";
+      return {
+        ...step,
+        isReason,
+        repeatSentence,
+        answerKeywords: uniqueKeywords((step.answerKeywords || []).concat(extractRepeatKeywords(repeatSentence))),
+        isFinal: false,
+      };
+    });
+
+  if (!normalized.length) {
+    normalized.push(guidedStep("先看题目", "先说题目问什么。", ["题目", "问什么"]));
+  }
+
+  if (!normalized.some((step) => step.isReason)) {
+    normalized.push(
+      guidedStep("跟老师说原因", "老师先说一句，你跟着说一遍。", createReasonKeywordsForLesson(lesson), {
+        isReason: true,
+        repeatSentence: createTeacherRepeatSentenceForStep(lesson, {
+          label: "跟老师说原因",
+          prompt: "老师先说一句，你跟着说一遍。",
+          answerKeywords: createReasonKeywordsForLesson(lesson),
+        }),
+      }),
+    );
+  }
+
+  normalized[normalized.length - 1].isFinal = true;
+  return normalized;
+}
+
+function createTeacherRepeatSentenceForStep(lesson, step) {
+  const question = lesson?.activeQuestion || null;
+  const explanationSentence = createExplanationRepeatSentence(question?.explanation || "", lesson?.node || lesson?.lesson || "");
+  const fallbackSentence = createReasonRepeatSentence(
+    `${lesson?.node || ""}${lesson?.lesson || ""}${lesson?.visualType || ""}${step?.label || ""}`,
+    `${step?.prompt || ""}${question?.prompt || ""}${question?.explanation || ""}`,
+    step?.answerKeywords || [],
+  );
+  if (explanationSentence && !/^我先看题目/.test(explanationSentence)) return explanationSentence;
+  return fallbackSentence;
+}
+
+function createReasonKeywordsForLesson(lesson) {
+  const question = lesson?.activeQuestion || null;
+  return uniqueKeywords([
+    ...(lesson?.answer?.whyKeywords || []),
+    ...(question?.answerKeywords || []),
+    ...(lesson?.answer?.answerKeywords || []),
+    ...extractKeyPhrases(question?.explanation || ""),
+    "因为",
+    "所以",
+    "先",
+    "再",
+  ]);
 }
 
 function createMoneyGuidedSteps(lesson) {
@@ -1417,6 +1636,9 @@ function createReasonRepeatSentence(label, prompt, answerKeywords = []) {
   if (text.includes("除法") || text.includes("平均分")) return "因为是平均分，每份同样多，可以用除法。";
   if (text.includes("减法") || text.includes("找回") || text.includes("还剩")) return "因为题目问剩下多少，所以用减法。";
   if (text.includes("加法") || text.includes("一共")) return "因为题目问一共多少，所以用加法。";
+  if (text.includes("钟") || text.includes("时针") || text.includes("分针") || text.includes("时间")) return "我先看短针是几时，再看长针是几分。";
+  if (text.includes("厘米") || text.includes("米") || text.includes("长度") || text.includes("刻度")) return "量长度要从0刻度开始，再看另一端对着几。";
+  if (text.includes("顶点") || text.includes("两条边") || text.includes("张开") || text.includes("角")) return "角的大小看张开的大小，不看边画得多长。";
   if (text.includes("克") || text.includes("千克")) return "轻小的物体常用克，比较重的物体常用千克。";
   if (text.includes("数位") || text.includes("读写")) return "因为每个数字所在的数位不同，表示的大小也不同。";
   if (text.includes("排除") || text.includes("推理")) return "我先排除不可能的，再看剩下的。";
@@ -4804,7 +5026,7 @@ function evaluateQuestionBankAttempt(text, inputType) {
     if (plan.isFinal || plan.index >= plan.totalSteps - 1) {
       completeQuestionBankRound(lesson, inputType);
     } else {
-      keepOnCurrentGuidedStep(lesson, plan, "你已经在说结果了，但老师要确认这一小步也稳。", inputType, "跳步回答");
+      askReasonAfterFullAnswer(lesson, inputType);
     }
     return;
   }
@@ -4932,7 +5154,8 @@ function looksLikeShortAnswer(normalizedText) {
 function getTargetQuestionPassCount(lesson) {
   const bankLength = getLessonQuestionBank(lesson).length;
   if (bankLength <= 1) return 1;
-  return Math.min(bankLength, 4);
+  const configured = Number(lesson?.targetPassCount || lesson?.teachingProfile?.targetPassCount || 4);
+  return Math.min(bankLength, Math.max(3, Math.min(4, configured || 4)));
 }
 
 function expandedQuestionAnswerKeywords(question, lesson) {
