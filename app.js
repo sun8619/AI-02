@@ -1214,7 +1214,11 @@ function createMoneyGuidedSteps(lesson) {
     return [
       guidedStep("知道 1 元=10 角", "先答一个小问题：1元等于几角？", answerKeywordsForNumber(10, "角")),
       guidedStep("知道 1 元=100 分", "再答一个小问题：1元等于几分？", answerKeywordsForNumber(100, "分")),
-      guidedStep("说清单位关系", "为什么1元会等于100分？", ["1角等于10分", "一角等于十分", "10个10分", "单位", "角和分"], { isReason: true, isFinal: true }),
+      guidedStep("说清单位关系", "为什么1元会等于100分？", ["1角等于10分", "一角等于十分", "10个10分", "单位", "角和分"], {
+        isReason: true,
+        isFinal: true,
+        repeatSentence: "因为1元等于10角，1角等于10分，所以1元等于100分。",
+      }),
     ];
   }
 
@@ -1238,7 +1242,13 @@ function createMoneyGuidedSteps(lesson) {
     }
     const total = info.yuan * 100 + info.jiao * 10 + info.fen;
     steps.push(guidedStep("合起来算总分", `最后合起来，一共是几分？`, answerKeywordsForNumber(total, "分").concat(question.answerKeywords || [])));
-    steps.push(guidedStep("说清为什么先换单位", "为什么要先换成同一种单位？", moneyReasonKeywords("分"), { isReason: true, isFinal: true }));
+    steps.push(
+      guidedStep("说清为什么先换单位", "为什么要先换成同一种单位？", moneyReasonKeywords("分"), {
+        isReason: true,
+        isFinal: true,
+        repeatSentence: "因为元、角、分不是同一种单位，所以要先都换成分。",
+      }),
+    );
     return steps;
   }
 
@@ -1254,7 +1264,13 @@ function createMoneyGuidedSteps(lesson) {
     } else {
       steps.push(guidedStep("说出结果", `所以${info.yuan}元等于几角？`, answerKeywordsForNumber(total, "角").concat(question.answerKeywords || [])));
     }
-    steps.push(guidedStep("说清为什么先换单位", "为什么要先把元换成角？", moneyReasonKeywords("角"), { isReason: true, isFinal: true }));
+    steps.push(
+      guidedStep("说清为什么先换单位", "为什么要先把元换成角？", moneyReasonKeywords("角"), {
+        isReason: true,
+        isFinal: true,
+        repeatSentence: "因为元和角不是同一种单位，所以要先把元换成角。",
+      }),
+    );
     return steps;
   }
 
@@ -1281,24 +1297,33 @@ function createGenericGuidedSteps(lesson) {
   );
   return [
     guidedStep("先看题目", `看这题：${prompt} 你只说答案就行。`, answerKeywords),
-    guidedStep("说一句原因", "再说一句：你刚才是怎么想的？", reasonKeywords, { isReason: true, isFinal: true }),
+    guidedStep("说一句原因", "再说一句：你刚才是怎么想的？", reasonKeywords, {
+      isReason: true,
+      isFinal: true,
+      repeatSentence: createExplanationRepeatSentence(question?.explanation || "", lesson?.node || ""),
+    }),
   ];
 }
 
 function guidedStep(label, prompt, answerKeywords, options = {}) {
+  const repeatSentence = options.repeatSentence || (options.isReason ? createReasonRepeatSentence(label, prompt, answerKeywords) : "");
   return {
     label,
     prompt,
-    answerKeywords: uniqueKeywords(answerKeywords || []),
+    answerKeywords: uniqueKeywords((answerKeywords || []).concat(extractRepeatKeywords(repeatSentence))),
     isReason: Boolean(options.isReason),
     isFinal: Boolean(options.isFinal),
+    repeatSentence,
   };
 }
 
 function formatChildStepPrompt(plan) {
   const prompt = String(plan?.prompt || "").trim();
   if (!prompt) return "你先说一个小答案。";
-  if (plan?.isReason) return `${prompt} 只说一句原因就行。`;
+  if (plan?.isReason) {
+    const sentence = plan.repeatSentence || createReasonRepeatSentence(plan.label, prompt, plan.answerKeywords);
+    return `这句老师先说，你跟着说一遍：${sentence}`;
+  }
   if (/为什么|怎么想|怎么知道|怎么比较|怎么检查/.test(prompt)) return `${prompt} 只说一句话就行。`;
   if (/先说|先答|先看|再答|最后|答案是多少|是多少|几/.test(prompt)) return prompt;
   return `${prompt} 你只说一个小答案就行。`;
@@ -1310,11 +1335,12 @@ function teacherAdvanceMessage(nextPlan) {
 
 function teacherRepairMessage(prefix, plan) {
   const lead = String(prefix || "这次还没对上。").replace(/[。！？!?]*$/, "。");
+  if (plan?.isReason) return `${lead}不用自己想很久，先跟老师说一遍：${plan.repeatSentence || createReasonRepeatSentence(plan.label, plan.prompt, plan.answerKeywords)}`;
   return `${lead}我们先停在这一小步：${formatChildStepPrompt(plan)}`;
 }
 
 function teacherReasonMessage(reasonPlan) {
-  return `答案对了。现在只补一句原因：${formatChildStepPrompt(reasonPlan)}`;
+  return `答案对了。现在练一句原因：${formatChildStepPrompt(reasonPlan)}`;
 }
 
 function parseMoneyQuestion(question) {
@@ -1351,11 +1377,77 @@ function inferMoneyTargetUnit(prompt, question) {
 function moneyReasonKeywords(unit) {
   return uniqueKeywords([
     "单位不同",
+    "不是同一种单位",
     "同一种单位",
     "先换单位",
     `先换成${unit}`,
+    `先都换成${unit}`,
     "元和角不一样",
+    "元和角不是同一种单位",
     "角和分不一样",
+    "角和分不是同一种单位",
+    "因为元和角单位不一样所以要先换成角",
+  ]);
+}
+
+function createExplanationRepeatSentence(explanation, fallbackTopic) {
+  const source = String(explanation || "").trim();
+  const candidates = source
+    .split(/[。！？!?]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const picked =
+    candidates.find((item) => /因为|所以|先|再|用|等于|表示|比较|单位|平均|排除|合起来/.test(item)) ||
+    candidates[0] ||
+    `我先看题目，再一步一步想${fallbackTopic ? `这个知识点` : ""}`;
+  return simplifyRepeatSentence(picked);
+}
+
+function createReasonRepeatSentence(label, prompt, answerKeywords = []) {
+  const text = normalizeText(`${label || ""}${prompt || ""}${(answerKeywords || []).join("")}`);
+  if (text.includes("元") && text.includes("角") && text.includes("分")) return "因为1元等于10角，1角等于10分，所以1元等于100分。";
+  if (text.includes("元") && text.includes("角")) return "因为元和角不是同一种单位，所以要先把元换成角。";
+  if (text.includes("角") && text.includes("分")) return "因为角和分不是同一种单位，所以要先换成同一种单位。";
+  if (text.includes("比较") || text.includes("符号")) return "我先看两边的数，再比较谁大谁小。";
+  if (text.includes("分是对") || text.includes("合起来检查")) return "因为两部分合起来还是总数，所以这样分是对的。";
+  if (text.includes("第几个")) return "第几个说的是位置，不是一共有几个。";
+  if (text.includes("规律")) return "我先看每次怎么变，再按同样的规律接着填。";
+  if (text.includes("最后一个数") || text.includes("总数")) return "按顺序数完，最后说到的数就是总数。";
+  if (text.includes("乘法")) return "因为每组同样多，几个几可以用乘法。";
+  if (text.includes("除法") || text.includes("平均分")) return "因为是平均分，每份同样多，可以用除法。";
+  if (text.includes("减法") || text.includes("找回") || text.includes("还剩")) return "因为题目问剩下多少，所以用减法。";
+  if (text.includes("加法") || text.includes("一共")) return "因为题目问一共多少，所以用加法。";
+  if (text.includes("克") || text.includes("千克")) return "轻小的物体常用克，比较重的物体常用千克。";
+  if (text.includes("数位") || text.includes("读写")) return "因为每个数字所在的数位不同，表示的大小也不同。";
+  if (text.includes("排除") || text.includes("推理")) return "我先排除不可能的，再看剩下的。";
+  if (text.includes("图形") || text.includes("特征")) return "我先看图形的特征，再说它的名字。";
+  if (text.includes("表") || text.includes("统计")) return "我先看表里的那一行或那一列，再读出数量。";
+  return "我先看题目问什么，再一步一步算。";
+}
+
+function simplifyRepeatSentence(sentence) {
+  const cleaned = String(sentence || "")
+    .replace(/^解[:：]\s*/, "")
+    .replace(/^答[:：]\s*/, "")
+    .replace(/所以答案是.*$/, "")
+    .replace(/。+$/, "")
+    .trim();
+  const short = cleaned.length > 36 ? cleaned.slice(0, 36).replace(/[，,、][^，,、]*$/, "") : cleaned;
+  return `${short || "我先看题目，再一步一步想"}。`;
+}
+
+function extractRepeatKeywords(sentence) {
+  const text = String(sentence || "");
+  if (!text) return [];
+  const phrases = text
+    .replace(/[。！？!?]/g, "")
+    .split(/[，,、；;：:\s]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2);
+  return uniqueKeywords([
+    text.replace(/[，,。！？!?；;：:\s]/g, ""),
+    ...phrases,
+    ...extractKeyPhrases(text),
   ]);
 }
 
@@ -4840,7 +4932,7 @@ function looksLikeShortAnswer(normalizedText) {
 function getTargetQuestionPassCount(lesson) {
   const bankLength = getLessonQuestionBank(lesson).length;
   if (bankLength <= 1) return 1;
-  return 2;
+  return Math.min(bankLength, 4);
 }
 
 function expandedQuestionAnswerKeywords(question, lesson) {
