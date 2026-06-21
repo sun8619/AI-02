@@ -1524,7 +1524,10 @@ function standardizeGuidedStepsForChild(steps, lesson) {
 }
 
 function createTeacherHintForStep(lesson, step) {
-  if (step?.isReason) return "";
+  if (step?.isReason) {
+    const sentence = step?.repeatSentence || createTeacherRepeatSentenceForStep(lesson, step);
+    return `老师先说：${sentence}你跟着说一遍。`;
+  }
   const answer = pickChildFollowAnswer(step?.answerKeywords || []);
   if (answer) return `老师先说：${answer}。你跟着说一遍：${answer}。`;
   const topic = lesson?.node || lesson?.lesson || "这一小步";
@@ -1569,6 +1572,8 @@ function pickChildFollowAnswer(answerKeywords) {
 
 function createTeacherRepeatSentenceForStep(lesson, step) {
   const question = lesson?.activeQuestion || null;
+  const childSafeSentence = createChildSafeRepeatSentence(lesson, step, question);
+  if (childSafeSentence) return childSafeSentence;
   const explanationSentence = createExplanationRepeatSentence(question?.explanation || "", lesson?.node || lesson?.lesson || "");
   const fallbackSentence = createReasonRepeatSentence(
     `${lesson?.node || ""}${lesson?.lesson || ""}${lesson?.visualType || ""}${step?.label || ""}`,
@@ -1577,6 +1582,42 @@ function createTeacherRepeatSentenceForStep(lesson, step) {
   );
   if (explanationSentence && !/^我先看题目/.test(explanationSentence)) return explanationSentence;
   return fallbackSentence;
+}
+
+function createChildSafeRepeatSentence(lesson, step, question) {
+  const prompt = question?.prompt || lesson?.problem || "";
+  const text = normalizeText(`${prompt} ${question?.explanation || ""} ${lesson?.node || ""} ${lesson?.lesson || ""} ${lesson?.visualType || ""} ${step?.label || ""}`);
+  const numbers = extractNumbers(prompt);
+
+  if (isCompareQuestion(question, lesson, text) && numbers.length >= 2) {
+    const [left, right] = numbers;
+    const symbol = getCompareSymbol(question?.answer || "");
+    if (left === right || symbol === "=") return `${left}和${right}一样大，所以填等号。`;
+    if (left < right || symbol === "<") return `${left}比${right}小，所以填小于号。`;
+    if (left > right || symbol === ">") return `${left}比${right}大，所以填大于号。`;
+  }
+
+  const money = parseMoneyQuestion(question);
+  if (money && (money.yuan || money.jiao || money.fen || money.sourceFen || money.isRelationQuestion)) {
+    if (money.isRelationQuestion) return "1元等于10角，1角等于10分。";
+    if (money.targetUnit === "角" && money.yuan && money.jiao) return `${money.yuan}元先换成${money.yuan * 10}角，再加${money.jiao}角。`;
+    if (money.targetUnit === "角" && money.yuan) return `1元等于10角，所以${money.yuan}元等于${money.yuan * 10}角。`;
+    if (money.targetUnit === "分" && money.jiao) return `1角等于10分，所以${money.jiao}角等于${money.jiao * 10}分。`;
+  }
+
+  const expression = parseArithmeticExpression(`${prompt} ${question?.explanation || ""}`);
+  if (expression) {
+    const operatorNames = { "+": "加", "-": "减", "×": "乘", "÷": "除以" };
+    return `${expression.left}${operatorNames[expression.operator] || expression.operator}${expression.right}等于${expression.result}。`;
+  }
+
+  if (isPlaceValueQuestion(prompt, text, lesson)) return "先看数位，再看每个数位上是几。";
+  if (isTimeQuestion(text, lesson)) return "先看时针，再看分针，合起来说时间。";
+  if (isMeasureQuestion(text, lesson)) return "先看单位，再带着单位回答。";
+  if (isShapeQuestion(text, lesson)) return "先说图形最明显的特征，再说它的名字。";
+  if (isDataQuestion(text, lesson)) return "先看表里哪一行或哪一列，再读出数量。";
+
+  return "";
 }
 
 function createReasonKeywordsForLesson(lesson) {
@@ -2656,6 +2697,7 @@ let state = {
   phase: "guiding",
   recording: false,
   voiceStatus: "idle",
+  isProcessing: false,
   showLessonPicker: false,
   showKeyboard: false,
   showVisual: true,
@@ -2870,12 +2912,11 @@ function renderKidQuestionBubble(lesson) {
   const plan = createGuidedStepPlan(lesson, state.completedSteps);
   const problem = childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem);
   const shortPrompt = formatChildStepPrompt(plan).replace(/^看这题[:：]\s*/, "");
-  const message =
+  const fallbackMessage =
     state.phase === "summary"
       ? "这一步学会了。你可以换下一个知识点，也可以再练一题。"
-      : state.phase === "teachback" || state.phase === "repair"
-        ? state.aiMessage
-        : `看这题：${problem} ${shortPrompt}`;
+      : `看这题：${problem} ${shortPrompt}`;
+  const message = state.aiMessage || fallbackMessage;
 
   return `
     <section class="kid-speech-bubble" aria-label="老师提问">
@@ -2886,7 +2927,7 @@ function renderKidQuestionBubble(lesson) {
 }
 
 function renderKidVoicePanel() {
-  const locked = state.voiceStatus === "processing";
+  const locked = state.isProcessing || state.voiceStatus === "processing";
   const inputLocked = state.recording || locked;
   return `
     <section class="kid-input-panel" aria-label="回答区">
@@ -3223,7 +3264,7 @@ function renderVisualPlaceholder() {
 }
 
 function renderVoiceDock() {
-  const locked = state.voiceStatus === "processing";
+  const locked = state.isProcessing || state.voiceStatus === "processing";
   const inputLocked = state.recording || locked;
   return `
     <section class="voice-dock" aria-label="语音输入区">
@@ -3243,14 +3284,14 @@ function renderVoiceDock() {
 
 function renderVoiceButtonLabel() {
   if (state.recording) return "结束说话";
-  if (state.voiceStatus === "processing") return "正在想";
+  if (state.isProcessing || state.voiceStatus === "processing") return "正在想";
   if (state.phase === "teachback") return "开始讲";
   return "开始说";
 }
 
 function renderVoiceButtonAriaLabel() {
   if (state.recording) return "点击结束说话";
-  if (state.voiceStatus === "processing") return "老师正在思考";
+  if (state.isProcessing || state.voiceStatus === "processing") return "老师正在思考";
   if (state.phase === "teachback") return "点击开始讲给老师听";
   return "点击开始说话";
 }
@@ -3297,7 +3338,7 @@ function renderChildStepTitle(step) {
 }
 
 function renderDockNote() {
-  if (state.voiceStatus === "processing") return "老师听到了，马上接着讲。";
+  if (state.isProcessing || state.voiceStatus === "processing") return "老师听到了，马上接着讲。";
   if (state.phase === "teachback") return "像小老师一样讲给老师听，说不完整也没关系。";
   if (state.phase === "repair") return "可以看着图说，不用一次讲完整。";
   if (state.phase === "summary") return "这一题已经完成，可以换知识点或去家长页看记录。";
@@ -3305,7 +3346,7 @@ function renderDockNote() {
 }
 
 function renderKeyboardComposer() {
-  const locked = state.voiceStatus === "processing" || state.recording;
+  const locked = state.isProcessing || state.voiceStatus === "processing" || state.recording;
   return `
     <form class="keyboard-composer" data-form="typed-answer">
       <input name="answer" autocomplete="off" placeholder="也可以打字，例如：我想换知识点" ${locked ? "disabled" : ""} />
@@ -4306,7 +4347,7 @@ function bindEvents() {
 
 async function toggleVoiceInput(event) {
   event.preventDefault();
-  if (state.voiceStatus === "processing") return;
+  if (state.isProcessing || state.voiceStatus === "processing") return;
   await handleVoiceButton();
 }
 
@@ -4427,6 +4468,7 @@ function changeLesson(reason, targetIndex = null) {
   state.phase = "guiding";
   state.recording = false;
   state.voiceStatus = "idle";
+  state.isProcessing = false;
   state.showLessonPicker = false;
   state.showKeyboard = false;
   state.strategyIndex = 0;
@@ -5088,7 +5130,7 @@ function blobToDataUrl(blob) {
 }
 
 function handleChildInput(text, inputType) {
-  if (state.voiceStatus === "processing" || state.recording) {
+  if (state.isProcessing || state.voiceStatus === "processing" || state.recording) {
     toastMessage("老师正在回复，等这句说完再继续。");
     return;
   }
@@ -5118,6 +5160,7 @@ function handleChildInput(text, inputType) {
   }
 
   state.lastStudentText = text;
+  state.isProcessing = true;
   state.voiceStatus = "processing";
   resetGeneratedVisualForTurn();
   render();
@@ -5129,6 +5172,7 @@ async function askGatewayTutor(text, inputType) {
   if (lesson.useQuestionBankTutor) {
     evaluateLocally(text, inputType);
     state.voiceStatus = "idle";
+    state.isProcessing = false;
     render();
     return;
   }
@@ -5136,6 +5180,7 @@ async function askGatewayTutor(text, inputType) {
   if (window.location.protocol === "file:") {
     evaluateLocally(text, inputType);
     state.voiceStatus = "idle";
+    state.isProcessing = false;
     render();
     return;
   }
@@ -5196,6 +5241,7 @@ async function askGatewayTutor(text, inputType) {
   }
 
   state.voiceStatus = "idle";
+  state.isProcessing = false;
   render();
 }
 
@@ -5260,6 +5306,7 @@ function applyGatewayTutor(payload, inputType) {
     inputType === "voice" ? "语音回答" : "键盘回答",
   );
   state.voiceStatus = "idle";
+  state.isProcessing = false;
   speakCurrentMessage();
 }
 
@@ -5588,7 +5635,28 @@ function looksLikeReason(normalizedText) {
 
 function isUnclearChildText(normalizedText) {
   if (!normalizedText || normalizedText.length < 1) return true;
-  return ["好", "好的", "嗯", "啊", "哦", "可以", "行", "继续", "不知道", "不会", "没听清"].includes(normalizedText);
+  return [
+    "好",
+    "好的",
+    "嗯",
+    "啊",
+    "哦",
+    "可以",
+    "行",
+    "继续",
+    "不知道",
+    "不会",
+    "不会答",
+    "不会说",
+    "不懂",
+    "没懂",
+    "没听懂",
+    "没听清",
+    "随便",
+    "不知道怎么说",
+    "我不会",
+    "我不知道",
+  ].includes(normalizedText);
 }
 
 function formatExpectedAnswer(question, lesson) {
