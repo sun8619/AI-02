@@ -1605,6 +1605,11 @@ function createChildSafeRepeatSentence(lesson, step, question) {
     if (money.targetUnit === "分" && money.jiao) return `1角等于10分，所以${money.jiao}角等于${money.jiao * 10}分。`;
   }
 
+  const group = parseMultiplicationStructure(`${prompt} ${question?.explanation || ""}`);
+  if (isMultiplicationQuestion(prompt, text, lesson) && group) {
+    return `每组有${group.each}个，一共有${group.groups}组，所以是${group.groups}个${group.each}。`;
+  }
+
   const expression = parseArithmeticExpression(`${prompt} ${question?.explanation || ""}`);
   if (expression) {
     const operatorNames = { "+": "加", "-": "减", "×": "乘", "÷": "除以" };
@@ -1994,7 +1999,16 @@ function isCalculationQuestion(prompt, text) {
 }
 
 function isMultiplicationQuestion(prompt, text, lesson) {
-  return lesson?.visualType === "array" || text.includes("乘法") || /[×xX*]/.test(prompt);
+  return (
+    lesson?.visualType === "array" ||
+    text.includes("乘法") ||
+    text.includes("几个几") ||
+    text.includes("同样多") ||
+    text.includes("每组") ||
+    text.includes("口诀") ||
+    /[×xX*]/.test(prompt) ||
+    /(\d+)\s*(个|组|行|列|份)\s*(\d+)/.test(prompt)
+  );
 }
 
 function isDivisionQuestion(prompt, text, lesson) {
@@ -2141,9 +2155,18 @@ function createApplicationGuidedSteps(lesson, question) {
   const relation = inferApplicationRelation(prompt, question?.explanation || "");
   const operationKeywords = relation.operation ? [relation.operation, relation.symbol, relation.intent].filter(Boolean) : ["加法", "减法", "乘法", "除法"];
   return [
-    guidedStep("看问题问什么", `先看题目问的是${relation.childChoice || "一共、还剩，还是每份几个"}？`, relation.keywords),
-    guidedStep("选方法", "这一步应该用什么方法算？", operationKeywords.concat(expression ? [formatExpression(expression)] : [])),
-    guidedStep("说出结果", "最后答案是多少？", answerKeywords.concat(expression ? answerKeywordsForNumber(expression.result) : [])),
+    guidedStep("看问题问什么", `先看最后一句。题目问的是${relation.childChoice || "什么"}？`, relation.keywords, {
+      teacherHint: `老师先带你说：题目问的是${relation.childChoice || "要求的那个数"}。`,
+    }),
+    guidedStep("找有用条件", "题里给了哪两个有用的数？只说这两个数。", extractNumbers(prompt).map(String).concat(["两个数", "条件"]), {
+      teacherHint: "先别算，先把题里有用的两个数找出来。",
+    }),
+    guidedStep("选方法", "这一步应该用加、减、乘，还是除？", operationKeywords.concat(expression ? [formatExpression(expression)] : []), {
+      teacherHint: relation.operation ? `老师先说：这题用${relation.operation}。你跟着说：${relation.operation}。` : "先想题目问一共、还剩、每份，还是找回。",
+    }),
+    guidedStep("说出结果", "最后答案是多少？", answerKeywords.concat(expression ? answerKeywordsForNumber(expression.result) : []), {
+      teacherHint: expression ? `老师先算：${formatExpression(expression)}等于${expression.result}。你跟着说：${expression.result}。` : "",
+    }),
     guidedStep("说清为什么", "为什么用这个方法？", relation.reasonKeywords, { isReason: true, isFinal: true }),
   ];
 }
@@ -2169,7 +2192,29 @@ function createCalculationGuidedSteps(lesson, question) {
 function createMultiplicationGuidedSteps(lesson, question) {
   const prompt = question?.prompt || lesson?.problem || "";
   const expression = parseArithmeticExpression(prompt) || parseArithmeticExpression(question?.explanation || "");
+  const group = parseMultiplicationStructure(`${prompt} ${question?.explanation || ""}`);
   const answerKeywords = expandedQuestionAnswerKeywords(question, lesson);
+  if (group) {
+    return [
+      guidedStep("看每组几个", `先看每组有几个？`, answerKeywordsForNumber(group.each, "个").concat([`每组${group.each}个`, String(group.each)]), {
+        teacherHint: `老师先说：每组有${group.each}个。你跟着说：${group.each}个。`,
+      }),
+      guidedStep("看有几组", `再数一共有几组？`, answerKeywordsForNumber(group.groups, "组").concat([`${group.groups}组`, String(group.groups)]), {
+        teacherHint: `老师先说：一共有${group.groups}组。你跟着说：${group.groups}组。`,
+      }),
+      guidedStep("说几个几", `合起来说，这是几个几？`, [`${group.groups}个${group.each}`, `${group.groups}组${group.each}`, `${group.groups}个${group.each}个`], {
+        teacherHint: `老师先说：这是${group.groups}个${group.each}。你跟着说一遍。`,
+      }),
+      guidedStep("列式或结果", "可以列式，也可以直接说总数。", answerKeywords.concat([`${group.groups}×${group.each}`, `${group.each}×${group.groups}`, String(group.total), chineseNumber(group.total)]), {
+        teacherHint: `老师先算：${group.groups}×${group.each}=${group.total}。你跟着说：${group.total}。`,
+      }),
+      guidedStep("说清乘法意思", "为什么可以用乘法？", ["同样多", "几个几", "每组", "一共", "乘法", "口诀"], {
+        isReason: true,
+        isFinal: true,
+        repeatSentence: "因为每组同样多，所以可以用乘法算一共有多少。",
+      }),
+    ];
+  }
   return [
     guidedStep("看几个几", "先说这题表示几个几。", ["几个几", "每组", "同样多", "行", "列", expression ? `${expression.left}个${expression.right}` : ""]),
     guidedStep("列式或算出结果", "可以列式，也可以直接说结果。", answerKeywords.concat(expression ? [formatExpression(expression), ...answerKeywordsForNumber(expression.result)] : [])),
@@ -2329,6 +2374,41 @@ function parseArithmeticExpression(text) {
   if (operator === "÷" && right !== 0) result = left / right;
   if (!Number.isFinite(result)) return null;
   return { left, right, operator, result };
+}
+
+function parseMultiplicationStructure(text) {
+  const source = String(text || "");
+  const normalized = normalizeText(source).replace(/两/g, "二");
+  const expression = parseArithmeticExpression(source);
+  if (expression?.operator === "×") return normalizeGroupInfo(expression.left, expression.right);
+
+  let match = normalized.match(/每(?:组|份|行|列)(?:有)?(\d+)(?:个|只|本|支|块|张|条|朵|面|人)?.{0,10}(?:有|一共)?(\d+)(?:组|份|行|列)/);
+  if (match) return normalizeGroupInfo(Number(match[2]), Number(match[1]));
+
+  match = normalized.match(/(\d+)(?:组|份|行|列).{0,10}每(?:组|份|行|列)(?:有)?(\d+)/);
+  if (match) return normalizeGroupInfo(Number(match[1]), Number(match[2]));
+
+  match = normalized.match(/(\d+)(?:个|组|行|列|份)(\d+)/);
+  if (match) return normalizeGroupInfo(Number(match[1]), Number(match[2]));
+
+  match = normalized.match(/(\d+)个(\d+)/);
+  if (match) return normalizeGroupInfo(Number(match[1]), Number(match[2]));
+
+  match = normalized.match(/(\d+)\s*[×x*]\s*(\d+)/);
+  if (match) return normalizeGroupInfo(Number(match[1]), Number(match[2]));
+
+  return null;
+}
+
+function normalizeGroupInfo(groups, each) {
+  const groupCount = Number(groups);
+  const eachCount = Number(each);
+  if (!Number.isFinite(groupCount) || !Number.isFinite(eachCount) || groupCount <= 0 || eachCount <= 0) return null;
+  return {
+    groups: groupCount,
+    each: eachCount,
+    total: groupCount * eachCount,
+  };
 }
 
 function normalizeOperator(operator) {
@@ -3026,11 +3106,15 @@ function getKidBoardPrompt(lesson) {
   const plan = createGuidedStepPlan(lesson, state.completedSteps);
   const prompt = String(plan?.prompt || lesson.problem || "").trim();
   const money = getMoneyVisualNumbers(lesson);
+  if (plan?.isReason || /为什么|原因|单位/.test(`${plan?.label || ""}${prompt}`)) {
+    if (lesson.visualType === "money" || lesson.id === "renminbi-conversion") return "为什么要先换成同一种单位？";
+    return childFacingPrompt(prompt || lesson.activeQuestion?.prompt || lesson.problem);
+  }
   if (/1元等于几角|1元是几角|1元等于多少角/.test(prompt)) return "1元是（  ）角？";
   if (/1角等于几分|1角是几分|1角等于多少分/.test(prompt)) return "1角是（  ）分？";
-  const yuanQuestion = prompt.match(/(\d+)元.*?几角/);
-  if (yuanQuestion) return `${yuanQuestion[1]}元是（  ）角？`;
   if (/再加|一共|最后|合起来/.test(prompt) && money.jiao > 0) return `${money.yuanJiao}角 + ${money.jiao}角 = （  ）角？`;
+  const yuanQuestion = prompt.match(/(\d+)元(?!\d*角).*?几角/);
+  if (yuanQuestion) return `${yuanQuestion[1]}元是（  ）角？`;
   if (lesson.visualType === "money" || lesson.id === "renminbi-conversion") return `${money.yuan || 3}元是（  ）角？`;
   return childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem);
 }
@@ -3691,16 +3775,22 @@ function renderAngleSvg(lesson) {
 }
 
 function renderArraySvg(lesson) {
+  const questionText = `${lesson.activeQuestion?.prompt || ""} ${lesson.activeQuestion?.explanation || ""} ${lesson.problem || ""}`;
+  const group = parseMultiplicationStructure(questionText);
+  const groups = Math.max(1, Math.min(6, group?.groups || 4));
+  const each = Math.max(1, Math.min(8, group?.each || 6));
+  const totalLabel = group ? `${group.groups}组，每组${group.each}个，一共${group.total}个` : "几组同样多";
+  const circles = Array.from({ length: groups }, (_, row) =>
+    Array.from({ length: each }, (_, col) => `<circle cx="${col * 34}" cy="${row * 28}" r="9" fill="#65d6ad" stroke="#244056" stroke-width="2"/>`).join(""),
+  ).join("");
   return `
     <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
       <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
       <g transform="translate(86 62)">
-        ${Array.from({ length: 4 }, (_, row) =>
-          Array.from({ length: 6 }, (_, col) => `<circle cx="${col * 38}" cy="${row * 32}" r="11" fill="#65d6ad" stroke="#244056" stroke-width="2"/>`).join(""),
-        ).join("")}
+        ${circles}
       </g>
-      <text x="330" y="98" class="svg-note">几组同样多</text>
-      <text x="128" y="190" class="svg-win">${escapeText(shortSvgText(lesson.microSteps.join("，"), 24))}</text>
+      <text x="330" y="96" class="svg-note">${escapeText(shortSvgText(totalLabel, 18))}</text>
+      <text x="128" y="190" class="svg-win">${escapeText(shortSvgText(group ? `${group.groups}个${group.each}可以用乘法` : lesson.microSteps.join("，"), 24))}</text>
     </svg>
   `;
 }
@@ -3949,7 +4039,8 @@ function renderJiaoDecomposeSvg(lesson, money) {
 }
 
 function getMoneyVisualNumbers(lesson) {
-  const source = normalizeText(`${state.aiMessage || ""} ${state.currentStep || ""} ${lesson.problem || ""}`);
+  const questionSource = `${lesson.activeQuestion?.prompt || ""} ${lesson.activeQuestion?.answer || ""} ${lesson.activeQuestion?.explanation || ""}`;
+  const source = normalizeText(`${state.currentStep || ""} ${questionSource} ${lesson.problem || ""} ${state.aiMessage || ""}`);
   const decomposeMatch = source.match(/(\d+)角(?:里面|里|可以|能)?.{0,8}几元几角/);
   const yuanJiaoMatch = source.match(/(\d+)元(\d+)角/);
   const pureYuanQuestion = /(\d+)元是几角/.test(source);

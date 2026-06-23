@@ -6,13 +6,13 @@ import { fileURLToPath } from "node:url";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { WebSocket, WebSocketServer } from "ws";
 import { createKnowledgeGraph } from "./teaching-engine/knowledge-model.js";
-import { pilotKnowledgeModules } from "./teaching-engine/pilot-curriculum.js";
+import { allKnowledgeModules } from "./teaching-engine/generated-curriculum.js";
 import { runTeachingTurn } from "./teaching-engine/state-machine.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "0.0.0.0";
-const teachingGraph = createKnowledgeGraph(pilotKnowledgeModules);
+const teachingGraph = createKnowledgeGraph(allKnowledgeModules);
 
 await loadDotEnv();
 
