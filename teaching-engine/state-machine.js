@@ -701,6 +701,7 @@ function buildParentSignals(point, session) {
 function makeTeachMessage(atom) {
   if (!atom) return "我们先看一个很小的问题。";
   const atomName = atom.atom_name || "";
+  if (atom.teach_prompt) return atom.teach_prompt;
   if (atomName.includes("1元等于10角")) return "我们先只看1元。1元等于几角？";
   if (atomName.includes("1角等于10分")) return "再看角和分：1角等于几分？";
   if (atomName.includes("换成几十角")) return "现在只换整元：3元是几角？";
@@ -727,6 +728,7 @@ function makeRepairMessage(atom, errorTag, point) {
   if (errorTag === ErrorTag.OFF_TOPIC) return makeReturnToQuestionMessage(atom, point);
   if (errorTag === ErrorTag.NO_RESPONSE) return makeNoResponseMessage(atom, point);
   if (errorTag === ErrorTag.AMBIGUOUS_RESPONSE) return `我没听清。我们只回答这一小步：${atomName || point?.point_name || "你再说一次答案"}`;
+  if (atom?.repair_prompt) return atom.repair_prompt;
   if (errorTag === ErrorTag.LANGUAGE_MISREAD) return "我把题目换成更口语的话。你先说：题里让我们找什么？";
   if ((errorTag === ErrorTag.CONCEPT_GAP || errorTag === ErrorTag.CALCULATION_SLIP) && atomName.includes("1元等于10角")) return "差一点。1元不是1角，1元可以换成10个1角。你再说一遍：1元等于几角？";
   if ((errorTag === ErrorTag.PROCESS_DROP || errorTag === ErrorTag.CALCULATION_SLIP) && atomName.includes("换成几十角")) return "先只换整元：1元是10角，所以3元是3个10角。你先说：3元是几角？";
@@ -761,6 +763,7 @@ function makeNoResponseMessage(atom, point) {
   if (atomName.includes("看到9先想差1到10")) return "没关系。只看9：9还差几就到10？";
   if (atomName.includes("把另一个数拆成")) return "没关系。只拆4：4可以拆成1和几？";
   if (atomName.includes("10再加剩下的数")) return "没关系。只算10加3等于几？";
+  if (atom?.no_response_prompt) return atom.no_response_prompt;
   return `没关系。我们只看这一小步：${atomName || point?.point_name || "先看第一步"}。你可以说“不知道”，老师再拆小一点。`;
 }
 
@@ -782,6 +785,7 @@ function makeReturnToQuestionMessage(atom, point) {
   if (atomName.includes("看到9先想差1到10")) return "这句还没有回答题目。现在只看：9还差几就到10？";
   if (atomName.includes("把另一个数拆成")) return "这句还没有回答题目。现在只拆4：4可以拆成1和几？";
   if (atomName.includes("10再加剩下的数")) return "这句还没有回答题目。现在只算：10加3等于几？";
+  if (atom?.return_prompt) return atom.return_prompt;
   return `这句还没有回答题目。我们先回到：${atomName || point?.point_name || "这一小步"}。`;
 }
 
