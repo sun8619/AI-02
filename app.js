@@ -18,6 +18,8 @@ const USE_BROWSER_SPEECH_RECOGNITION = false;
 const USE_REALTIME_ASR = true;
 const MAX_RECORDING_MS = 9000;
 const REALTIME_ASR_CHUNK_BYTES = 6400;
+const ALLOW_BROWSER_TTS_FALLBACK = false;
+let ttsProblemNotified = false;
 
 const customLessons = [
   {
@@ -5937,11 +5939,13 @@ async function speakCurrentMessage() {
         await currentAudio.play();
         return;
       }
-    } catch {
-      // Browser speech is a safe fallback for local demos and missing TTS setup.
+      notifyTtsProblem(payload);
+    } catch (error) {
+      notifyTtsProblem({ error: error?.message || "TTS request failed" });
     }
   }
 
+  if (!ALLOW_BROWSER_TTS_FALLBACK) return;
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
@@ -5951,6 +5955,14 @@ async function speakCurrentMessage() {
   utterance.rate = 0.88;
   utterance.pitch = 1.04;
   window.speechSynthesis.speak(utterance);
+}
+
+function notifyTtsProblem(payload = {}) {
+  if (ttsProblemNotified) return;
+  ttsProblemNotified = true;
+  const hint = payload.hint || payload.message || payload.error || "豆包语音合成暂不可用。";
+  console.warn("Doubao TTS unavailable:", hint, payload.detail || payload.logId || "");
+  toastMessage("豆包语音暂时没有接通，请家长检查火山语音合成配置。");
 }
 
 function pickChineseVoice() {

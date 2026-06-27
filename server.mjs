@@ -639,9 +639,10 @@ async function handleSpeechSynthesis(request, response) {
   const text = naturalizeSpeechText(String(input.text || "").trim());
   const apiKey = getSpeechApiKey("TTS");
   if (!apiKey) {
-    sendJson(response, 200, {
-      mode: "browser-fallback",
-      message: "未配置语音合成 Key，前端会回退到浏览器朗读。",
+    sendJson(response, 503, {
+      error: "TTS not configured",
+      message: "未配置火山豆包语音合成 Key，已停止使用浏览器机械朗读。",
+      hint: "请在服务器环境变量里配置 ARK_TTS_API_KEY 或 ARK_SPEECH_API_KEY，并确认 ARK_TTS_RESOURCE_ID 与 ARK_TTS_SPEAKER 有权限。",
     });
     return;
   }
@@ -682,9 +683,11 @@ async function handleSpeechSynthesis(request, response) {
 
   const raw = await upstream.text();
   if (!upstream.ok) {
+    const hint = createTtsErrorHint(raw);
     sendJson(response, 502, {
       error: "TTS failed",
       detail: raw.slice(0, 500),
+      hint,
       logId: upstream.headers.get("X-Tt-Logid") || "",
     });
     return;
@@ -698,6 +701,7 @@ async function handleSpeechSynthesis(request, response) {
     sendJson(response, 502, {
       error: "TTS returned no audio",
       detail: raw.slice(0, 500),
+      hint: createTtsErrorHint(raw),
       logId: upstream.headers.get("X-Tt-Logid") || "",
     });
     return;
@@ -1121,6 +1125,20 @@ function summarizeUpstreamError(payload) {
   if (typeof payload?.message === "string") return payload.message;
   if (typeof payload?.error === "string") return payload.error;
   return "上游接口返回错误，请检查模型、额度、权限或请求参数。";
+}
+
+function createTtsErrorHint(raw) {
+  const text = String(raw || "");
+  if (/requested resource not granted|resource.*not granted|not granted/i.test(text)) {
+    return "火山语音合成资源没有授权。请检查 ARK_TTS_RESOURCE_ID 和 ARK_TTS_SPEAKER 是否是当前 Key 已开通的资源。";
+  }
+  if (/unauthorized|forbidden|invalid.*key|api.?key/i.test(text)) {
+    return "火山语音合成 Key 无效或没有权限。请检查 ARK_TTS_API_KEY 或 ARK_SPEECH_API_KEY。";
+  }
+  if (/speaker|voice/i.test(text)) {
+    return "音色参数可能不可用。请在火山语音合成控制台确认 ARK_TTS_SPEAKER。";
+  }
+  return "豆包语音合成接口返回异常。请检查 TTS Key、资源 ID、音色 ID、额度和火山控制台权限。";
 }
 
 function sanitizeMessage(error) {
