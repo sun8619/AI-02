@@ -1059,32 +1059,48 @@ const lessons = buildLessonCatalog();
 
 function buildQuestionBankBlueprints(bank) {
   const points = Array.isArray(bank?.points) ? bank.points : [];
-  return points.flatMap((point) => {
+  return points.map((point) => {
     const listedQuestions = normalizeLessonQuestions(point.questions || []);
     const typical = normalizeQuestion(point.typicalQuestion) || listedQuestions[0] || null;
     const questions = uniqueQuestions([typical, ...listedQuestions].filter(Boolean));
     const primaryQuestion = typical || questions[0] || null;
-    if (!primaryQuestion) return [];
+    if (!primaryQuestion) return null;
 
-    const groupedQuestions = groupQuestionsByTeachingFamily(point, questions);
     const primaryFamily = inferQuestionTeachingFamily(point, primaryQuestion);
-    const groups = orderQuestionGroups(groupedQuestions, primaryFamily);
-    return groups.map((group, groupIndex) => createQuestionBankBlueprint(point, group, groupIndex, primaryQuestion, primaryFamily));
-  });
+    const orderedQuestions = orderQuestionsForKnowledgePoint(point, questions, primaryQuestion, primaryFamily);
+    return createQuestionBankBlueprint(point, orderedQuestions, primaryQuestion, primaryFamily);
+  }).filter(Boolean);
 }
 
-function createQuestionBankBlueprint(point, group, groupIndex, originalPrimaryQuestion, primaryFamily) {
+function orderQuestionsForKnowledgePoint(point, questions, primaryQuestion, primaryFamily) {
+  const primaryId = primaryQuestion?.id || "";
+  const direct = [];
+  const sameFamily = [];
+  const variants = [];
+  for (const question of questions || []) {
+    if (!question) continue;
+    if (question.id === primaryId) {
+      direct.push(question);
+      continue;
+    }
+    const family = inferQuestionTeachingFamily(point, question);
+    if (family === primaryFamily) sameFamily.push(question);
+    else variants.push(question);
+  }
+  return uniqueQuestions([...direct, ...sameFamily, ...variants]);
+}
+
+function createQuestionBankBlueprint(point, questions, originalPrimaryQuestion, primaryFamily) {
     const baseId = questionBankLessonAliases[point.id] || point.id.toLowerCase();
-    const isPrimaryGroup = group.family === primaryFamily;
-    const id = isPrimaryGroup ? baseId : `${baseId}-${group.family}`;
+    const id = baseId;
     const primaryQuestion =
-      (isPrimaryGroup && group.questions.find((question) => question.id === originalPrimaryQuestion?.id)) ||
-      group.questions[0] ||
+      questions.find((question) => question.id === originalPrimaryQuestion?.id) ||
+      questions[0] ||
       originalPrimaryQuestion;
-    const visualType = visualTypeForTeachingFamily(group.family, point.visualType || "generic");
-    const familyLabel = teachingFamilyChildLabel(group.family);
-    const node = isPrimaryGroup ? point.node || point.title || "" : `${point.node || point.title || "知识点"}：${familyLabel}`;
-    const lessonName = isPrimaryGroup ? point.lesson || point.title || point.node || "" : `${point.lesson || point.title || point.node || ""} · ${familyLabel}`;
+    const visualType = visualTypeForTeachingFamily(primaryFamily, point.visualType || "generic");
+    const familyLabel = teachingFamilyChildLabel(primaryFamily);
+    const node = point.node || point.title || "";
+    const lessonName = point.lesson || point.title || point.node || "";
     const pointForGroup = {
       ...point,
       node,
@@ -1092,7 +1108,7 @@ function createQuestionBankBlueprint(point, group, groupIndex, originalPrimaryQu
       lesson: lessonName,
       visualType,
     };
-    const teachingProfile = createTeachingProfileForPoint(pointForGroup, primaryQuestion, group.family);
+    const teachingProfile = createTeachingProfileForPoint(pointForGroup, primaryQuestion, primaryFamily);
     const microSteps = normalizeTextList(teachingProfile.microSteps, [
       "先读懂题目在问什么",
       "只做当前小台阶",
@@ -1115,7 +1131,7 @@ function createQuestionBankBlueprint(point, group, groupIndex, originalPrimaryQu
     return {
       id,
       sourceQuestionBankId: point.id,
-      sourceQuestionFamily: group.family,
+      sourceQuestionFamily: primaryFamily,
       subject: "数学",
       edition: "人教版",
       grade: point.grade || point.volume || "",
@@ -1135,22 +1151,23 @@ function createQuestionBankBlueprint(point, group, groupIndex, originalPrimaryQu
       diagnosticFocus: normalizeTextList(point.commonGaps, []),
       substeps: normalizeTextList(teachingProfile.substeps || point.substeps || point.microSteps, microSteps),
       visualType,
-      questionBank: group.questions,
+      baseVisualType: point.visualType || visualType,
+      questionBank: questions,
       useQuestionBankTutor: true,
       targetPassCount: teachingProfile.targetPassCount,
       teachingProfile,
       activeQuestionId: primaryQuestion?.id || "",
-      questionCursor: Math.max(0, group.questions.findIndex((question) => question.id === primaryQuestion?.id)),
+      questionCursor: Math.max(0, questions.findIndex((question) => question.id === primaryQuestion?.id)),
       questionTypes: uniqueKeywords([...(point.questionTypes || []), familyLabel]),
       variationRules: point.variationRules || [],
       teachingMethods: point.teachingMethods || [],
       questionBankStats: {
         sourceId: point.id,
-        family: group.family,
-        questionCount: group.questions.length,
-        sourceQuestionCount: Number(point.questionCount || group.questions.length),
-        typicalCount: group.questions.filter((question) => question.kind === "typical").length,
-        variantCount: group.questions.filter((question) => question.kind === "variant").length,
+        family: primaryFamily,
+        questionCount: questions.length,
+        sourceQuestionCount: Number(point.questionCount || questions.length),
+        typicalCount: questions.filter((question) => question.kind === "typical").length,
+        variantCount: questions.filter((question) => question.kind === "variant").length,
       },
     };
 }
@@ -1526,10 +1543,10 @@ function standardizeGuidedStepsForChild(steps, lesson) {
 function createTeacherHintForStep(lesson, step) {
   if (step?.isReason) {
     const sentence = step?.repeatSentence || createTeacherRepeatSentenceForStep(lesson, step);
-    return `老师先说：${sentence}你跟着说一遍。`;
+    return `老师先给一句：${sentence}。你可以照着说，也可以用自己的话说。`;
   }
   const answer = pickChildFollowAnswer(step?.answerKeywords || []);
-  if (answer) return `老师先说：${answer}。你跟着说一遍：${answer}。`;
+  if (answer) return `老师把答案范围缩小：这里要说「${answer}」。你先说这个小答案。`;
   const topic = lesson?.node || lesson?.lesson || "这一小步";
   const prompt = String(step?.prompt || "").replace(/[。！？!?]*$/, "");
   if (prompt) return `老师把问题缩小一点：${prompt}。`;
@@ -1792,35 +1809,76 @@ function formatChildStepPrompt(plan) {
   const prompt = String(plan?.prompt || "").trim();
   if (!prompt) return "你先说一个小答案。";
   if (plan?.isReason) {
-    const sentence = plan.repeatSentence || createReasonRepeatSentence(plan.label, prompt, plan.answerKeywords);
-    return `这句老师先说，你跟着说一遍：${sentence}`;
+    const sentence = String(plan.repeatSentence || createReasonRepeatSentence(plan.label, prompt, plan.answerKeywords)).replace(/[。！？!?]+$/, "");
+    return `老师给你一句可以照着说的话：${sentence}。你也可以换成自己的话说。`;
   }
   if (/为什么|怎么想|怎么知道|怎么比较|怎么检查/.test(prompt)) return `${prompt} 只说一句话就行。`;
   if (/先说|先答|先看|再答|最后|答案是多少|是多少|几/.test(prompt)) return prompt;
   return `${prompt} 你只说一个小答案就行。`;
 }
 
+function childGuideBridge(plan, previousPlan = null) {
+  const index = Number(plan?.index ?? previousPlan?.index ?? 0) || 0;
+  const options = [
+    "对，你抓到关键了。",
+    "可以，这一步会了。",
+    "很好，我们往前挪一小步。",
+    "对，不多讲，换一个角度看。",
+  ];
+  return options[index % options.length];
+}
+
+function softenTeacherScaffoldText(text) {
+  return String(text || "")
+    .replace(/你跟着说一遍[:：]?/g, "你可以先照着说：")
+    .replace(/你跟着说[:：]?/g, "你先说：")
+    .replace(/老师先说答案[:：]?/g, "老师先示范：")
+    .replace(/老师先告诉你[:：]?/g, "老师先把关键点说清楚：")
+    .replace(/老师先说[:：]?/g, "老师先示范：")
+    .replace(/跟老师说一句/g, "用自己的话说一句")
+    .replace(/跟着说一个小答案/g, "先说一个小答案");
+}
+
 function teacherAdvanceMessage(nextPlan, previousPlan = null) {
   const bridge = String(nextPlan?.bridgeMessage || "").trim();
   const follow = String(nextPlan?.followPrompt || "").trim();
+  let message = "";
   if (bridge) {
-    return `对，这一步过了。${bridge}${follow ? ` ${follow}` : ""}`;
+    message = `${childGuideBridge(nextPlan, previousPlan)}${bridge}${follow ? ` ${follow}` : ""}`;
+    return softenTeacherScaffoldText(message);
+  }
+  if (nextPlan?.isReason) {
+    message = `${childGuideBridge(nextPlan, previousPlan)}现在不是再算一遍，而是说一句为什么：${formatChildStepPrompt(nextPlan)}`;
+    return softenTeacherScaffoldText(message);
   }
   if (previousPlan?.label && nextPlan?.label) {
-    return `对，这一步过了。现在只看「${nextPlan.label}」：${formatChildStepPrompt(nextPlan)}`;
+    message = `${childGuideBridge(nextPlan, previousPlan)}现在只看「${nextPlan.label}」：${formatChildStepPrompt(nextPlan)}`;
+    return softenTeacherScaffoldText(message);
   }
-  return `对，这一步过了。下一步：${formatChildStepPrompt(nextPlan)}`;
+  message = `${childGuideBridge(nextPlan, previousPlan)}下一步：${formatChildStepPrompt(nextPlan)}`;
+  return softenTeacherScaffoldText(message);
 }
 
 function teacherRepairMessage(prefix, plan) {
-  const lead = String(prefix || "这次还没对上。").replace(/[。！？!?]*$/, "。");
-  if (plan?.isReason) return `${lead}不用自己想很久，先跟老师说一遍：${plan.repeatSentence || createReasonRepeatSentence(plan.label, plan.prompt, plan.answerKeywords)}`;
-  if (plan?.teacherHint) return `${lead}${plan.teacherHint}`;
-  return `${lead}我们先停在这一小步：${formatChildStepPrompt(plan)}`;
+  const rawLead = String(prefix || "这次还没对上。").replace(/[。！？!?]*$/, "。");
+  const lead = /没连上|答非所问|当前小问题/.test(rawLead)
+    ? "刚才那句话先放一边，我们回到这道小题。"
+    : rawLead;
+  let message = "";
+  if (plan?.isReason) {
+    message = `${lead}原因不用想很长，先借老师这句话说一遍：${plan.repeatSentence || createReasonRepeatSentence(plan.label, plan.prompt, plan.answerKeywords)}。`;
+    return softenTeacherScaffoldText(message);
+  }
+  if (plan?.teacherHint) {
+    message = `${lead}${plan.teacherHint}`;
+    return softenTeacherScaffoldText(message);
+  }
+  message = `${lead}我们不重来，只把问题缩小：${formatChildStepPrompt(plan)}`;
+  return softenTeacherScaffoldText(message);
 }
 
 function teacherReasonMessage(reasonPlan) {
-  return `答案对了。现在练一句原因：${formatChildStepPrompt(reasonPlan)}`;
+  return softenTeacherScaffoldText(`结果对了。老师想确认你不是背答案，我们补一句为什么：${formatChildStepPrompt(reasonPlan)}`);
 }
 
 function parseMoneyQuestion(question) {
@@ -2503,7 +2561,10 @@ function buildLessonCatalog() {
       : generatedLesson;
   });
   const generatedIds = new Set(generated.map((lesson) => lesson.id));
-  return generated.concat(customLessons.filter((lesson) => !generatedIds.has(lesson.id)));
+  const visibleCustomLessons = questionBankBlueprints.length
+    ? customLessons.filter((lesson) => /一|二/.test(String(lesson.grade || "")))
+    : customLessons;
+  return generated.concat(visibleCustomLessons.filter((lesson) => !generatedIds.has(lesson.id)));
 }
 
 function mergeCustomLessonWithCurriculum(custom, generatedLesson, spec) {
@@ -2854,6 +2915,10 @@ function getQuestionBankSample(lesson = currentLesson()) {
 
 function activateLessonQuestion(lesson, question, cursor = 0) {
   if (!lesson || !question) return false;
+  const questionFamily = inferQuestionTeachingFamily(lesson, question);
+  lesson.activeQuestionFamily = questionFamily;
+  lesson.sourceQuestionFamily = questionFamily || lesson.sourceQuestionFamily;
+  lesson.visualType = visualTypeForTeachingFamily(questionFamily, lesson.baseVisualType || lesson.visualType || "generic");
   lesson.activeQuestion = question;
   lesson.questionCursor = Math.max(0, cursor);
   lesson.problem = question.prompt;
@@ -2892,7 +2957,7 @@ function advanceLessonQuestion(reason = "换一道同类题") {
   state.currentAtomName = starter.label;
   state.currentStep = `小台阶 1：${starter.label}`;
   state.aiContext = reason;
-  state.aiMessage = `换个问法再确认一次。看这题：${childFacingPrompt(nextQuestion.prompt)} 我只问一步：${formatChildStepPrompt(starter)}`;
+  state.aiMessage = `这题会了，不多刷。老师换一个小变化，看看你是不是真的会：${childFacingPrompt(nextQuestion.prompt)} 先只做一步：${formatChildStepPrompt(starter)}`;
   resetGeneratedVisualForTurn();
   addEvidence("换同类题", `从题库切到：${nextQuestion.prompt}`, "变式练习");
   render();
@@ -5635,6 +5700,7 @@ function isLikelyOffTopicAnswer(normalizedText, lesson, plan) {
   if (!normalizedText) return true;
   if (matchesGuidedKeywords(normalizedText, plan.answerKeywords)) return false;
   if (plan.isReason && looksLikeReason(normalizedText)) return false;
+  if (/冰淇淋|吃|玩|游戏|动画片|睡觉|不想学|不要学|累了|无聊/.test(normalizedText)) return true;
   const question = lesson.activeQuestion || null;
   const text = normalizeText(`${question?.prompt || ""} ${lesson.node || ""} ${lesson.lesson || ""} ${plan.label || ""} ${plan.prompt || ""}`);
   const hasMoneyContext = /元|角|分|钱|人民币/.test(text);
