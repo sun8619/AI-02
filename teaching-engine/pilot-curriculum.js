@@ -209,7 +209,7 @@ export const pilotKnowledgeModules = [
           question("g1b-money-v1", variant, "买铅笔要1元6角，如果全用角来数，是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["16角", "十六角", "16"], { kind: "money_jiao", totalJiao: 16 }),
           question("g1b-money-v2", variant, "25角里面有几元几角？", ["g1b-atom-one-yuan-ten-jiao", "g1b-atom-convert-yuan-to-jiao"], ["2元5角", "二元五角", "两元五角", "二元5角", "两元5角"], { kind: "money_decompose", yuan: 2, jiao: 5, totalJiao: 25 }),
           question("g1b-money-v3", variant, "一本练习本2元4角，付的钱要全部换成角来算，是几角？", ["g1b-atom-convert-yuan-to-jiao", "g1b-atom-add-leftover-jiao"], ["24角", "二十四角", "24"], { kind: "money_jiao", totalJiao: 24 }),
-          question("g1b-money-r1", reasoning, "跟老师说一遍：因为元和角不是同一种单位，所以要先把元换成角。", ["g1b-atom-explain-same-unit"], ["因为元和角不是同一种单位所以要先把元换成角", "元和角不是同一种单位", "不是同一种单位", "先把元换成角", "先换成角", "单位不同"]),
+          question("g1b-money-r1", reasoning, "用一句话说原因：为什么元和角要先换成同一种单位？", ["g1b-atom-explain-same-unit"], ["因为元和角不是同一种单位所以要先把元换成角", "元和角不是同一种单位", "不是同一种单位", "先把元换成角", "先换成角", "单位不同"]),
         ],
         remediation_rules: [
           remediation("g1b-money-r-unit", ErrorTag.LANGUAGE_MISREAD, "g1b-atom-know-yuan-jiao", "先用购物故事重说元和角。"),

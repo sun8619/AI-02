@@ -468,7 +468,7 @@ function makeAssessmentPromptMessage(template, prefix = "") {
 }
 
 function makeMoneyReasonRepeatMessage(prefix = "") {
-  return `${prefix}这句老师先说，你跟着说一遍：因为元和角不是同一种单位，所以要先把元换成角。`;
+  return `${prefix}这句老师先示范：因为元和角不是同一种单位，所以要先把元换成角。你可以先说“单位不同，所以先换成角”。`;
 }
 
 function returnToAssessmentQuestion({ point, session, atom, assessment, inputType }) {
@@ -613,11 +613,11 @@ function makeClarifyAssessmentMessage(template, atom, point) {
   if (template?.id === "g1b-money-r1" || atomName.includes("说清为什么先换单位")) {
     return makeMoneyReasonRepeatMessage("我没听清。");
   }
-  if (prompt.includes("25角")) return "我没听清。你是想说2元5角吗？请只说：几元几角。";
-  if (prompt.includes("几角") || atomName.includes("元等于10角") || atomName.includes("换成几十角")) return "我没听清。请只说一个答案：是几角？";
-  if (prompt.includes("找回")) return "我没听清。请只说找回多少钱，比如：3元。";
+  if (prompt.includes("25角")) return "我没听清。你是想说2元5角吗？先说成“几元几角”。";
+  if (prompt.includes("几角") || atomName.includes("元等于10角") || atomName.includes("换成几十角")) return "我没听清。我们只看这一小步：答案是几角？";
+  if (prompt.includes("找回")) return "我没听清。我们只说找回多少钱，比如：3元。";
   if (prompt.includes("连加式")) return "我没听清。请说成连加式，比如：3加3加3。";
-  if (prompt.includes("几个几")) return "我没听清。请只说：几个几。";
+  if (prompt.includes("几个几")) return "我没听清。先说成“几个几”。";
   return `我没听清。我们回到这一小问：${template?.prompt || atom?.atom_name || point?.point_name || "你再说一次答案"}`;
 }
 
@@ -706,7 +706,7 @@ function makeTeachMessage(atom) {
   if (atomName.includes("1角等于10分")) return "再看角和分：1角等于几分？";
   if (atomName.includes("换成几十角")) return "现在只换整元：3元是几角？";
   if (atomName.includes("再加原来的几角")) return "现在把换好的角和原来的角合起来。30角加5角是多少？";
-  if (atomName.includes("说清为什么先换单位")) return makeMoneyReasonRepeatMessage("这句有点难，老师先说。");
+  if (atomName.includes("说清为什么先换单位")) return makeMoneyReasonRepeatMessage("这句有点难。");
   if (atomName.includes("看清商品价格")) return "先只看价格：商品多少钱？";
   if (atomName.includes("看清付了多少钱")) return "再只看付出去的钱：付了多少钱？";
   if (atomName.includes("找回就是剩下的钱")) return "找回的钱，是付出去后剩下的钱，还是还要再付的钱？";
@@ -752,7 +752,7 @@ function makeNoResponseMessage(atom, point) {
   if (atomName.includes("1角等于10分")) return "没关系。只回答一个数：1角等于几分？";
   if (atomName.includes("换成几十角")) return "没关系。先只看3元：1元是10角，3元是几个10角？";
   if (atomName.includes("再加原来的几角")) return "没关系。只算最后一小步：30角加5角是多少？";
-  if (atomName.includes("说清为什么先换单位")) return makeMoneyReasonRepeatMessage("没关系，先跟老师说一遍。");
+  if (atomName.includes("说清为什么先换单位")) return makeMoneyReasonRepeatMessage("没关系。");
   if (atomName.includes("看清商品价格")) return "没关系。先只看价格：本子要多少钱？";
   if (atomName.includes("看清付了多少钱")) return "没关系。先只看付出去的钱：付了多少钱？";
   if (atomName.includes("用减法算找回")) return "没关系。只算一小步：5减4等于几？";
@@ -773,7 +773,7 @@ function makeReturnToQuestionMessage(atom, point) {
   if (atomName.includes("1角等于10分")) return "这句还没有回答题目。我们回到这一小问：1角等于几分？";
   if (atomName.includes("换成几十角")) return "这句还没有回答题目。现在只看3元：3元是几角？";
   if (atomName.includes("再加原来的几角")) return "这句还没有回答题目。现在只算：30角加5角是多少？";
-  if (atomName.includes("说清为什么先换单位")) return makeMoneyReasonRepeatMessage("这句还没有说到原因。先跟老师说一遍。");
+  if (atomName.includes("说清为什么先换单位")) return makeMoneyReasonRepeatMessage("这句还没有说到原因。");
   if (atomName.includes("看清商品价格")) return "这句还没有回答题目。先只看价格：本子要多少钱？";
   if (atomName.includes("看清付了多少钱")) return "这句还没有回答题目。先只看付了多少钱？";
   if (atomName.includes("找回就是剩下的钱")) return "这句还没有回答题目。找回的钱，是剩下的钱，还是又要付的钱？";

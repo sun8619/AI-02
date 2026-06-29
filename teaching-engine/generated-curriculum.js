@@ -123,23 +123,23 @@ function createFamilySteps(family, point, question) {
   const familyText = normalizeText(`${title} ${prompt} ${explanation} ${point.description || ""}`);
   const common = {
     read: makeStep("看清题目", `先看这题：${prompt}。题目让我们求什么？`, ["题目", "求什么", "问什么", "看清"], `我们只先看题。你可以说：题目问什么。`),
-    answer: makeStep("说出答案", `这一小步算完后，答案是多少？`, answerKeywords(question), `先别急，我们只说答案。${answer ? `可以说：${answer}。` : ""}`, { acceptsFinal: true }),
-    reason: makeStep("说清为什么", "老师先说一句，你跟着说一遍：我先看题目，再按小台阶做，因为这样不会漏。", ["因为", "所以", "先", "再", "方法", "不会漏"], "如果说不出来，先跟老师说半句：因为……", { isReason: true }),
+    answer: makeStep("说出答案", `这一小步算完后，答案是多少？`, answerKeywords(question), `先别急，先把这一步的答案说出来。${answer ? `可以说：${answer}。` : ""}`, { acceptsFinal: true }),
+    reason: makeStep("说清为什么", "把刚才的方法说成一句话：我先看题目，再按小台阶做，因为这样不会漏。", ["因为", "所以", "先", "再", "方法", "不会漏"], "如果说不出来，老师先示范半句：因为……", { isReason: true }),
   };
 
   const familySteps = {
     money: [
-      makeStep("看清元角分", `先只看钱的单位。题里有元、角，还是分？`, ["元", "角", "分", "人民币", "单位"], "先不算答案，只说看到的单位。"),
-      makeStep("记住换算关系", "先记住：1元=10角，1角=10分。你跟着说一遍。", ["1元", "10角", "1角", "10分", "十"], "这句老师先说：1元等于10角，1角等于10分。"),
+      makeStep("看清元角分", `先看钱的单位。题里有元、角，还是分？`, ["元", "角", "分", "人民币", "单位"], "先不算答案，先找看到的单位。"),
+      makeStep("记住换算关系", "先记住：1元=10角，1角=10分。你可以先说出关键数。", ["1元", "10角", "1角", "10分", "十"], "1元能换成10个1角，1角能换成10个1分。"),
       makeStep("先换成同一种单位", "遇到不同单位，先换成同一种单位。现在要先换成什么单位？", ["同一种单位", "换成角", "换成分", "单位不同"], "元和角不能直接拼在一起，先换成同一种单位。"),
       makeStep("再算出结果", "换好单位后，再把剩下的数合起来。答案是多少？", answerKeywords(question), `只看最后一步。${answer ? `这题最后是${answer}。` : ""}`, { acceptsFinal: true }),
-      makeStep("说清为什么先换单位", "老师先说一句，你跟着说：因为单位不同，所以要先换成同一种单位。", ["单位不同", "先换", "同一种单位", "因为"], "先跟老师说：因为单位不同，所以先换单位。", { isReason: true }),
+      makeStep("说清为什么先换单位", "用一句话说原因：为什么要先换成同一种单位？", ["单位不同", "先换", "同一种单位", "因为"], "元、角、分单位不同，不能直接合起来，先换成同一种单位。", { isReason: true }),
     ],
     compare: [
-      makeStep("看清两边", "先看左边是什么，右边是什么。你只说两边各是多少。", ["左边", "右边", "两边", "多少"]),
+      makeStep("看清两边", "先看左边是什么，右边是什么。先把两边各是多少说清楚。", ["左边", "右边", "两边", "多少"]),
       makeStep("比较大小", "再比一比，哪边大、哪边小，还是一样大？", ["大", "小", "一样", "相等", "多", "少"]),
       makeStep("填合适符号", "现在填大于号、小于号，还是等号？", answerKeywords(question).concat(["大于", "小于", "等于", ">", "<", "="]), "先看两边，再选符号。", { acceptsFinal: true }),
-      makeStep("说清比较方法", "你怎么比较出来的？只说一句方法。", ["一一对应", "数", "比", "大", "小", "高位"], "可以说：我先看两边，再比较大小。", { isReason: true }),
+      makeStep("说清比较方法", "你怎么比较出来的？说一句小方法。", ["一一对应", "数", "比", "大", "小", "高位"], "可以说：我先看两边，再比较大小。", { isReason: true }),
     ],
     count: [
       makeStep("按顺序数", "先说怎么数才不会漏也不会重复。", ["按顺序", "一个一个", "不漏", "不重复", "做记号"]),
@@ -168,7 +168,7 @@ function createFamilySteps(family, point, question) {
     calculation: [
       makeStep("看运算符号", "先看这题是加、减、乘，还是除。", ["加", "减", "乘", "除", "+", "-", "×", "÷"]),
       makeStep("只算一步", "只做当前这一步，先算什么？", ["先算", "第一步", "口算", "口诀"]),
-      makeStep("说出结果", "算完结果是多少？", answerKeywords(question), "先只说算出来的结果。", { acceptsFinal: true }),
+      makeStep("说出结果", "算完结果是多少？", answerKeywords(question), "先把这一步算出来的结果说出来。", { acceptsFinal: true }),
       makeStep("说清怎么算", "你是怎么算出来的？", ["先", "再", "凑十", "口诀", "合起来", "去掉"], "可以说：我先看符号，再算结果。", { isReason: true }),
     ],
     application: [
@@ -176,7 +176,7 @@ function createFamilySteps(family, point, question) {
       makeStep("找有用条件", "再找题里给了哪两个有用的数。", extractNumbers(question.prompt).map(String).concat(["条件", "两个数"])),
       makeStep("选方法", "根据问题，应该用加、减、乘，还是除？", ["加", "减", "乘", "除", "加法", "减法", "乘法", "除法"]),
       makeStep("算出答案", "最后答案是多少？", answerKeywords(question), "先按选好的方法算。", { acceptsFinal: true }),
-      makeStep("说清原因", "为什么用这个方法？只说一句原因。", ["因为", "所以", "一共", "还剩", "找回", "平均", "同样多"], "可以说：因为题目问……所以用……", { isReason: true }),
+      makeStep("说清原因", "为什么用这个方法？说一句原因。", ["因为", "所以", "一共", "还剩", "找回", "平均", "同样多"], "可以说：因为题目问……所以用……", { isReason: true }),
     ],
     multiplication: [
       makeStep("看每份几个", "先看每组同样多吗？每组有几个？", ["每组", "每份", "同样多", "几个"]),
@@ -200,7 +200,7 @@ function createFamilySteps(family, point, question) {
     measure: [
       makeStep("先看单位", "先看题里用的是什么单位。", ["厘米", "米", "克", "千克", "单位"]),
       makeStep("联系生活或刻度", "再想它是长短、轻重，还是角的大小。", ["长", "短", "轻", "重", "刻度", "角"]),
-      makeStep("带单位回答", "答案是多少？记得带单位。", answerKeywords(question).concat(["厘米", "米", "克", "千克"]), "别只说数字，要带单位。", { acceptsFinal: true }),
+      makeStep("带单位回答", "答案是多少？记得带单位。", answerKeywords(question).concat(["厘米", "米", "克", "千克"]), "数字后面要带单位，答案才完整。", { acceptsFinal: true }),
       makeStep("说清为什么", "为什么选这个单位或这样量？", ["因为", "单位", "生活", "刻度", "轻", "重"], "可以说：因为这个物体……所以用……", { isReason: true }),
     ],
     placeValue: [
@@ -213,7 +213,7 @@ function createFamilySteps(family, point, question) {
     shape: [
       makeStep("看图形特征", "先说它最明显的样子。", ["平", "方", "圆", "滚", "面", "边", "角", "对称"]),
       makeStep("说出名称或判断", "根据这个特征，答案是什么？", answerKeywords(question).concat(["长方体", "正方体", "圆柱", "球", "长方形", "正方形", "三角形", "圆", "对", "错"]), "先看特征再判断。", { acceptsFinal: true }),
-      makeStep("说清一个理由", "你为什么这样认？只说一个特征。", ["因为", "特征", "面", "边", "角", "会滚", "对称"], "可以说：因为它有……", { isReason: true }),
+      makeStep("说清一个理由", "你为什么这样认？说一个明显特征。", ["因为", "特征", "面", "边", "角", "会滚", "对称"], "可以说：因为它有……", { isReason: true }),
     ],
     data: [
       makeStep("看分类或表头", "先看按什么分，或表里每一行表示什么。", ["分类", "表", "记录", "一行", "一列"]),
@@ -233,7 +233,7 @@ function createFamilySteps(family, point, question) {
       makeStep("找顶点", "先找角尖尖的顶点在哪里。", ["顶点", "尖尖的点"]),
       makeStep("找两条边", "再找从顶点伸出去的两条边。", ["两条边", "边", "张开"]),
       makeStep("判断角", "根据顶点和两条边，答案是什么？", answerKeywords(question).concat(["角", "直角", "锐角", "钝角"]), "先看清顶点和两条边。", { acceptsFinal: true }),
-      makeStep("说清角的特征", "为什么这样判断？只说一个特征。", ["顶点", "两条边", "张开", "因为"], "可以说：角有一个顶点和两条边。", { isReason: true }),
+      makeStep("说清角的特征", "为什么这样判断？说一个角的特征。", ["顶点", "两条边", "张开", "因为"], "可以说：角有一个顶点和两条边。", { isReason: true }),
     ];
   }
 
@@ -248,13 +248,13 @@ function createFamilySteps(family, point, question) {
     ...step,
     canDo: step.canDo || `孩子能完成「${title}」的第${index + 1}个小台阶：${step.label}。`,
     teach: step.teach || `我们学「${title}」。${step.prompt || ""}`,
-    noResponse: step.noResponse || `没关系。老师先说一遍：${step.repeatSentence || step.prompt || step.label}。你跟着说一个词也可以。`,
+    noResponse: step.noResponse || `没关系。老师先示范：${step.repeatSentence || step.prompt || step.label}。你先说一个关键词也可以。`,
     repair: step.repair || `我们把「${step.label}」再拆小一点。${step.prompt || ""}`,
   }));
 }
 
 function makeStep(label, teach, keywords = [], repair = "", options = {}) {
-  const repeatSentence = options.isReason ? options.repeatSentence || teach.replace(/^老师先说一句，你跟着说一遍：?/, "") : options.repeatSentence || "";
+  const repeatSentence = options.isReason ? options.repeatSentence || teach.replace(/^老师先说一句，你跟着说一遍：?/, "").replace(/^把刚才的方法说成一句话：?/, "") : options.repeatSentence || "";
   return {
     label,
     teach,
