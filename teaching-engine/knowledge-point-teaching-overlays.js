@@ -41,12 +41,12 @@
       variationRules: ["给左边求右边", "给右边求左边", "看图说分合", "用分合帮加减法"],
     }),
     "G1V1-U1-KP03": overlay({
-      family: "concreteAddition",
+      family: "calculation",
       visualType: "ten-frame",
-      microSteps: ["找第一部分", "找第二部分", "合起来", "数一共", "说为什么用加法"],
-      teachingMethods: ["两部分合并", "接着数", "看图列式", "把故事说成算式"],
-      commonGaps: ["只看一部分", "不知道一共就是合起来", "把单位漏掉"],
-      variationRules: ["又来几个", "两盒合起来", "看图列式", "已知两部分求总数"],
+      microSteps: ["先看故事动作", "又来或合起来用加法", "拿走或飞走用减法", "看图列式", "说清为什么这样算"],
+      teachingMethods: ["故事动作判断加减", "看图列式", "接着数或倒着数", "带单位回答"],
+      commonGaps: ["只看数字乱加减", "把拿走当合起来", "会算但说不清为什么用加法或减法"],
+      variationRules: ["合起来求一共", "拿走求还剩", "看图列式", "换生活物品判断加减"],
     }),
     "G1V1-U2-KP01": overlay({
       family: "composition",
@@ -362,9 +362,28 @@
     }),
   };
 
-  function getPointId(pointOrId) {
-    if (typeof pointOrId === "string") return pointOrId;
-    return pointOrId?.id || pointOrId?.sourceQuestionBankId || "";
+  const aliases = {
+    "g1a-add-9-plus": "G1V1-U5-KP01",
+    "g1a-carry-add-20": "G1V1-U5-KP01",
+    "g1b-money-convert-yuan-jiao": "G1V2-U5-KP01",
+    "renminbi-conversion": "G1V2-U5-KP01",
+    "g1b-simple-shopping-change": "G1V2-U5-KP02",
+    "g1b-simple-shopping": "G1V2-U5-KP02",
+    "g2a-multiply-several-groups": "G2V1-U4-KP01",
+    "g2a-multiply-meaning": "G2V1-U4-KP01",
+  };
+
+  function getPointIdCandidates(pointOrId) {
+    if (typeof pointOrId === "string") return [pointOrId];
+    const candidates = [
+      pointOrId?.id,
+      pointOrId?.sourceQuestionBankId,
+      pointOrId?.sourceQuestionId,
+      pointOrId?.questionBankStats?.sourceId,
+      ...(pointOrId?.lesson_ids || []),
+      ...(pointOrId?.lessonIds || []),
+    ].filter(Boolean);
+    return candidates.flatMap((id) => (aliases[id] ? [id, aliases[id]] : [id]));
   }
 
   function clone(value) {
@@ -372,8 +391,10 @@
   }
 
   function getPointOverlay(pointOrId) {
-    const id = getPointId(pointOrId);
-    return id && points[id] ? clone(points[id]) : null;
+    for (const id of getPointIdCandidates(pointOrId)) {
+      if (points[id]) return clone(points[id]);
+    }
+    return null;
   }
 
   function list() {

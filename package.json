@@ -10,6 +10,7 @@
     "ws": "^8.18.0"
   },
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "audit:teaching": "node teaching-engine/teaching-quality-audit.js"
   }
 }
