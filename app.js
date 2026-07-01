@@ -2568,7 +2568,9 @@ function softenTeacherScaffoldText(text) {
     .replace(/老师先说[:：]?/g, "老师先示范：")
     .replace(/老师把答案范围缩小[:：]?/g, "老师把这一步讲清楚：")
     .replace(/跟老师说一句/g, "用自己的话说一句")
-    .replace(/跟着说一个小答案/g, "先说一个小答案");
+    .replace(/跟着说一个小答案/g, "先说一个小答案")
+    .replace(/^(对，[^。！？!?]+。)对，/g, "$1")
+    .replace(/^(好，[^。！？!?]+。)好，/g, "$1");
 }
 
 function teacherAdvanceMessage(nextPlan, previousPlan = null) {
@@ -5350,7 +5352,7 @@ function getKidBoardPrompt(lesson) {
   const yuanQuestion = prompt.match(/(\d+)元(?!\d*角).*?几角/);
   if (yuanQuestion) return `${yuanQuestion[1]}元是（  ）角？`;
   if (lesson.visualType === "money" || lesson.id === "renminbi-conversion") return `${money.yuan || 3}元是（  ）角？`;
-  return childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem);
+  return childFacingPrompt(prompt || lesson.activeQuestion?.prompt || lesson.problem);
 }
 
 function renderKidTeacherAvatar(size = "large") {
@@ -5684,7 +5686,7 @@ function renderLearningVisual() {
         <strong>${escapeText(getVisualPanelLabel(visualLesson))}</strong>
       </div>
       ${renderLessonSvg(visualLesson, visualMode)}
-      <p class="visual-turn-note">本轮题目：${escapeText(lesson.activeQuestion?.prompt || lesson.problem)}${state.currentAtomName ? ` · ${escapeText(state.currentAtomName)}` : ""}</p>
+      <p class="visual-turn-note">本轮小问：${escapeText(getKidBoardPrompt(visualLesson))}${state.currentAtomName ? ` · ${escapeText(state.currentAtomName)}` : ""}</p>
       <div class="ai-visual-card">
         <div>
           <strong>${escapeText(lesson.visualCardTitle)}</strong>
@@ -5741,13 +5743,30 @@ function getVisualPanelLabel(lesson) {
 
 function createActiveVisualLesson(lesson) {
   const visualType = getActiveVisualType(lesson);
-  const visualTitle = createVisualTitle({ ...lesson, visualType });
+  const visualTitle = createActiveVisualTitle(lesson, visualType);
   return {
     ...lesson,
     visualType,
     visualTitle,
     visualLabel: ["compare", "count", "position"].includes(visualType) ? "程序辅助理解" : lesson.visualLabel,
   };
+}
+
+function getCurrentVisualPlan(lesson = currentLesson()) {
+  if (!lesson) return null;
+  const index = Math.max(0, Number(state.completedSteps) || 0);
+  return createGuidedStepPlan(lesson, index);
+}
+
+function createActiveVisualTitle(lesson, visualType) {
+  const plan = getCurrentVisualPlan(lesson);
+  const label = String(plan?.label || state.currentAtomName || "").trim();
+  if (state.phase !== "summary" && label) {
+    if (plan?.isReason || /原因|为什么|说清|讲/.test(label)) return "说清为什么";
+    return label;
+  }
+  if (state.phase === "summary") return "会做，也能讲清楚";
+  return createVisualTitle({ ...lesson, visualType });
 }
 
 function getActiveVisualType(lesson) {
@@ -5858,7 +5877,16 @@ function renderCompareThinkingSvg(lesson, visualMode = getVisualRevealMode(lesso
   const symbol = getCompareSymbol(question?.answer || "") || "□";
   const largerText = left === right ? "一样大" : left > right ? "左边大" : "右边大";
   const revealAnswer = shouldRevealFinalVisualAnswer(visualMode);
-  const summaryText = revealAnswer ? `${left} ${symbol} ${right} · ${largerText}` : `${left} □ ${right} · 先看哪边大`;
+  const plan = getCurrentVisualPlan(lesson);
+  const planText = normalizeText(`${plan?.label || ""} ${plan?.prompt || ""} ${state.currentStep || ""}`);
+  let summaryText = `${left} □ ${right} · 先看哪边大`;
+  if (revealAnswer) {
+    summaryText = `${left} ${symbol} ${right} · ${largerText}`;
+  } else if (/填比较符号|大于号|小于号|等号|符号/.test(planText)) {
+    summaryText = `${left} □ ${right} · 该填哪个符号？`;
+  } else if (/原因|为什么|说清/.test(planText)) {
+    summaryText = `${left} ${symbol} ${right} · 说说为什么`;
+  }
   const leftItems = Math.min(left, 9);
   const rightItems = Math.min(right, 9);
   return `
