@@ -179,7 +179,7 @@ function advanceAtomOrPractice({ graph, point, session, atom, inputType }) {
       session: nextSession,
       phase: "guiding",
       aiContext: `孩子已通过「${atom?.atom_name || point.point_name}」，进入下一个知识原子。`,
-      aiMessage: makeTeachMessage(nextAtom),
+      aiMessage: makeNextAtomMessage({ point, previousAtom: atom, nextAtom, session }),
       currentStep: `小台阶：${nextAtom.atom_name}`,
       evidenceSignal: "通过一个小台阶",
       evidenceText: `孩子能做到：${atom?.can_do_statement || point.point_name}`,
@@ -188,7 +188,8 @@ function advanceAtomOrPractice({ graph, point, session, atom, inputType }) {
     });
   }
 
-  const firstQuestion = point.assessment_templates?.[0];
+  const assessmentPlan = getAssessmentPlan(point);
+  const firstQuestion = assessmentPlan[0];
   const nextSession = {
     ...session,
     current_state: TeachingState.PRACTICE_SET,
@@ -202,8 +203,8 @@ function advanceAtomOrPractice({ graph, point, session, atom, inputType }) {
     session: nextSession,
     phase: "guiding",
     aiContext: "进入掌握检验。先做直接题，再做变式题和说理题。",
-    aiMessage: makeAssessmentPromptMessage(firstQuestion, "我们来做一个小闯关。第一题："),
-    currentStep: `闯关检验 1/${point.assessment_templates?.length || 1}`,
+    aiMessage: makeEnterAssessmentMessage(firstQuestion, point),
+    currentStep: `闯关检验 1/${assessmentPlan.length || 1}`,
     evidenceSignal: "进入掌握检验",
     evidenceText: "当前知识点的核心小台阶已走完，开始做直接题、变式题和说理题。",
     bestStrategy: "闯关检验",
@@ -213,7 +214,7 @@ function advanceAtomOrPractice({ graph, point, session, atom, inputType }) {
 }
 
 function evaluateAssessment({ graph, point, session, text, inputType }) {
-  const templates = point.assessment_templates || [];
+  const templates = getAssessmentPlan(point);
   const current = templates[session.assessment_index] || templates[0];
   const diagnosis = evaluateAssessmentAnswer(text, current, point);
   const passed = diagnosis.passed;
@@ -286,7 +287,7 @@ function evaluateAssessment({ graph, point, session, text, inputType }) {
       },
       phase: "guiding",
       aiContext: "继续掌握检验。",
-      aiMessage: makeAssessmentPromptMessage(nextQuestion, "这一题过了。下一题："),
+      aiMessage: makeNextAssessmentMessage(nextQuestion, nextIndex, templates, point, session),
       currentStep: `闯关检验 ${nextIndex + 1}/${templates.length}`,
       evidenceSignal: "检验题通过",
       evidenceText: `孩子通过 ${current?.prompt || "当前检验题"}`,
@@ -306,7 +307,7 @@ function evaluateAssessment({ graph, point, session, text, inputType }) {
     },
     phase: "teachback",
     aiContext: "掌握检验全对，进入费曼复述。",
-    aiMessage: point.feynman_prompt?.child_prompt || `你来当小老师，讲讲${point.point_name}怎么想。`,
+    aiMessage: makeTeachbackPrompt(point),
     currentStep: "你来当小老师",
     feynmanStatus: "等待孩子讲",
     evidenceSignal: "掌握检验全对",
@@ -455,20 +456,142 @@ function countRemediations(session, atomId) {
 }
 
 function getCurrentAssessment(point, session) {
-  const templates = point.assessment_templates || [];
+  const templates = getAssessmentPlan(point);
   return templates[session.assessment_index] || null;
 }
 
-function makeAssessmentPromptMessage(template, prefix = "") {
+function getAssessmentPlan(point) {
+  const templates = point?.assessment_templates || [];
+  if (templates.length <= 4) return templates;
+
+  const plan = [];
+  const add = (template) => {
+    if (template && !plan.some((item) => item.id === template.id)) plan.push(template);
+  };
+  const direct = templates.filter((item) => item.dimension === MasteryDimension.DIRECT);
+  const variant = templates.filter((item) => item.dimension === MasteryDimension.VARIANT);
+  const reasoning = templates.filter((item) => item.dimension === MasteryDimension.REASONING);
+
+  add(direct[0]);
+  add(variant[0] || direct[1]);
+  add(variant.find((item) => item.primary_atom_id !== plan[1]?.primary_atom_id) || variant[1]);
+  add(reasoning[0]);
+
+  for (const template of templates) {
+    if (plan.length >= 4) break;
+    add(template);
+  }
+
+  return plan.slice(0, 4);
+}
+
+function makeAssessmentPromptMessage(template, prefix = "", point = null) {
   if (!template) return `${prefix}先看这一小问。`;
   if (template.id === "g1b-money-r1" || template.primary_atom_id === "g1b-atom-explain-same-unit") {
     return makeMoneyReasonRepeatMessage(prefix);
+  }
+  if (template.dimension === MasteryDimension.REASONING) {
+    return makeReasoningPromptMessage(template, point, prefix);
   }
   return `${prefix}${template.prompt}`;
 }
 
 function makeMoneyReasonRepeatMessage(prefix = "") {
-  return `${prefix}这句老师先示范：因为元和角不是同一种单位，所以要先把元换成角。你可以先说“单位不同，所以先换成角”。`;
+  const lead = prefix ? `${prefix}这一问只说原因。` : "";
+  return `${lead}老师先示范：因为元和角不是同一种单位，所以要先把元换成角。你可以先说“单位不同，所以先换成角”。`;
+}
+
+function makeReasoningPromptMessage(template, point, prefix = "") {
+  const family = point?.teaching_family || "generic";
+  const sentence = getReasoningSentence(family, point);
+  const lead = prefix || pickText([
+    "这题不是要算新答案，是要说为什么。",
+    "现在换成小老师模式，只说一句原因。",
+    "这一问有点难，老师先给你一句可以照着说的话。",
+  ], `${point?.id || ""}|${template?.id || ""}|reason`);
+  return `${lead}你可以先说：“${sentence}”`;
+}
+
+function getReasoningSentence(family, point = null) {
+  const title = point?.point_name || point?.child_title || "这类题";
+  const table = {
+    count: "我一个一个按顺序数，最后说到的数就是一共有几个。",
+    compare: "我先看左边是多少，再看右边是多少，谁大就选谁。",
+    ordinal: "我先确定从哪边数，再数到第几个。",
+    composition: "总数不变，知道一部分，就能想另一部分还差几。",
+    concreteAddition: "题里是合起来，所以用加法。",
+    concreteSubtraction: "题里是拿走或还剩，所以用减法。",
+    makeTenAdd: "先凑成10，算起来更容易。",
+    breakTenSubtract: "个位不够减，所以先把十几拆成10和几。",
+    calculation: "我先看符号和数位，再一步一步算。",
+    mixedCalculation: "我先看运算顺序，不能看到数字就乱算。",
+    application: "我先看题目问什么，再找有用数字。",
+    money: "元和角不是同一种单位，所以要先换成同一种单位。",
+    moneyApplication: "找回的钱是付的钱里剩下的，所以用付的钱减价格。",
+    multiplication: "相同数量一组一组重复出现，可以说成几个几，用乘法更方便。",
+    division: "平均分就是每份一样多，所以可以用除法表示。",
+    time: "我先看短针是几时，再看长针是多少分。",
+    measure: "答案要带单位，不然不知道量的是长度、重量还是时间。",
+    placeValue: "数字站在不同数位，表示的大小不一样。",
+    shape: "图形要看边、角、面这些特征，不能只看像不像。",
+    data: "我先从表里找到数量，再按题目要求比较或合起来。",
+    logic: "我先用一个条件排除不可能的，再看下一个条件。",
+    pattern: "我先找重复的一组，或者看每次多几少几。",
+    comparisonDifference: "要求多多少，就是把两边配对后看多出来的部分。",
+    arrangement: "我按顺序搭配，固定一种，再把另一种都配一遍。",
+    observation: "站的位置不同，看到的面可能不同。",
+    timeDuration: "我先找开始时间和结束时间，再看中间过了多久。",
+    angle: "角的大小看张开的大小，不看边画得长不长。",
+    remainderDivision: "我先找最多能分满几份，剩下的就是余数。",
+    remainderApplication: "有余数时还要看生活里剩下的要不要再占一份。",
+  };
+  return table[family] || `我先说清${title}的方法，再回答。`;
+}
+
+function makeNextAtomMessage({ point, previousAtom, nextAtom, session }) {
+  const opener = pickText([
+    "这一步站住了，我们往前走一小步。",
+    "好，刚才那个点可以了。现在只看下一小点。",
+    "不错，我们不一下子跳太远，接着看一个小动作。",
+    "这一小步过了，下面换一个角度看。",
+  ], `${point?.id}|${previousAtom?.id}|${nextAtom?.id}|${session?.completed_atom_ids?.length}`);
+  return `${opener}${makeTeachMessage(nextAtom)}`;
+}
+
+function makeEnterAssessmentMessage(firstQuestion, point) {
+  const opener = pickText([
+    "我们不用做很多题，先用一小题看看你是不是会用了。",
+    "现在做一个小检查，不是考试，答错老师会继续带你。",
+    "方法学过了，换一道小题试试看。",
+  ], `${point?.id}|assessment-start`);
+  return makeAssessmentPromptMessage(firstQuestion, `${opener}`, point);
+}
+
+function makeNextAssessmentMessage(nextQuestion, nextIndex, templates, point, session) {
+  const opener = pickText([
+    "这题可以。换个样子再试一题：",
+    "刚才是会做了，现在看一个小变形：",
+    "我们再确认一下，不多做，只看这一题：",
+    "这一关过了，下一关换问法：",
+  ], `${point?.id}|${nextQuestion?.id}|${nextIndex}|${session?.assessment_records?.length}`);
+  const progress = templates?.length ? `第${nextIndex + 1}小题，` : "";
+  return makeAssessmentPromptMessage(nextQuestion, `${opener}${progress}`, point);
+}
+
+function makeTeachbackPrompt(point) {
+  const base = point?.feynman_prompt?.child_prompt;
+  const sentence = getReasoningSentence(point?.teaching_family || "generic", point);
+  if (base) return `${base} 说不完整也没关系，可以用这句开头：“${sentence}”`;
+  return `现在你当小老师，讲一遍这个方法。可以先说：“${sentence}”`;
+}
+
+function pickText(options, key = "") {
+  const list = (options || []).filter(Boolean);
+  if (!list.length) return "";
+  let hash = 0;
+  const source = String(key || "");
+  for (let i = 0; i < source.length; i += 1) hash = (hash * 33 + source.charCodeAt(i)) >>> 0;
+  return list[hash % list.length];
 }
 
 function returnToAssessmentQuestion({ point, session, atom, assessment, inputType }) {
@@ -484,7 +607,7 @@ function returnToAssessmentQuestion({ point, session, atom, assessment, inputTyp
     session: nextSession,
     phase: "guiding",
     aiContext: "补救小台阶已通过，回到刚才没稳的题，不继续跑偏。",
-    aiMessage: makeAssessmentPromptMessage(assessment, "这一小步补上了。回到刚才这题："),
+    aiMessage: makeAssessmentPromptMessage(assessment, "刚才那个小地方补上了。我们回到原题，只看这一问：", point),
     currentStep: `回到闯关：${assessment.prompt}`,
     evidenceSignal: "补完后回到原题",
     evidenceText: `孩子已补上 ${atom?.atom_name || point.point_name}，回到 ${assessment.prompt}`,
