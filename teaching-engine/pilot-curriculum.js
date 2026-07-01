@@ -22,6 +22,7 @@ export const pilotKnowledgeModules = [
         lesson_ids: ["g1a-carry-add-20"],
         point_name: "9加几",
         child_title: "9加几：先凑成10",
+        teaching_family: "makeTenAdd",
         entry_question: "9+4可以怎样算得更快？",
         atoms: [
           {
@@ -121,6 +122,7 @@ export const pilotKnowledgeModules = [
         lesson_ids: ["renminbi-conversion"],
         point_name: "人民币单位换算",
         child_title: "元和角：先换成同一种单位",
+        teaching_family: "money",
         entry_question: "3元5角一共是几角？",
         atoms: [
           {
@@ -227,6 +229,7 @@ export const pilotKnowledgeModules = [
         lesson_ids: ["g1b-simple-shopping"],
         point_name: "简单购物找钱",
         child_title: "购物找钱：付的钱减去价格",
+        teaching_family: "moneyApplication",
         entry_question: "一本本子4元，付5元，应找回多少钱？",
         atoms: [
           {
@@ -327,6 +330,7 @@ export const pilotKnowledgeModules = [
         lesson_ids: ["g2a-multiply-meaning"],
         point_name: "几个几",
         child_title: "几个几：一组一组地数",
+        teaching_family: "multiplication",
         entry_question: "3盘苹果，每盘4个，一共有几个？",
         atoms: [
           {
@@ -403,6 +407,73 @@ export const pilotKnowledgeModules = [
     ],
   },
 ];
+
+enrichPilotKnowledgeModules(pilotKnowledgeModules);
+
+function enrichPilotKnowledgeModules(modules) {
+  for (const module of modules || []) {
+    for (const point of module.points || []) {
+      for (const atom of point.atoms || []) {
+        const teaching = createPilotAtomTeaching(point, atom);
+        atom.teach_prompt = atom.teach_prompt || teaching.teachPrompt;
+        atom.repair_prompt = atom.repair_prompt || teaching.repairPrompt;
+        atom.no_response_prompt = atom.no_response_prompt || teaching.noResponsePrompt;
+        atom.return_prompt = atom.return_prompt || `我们先回到这一小步：${atom.atom_name}。`;
+        atom.repeat_sentence = atom.repeat_sentence || teaching.repeatSentence;
+        atom.check_keywords = uniquePilotKeywords([...(atom.check_keywords || []), teaching.repeatSentence, ...(teaching.extraKeywords || [])]);
+        atom.assessment_targets = uniquePilotKeywords([...(atom.assessment_targets || []), teaching.repeatSentence]);
+      }
+    }
+  }
+}
+
+function createPilotAtomTeaching(point, atom) {
+  const name = String(atom.atom_name || "");
+  const pointName = String(point.point_name || point.child_title || "");
+  const key = `${pointName} ${name}`;
+
+  if (/10的分与合/.test(key)) return pilotTeaching("凑十之前，先找10的朋友。9还差1到10。", "9还差1到10", ["10的朋友", "还差1"]);
+  if (/看到9先想差1/.test(key)) return pilotTeaching("看到9加几，先不硬算，先想9差1就到10。", "9差1到10", ["拿1给9", "凑成10"]);
+  if (/把另一个数拆/.test(key)) return pilotTeaching("要从另一个数里拿出1给9，剩下的不能丢。", "把另一个数拆成1和剩下的数", ["拆数", "剩下"]);
+  if (/10再加剩下/.test(key)) return pilotTeaching("9拿到1变成10，再把剩下的数加回来。", "10再加剩下的数", ["10加", "剩下"]);
+  if (/说清为什么这样算/.test(key)) return pilotTeaching("会算以后要讲原因：先凑成10，是因为10加几更好算。", "因为10更好算，所以先凑十", ["10更好算", "凑十"]);
+
+  if (/认识元和角/.test(key)) return pilotTeaching("人民币题先看单位。元和角是不同单位，不能直接混着算。", "先看元和角是不是同一种单位", ["元", "角", "单位"]);
+  if (/1元等于10角/.test(key)) return pilotTeaching("记住关键关系：1元可以换成10个1角。", "1元等于10角", ["1元", "10角"]);
+  if (/1角等于10分/.test(key)) return pilotTeaching("角和分也有关系：1角可以换成10个1分。", "1角等于10分", ["1角", "10分"]);
+  if (/把几元换成几十角/.test(key)) return pilotTeaching("几元就有几个10角。3元就是3个10角，也就是30角。", "3元是30角", ["几个10角", "30角"]);
+  if (/再加原来的几角/.test(key)) return pilotTeaching("整元换成角以后，还要加上题里原来的几角。", "30角再加5角", ["再加", "原来的几角"]);
+  if (/为什么先换单位/.test(key)) return pilotTeaching("能算以后讲原因：元和角单位不同，所以先换成同一种单位。", "因为单位不同，所以先换成角", ["单位不同", "同一种单位"]);
+
+  if (/看清商品价格/.test(key)) return pilotTeaching("购物题先看商品价格，就是东西本身要多少钱。", "先看商品价格", ["价格", "商品"]);
+  if (/看清付了多少钱/.test(key)) return pilotTeaching("再看付出去多少钱。价格和付的钱要分开放。", "再看付了多少钱", ["付了", "给了"]);
+  if (/找回就是剩下的钱/.test(key)) return pilotTeaching("找回的钱，是付的钱里花掉价格以后剩下的部分。", "找回是剩下的钱", ["找回", "剩下"]);
+  if (/用减法算找回/.test(key)) return pilotTeaching("找回要用付的钱减商品价格。", "付的钱减价钱", ["减法", "付的钱减价格"]);
+  if (/为什么用减法/.test(key)) return pilotTeaching("讲原因时说：付了5元，花掉4元，剩下1元要找回。", "因为找回是剩下的钱，所以用减法", ["剩下", "用减法"]);
+
+  if (/每组同样多/.test(key)) return pilotTeaching("乘法先看每组是不是同样多。每组一样多，才能说几个几。", "每组同样多", ["同样多", "每组"]);
+  if (/数有几组/.test(key)) return pilotTeaching("再数一共有几组，组数和每组个数要分清。", "再看有几组", ["组数", "几组"]);
+  if (/用连加表示几个几/.test(key)) return pilotTeaching("几个几可以先写成同数连加。3个4就是4+4+4。", "几个几可以写成连加", ["连加", "几个几"]);
+  if (/用乘法表示几个几/.test(key)) return pilotTeaching("同数连加可以写成乘法，这样更简便。", "几个几可以用乘法表示", ["乘法", "同数连加"]);
+
+  const repeat = atom.check_keywords?.[0] || name || "先说当前小台阶";
+  return pilotTeaching(`这一步只看「${name}」，不用一次讲完整题。`, repeat, [name]);
+}
+
+function pilotTeaching(explain, repeatSentence, extraKeywords = []) {
+  const repeat = String(repeatSentence || "").trim().replace(/[。！？.!?]+$/, "");
+  return {
+    teachPrompt: `${explain} 你先跟老师说一句：${repeat}。`,
+    repairPrompt: `${explain} 如果不会，就先跟着说：${repeat}。`,
+    noResponsePrompt: `没关系，老师先说：${repeat}。你跟着说一遍就行。`,
+    repeatSentence: repeat,
+    extraKeywords,
+  };
+}
+
+function uniquePilotKeywords(values) {
+  return Array.from(new Set((values || []).map((item) => String(item || "").trim()).filter(Boolean)));
+}
 
 function question(id, dimension, prompt, atomIds, expectedKeywords = [], expected = {}) {
   return {
