@@ -1352,6 +1352,14 @@ function createStrategyVariantQuestionMessage(family, prompt, firstStep, key) {
   }
 }
 
+function createStrategyDialogueMove(family, kind, key, options = {}) {
+  try {
+    return window.LezhiTeachingStrategies?.createDialogueMove?.({ family, kind, key, ...options }) || "";
+  } catch (error) {
+    return "";
+  }
+}
+
 function getTeachingStandards() {
   const externalStandards = getExternalTeachingStandards();
   if (externalStandards && Object.keys(externalStandards).length) return externalStandards;
@@ -2587,31 +2595,34 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
       ];
   const lesson = typeof currentLesson === "function" ? currentLesson() : null;
   const activeQuestion = lesson?.activeQuestion || {};
+  const family = inferActiveQuestionFamily(lesson, activeQuestion);
   const nextLead = pickNaturalVariant(
     leadOptions,
     `${lesson?.id || ""}|${activeQuestion.id || activeQuestion.prompt || ""}|${state?.lastStudentText || ""}|${nextPlan?.label || ""}|${previousPlan?.label || ""}|${nextPlan?.index || 0}`,
   );
   const familyBridge = createFamilyProgressBridge(nextPlan, previousPlan, lesson);
+  const moveKey = `${lesson?.id || ""}|${activeQuestion.id || activeQuestion.prompt || ""}|${state?.lastStudentText || ""}|${nextPlan?.label || ""}|${previousPlan?.label || ""}|${state?.passedQuestionIds?.length || 0}`;
+  const move = createStrategyDialogueMove(family, nextPlan?.isReason ? "teachback" : "advance", moveKey) || childGuideBridge(nextPlan, previousPlan);
   let message = "";
   if (familyBridge && !bridge) {
     const nextPrompt = follow || formatChildStepPrompt(nextPlan);
-    message = `${childGuideBridge(nextPlan, previousPlan)}${familyBridge}${nextPrompt}`;
+    message = `${move}${familyBridge}${nextPrompt}`;
     return softenTeacherScaffoldText(message);
   }
   if (bridge) {
     const nextPrompt = follow || formatChildStepPrompt(nextPlan);
-    message = `${childGuideBridge(nextPlan, previousPlan)}${bridge} ${nextLead}：${nextPrompt}`;
+    message = `${move}${bridge} ${nextLead}：${nextPrompt}`;
     return softenTeacherScaffoldText(message);
   }
   if (nextPlan?.isReason) {
-    message = `${childGuideBridge(nextPlan, previousPlan)}${nextLead}：${follow || formatChildStepPrompt(nextPlan)}`;
+    message = `${move}${nextLead}：${follow || formatChildStepPrompt(nextPlan)}`;
     return softenTeacherScaffoldText(message);
   }
   if (previousPlan?.label && nextPlan?.label) {
-    message = `${childGuideBridge(nextPlan, previousPlan)}${nextLead}：${formatChildStepPrompt(nextPlan)}`;
+    message = `${move}${nextLead}：${formatChildStepPrompt(nextPlan)}`;
     return softenTeacherScaffoldText(message);
   }
-  message = `${childGuideBridge(nextPlan, previousPlan)}下一步：${formatChildStepPrompt(nextPlan)}`;
+  message = `${move}下一步：${formatChildStepPrompt(nextPlan)}`;
   return softenTeacherScaffoldText(message);
 }
 
@@ -2670,12 +2681,23 @@ function createFamilyProgressBridge(nextPlan, previousPlan = null, lesson = curr
 }
 
 function teacherRepairMessage(prefix, plan) {
+  const lesson = typeof currentLesson === "function" ? currentLesson() : null;
+  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
   const lastStudentText = normalizeText(state?.lastStudentText || "");
   const saysCannot = isCannotAnswerText(lastStudentText);
   const repairCount = getGuidedRepairAttemptCount(plan);
   const shouldModelAnswer = saysCannot || repairCount >= 2;
   const rawLead = String(prefix || (saysCannot ? "没关系，我们把这一步讲小一点。" : "这次还没对上。")).replace(/[。！？!?]*$/, "。");
-  const lead = saysCannot
+  const moveKind = saysCannot ? "cannotAnswer" : /没连上|答非所问|当前小问题/.test(rawLead) ? "offTopic" : "repair";
+  const strategyLead = createStrategyDialogueMove(
+    family,
+    moveKind,
+    `${lesson?.id || ""}|${lesson?.activeQuestion?.id || lesson?.problem || ""}|${plan?.label || ""}|${lastStudentText}|${repairCount}`,
+    { includeHint: shouldModelAnswer && !plan?.isReason },
+  );
+  const lead = strategyLead
+    ? ensureChineseSentence(strategyLead)
+    : saysCannot
     ? "没关系，这一步老师先示范。"
     : /没连上|答非所问|当前小问题/.test(rawLead)
     ? "刚才那句话先放一边，我们回到这道小题。"
@@ -4823,6 +4845,21 @@ function createInitialEvidence(lesson) {
   };
 }
 
+function createEmptyMasteryEvidence() {
+  return {
+    direct: 0,
+    variant: 0,
+    reasoning: 0,
+    teachback: 0,
+  };
+}
+
+function recordMasteryEvidence(kind) {
+  if (!state.masteryEvidence) state.masteryEvidence = createEmptyMasteryEvidence();
+  if (!Object.prototype.hasOwnProperty.call(state.masteryEvidence, kind)) return;
+  state.masteryEvidence[kind] += 1;
+}
+
 let state = {
   view: "child",
   lessonIndex: 0,
@@ -4846,6 +4883,7 @@ let state = {
   teachingState: "GUIDED_STEP",
   currentAtomName: lessons[0].useQuestionBankTutor ? createGuidedStepPlan(lessons[0], 0).label : "",
   engineSession: null,
+  masteryEvidence: createEmptyMasteryEvidence(),
   passedQuestionIds: [],
   parentSignals: null,
   feynmanStatus: "还没开始讲",
@@ -4962,6 +5000,7 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
   const firstStep = formatChildStepPrompt(starter);
   const family = lesson.activeQuestionFamily || inferQuestionTeachingFamily(lesson, question);
   const key = `${lesson.id}|${question?.id || prompt}|${starter?.label || ""}|${reason}|${state.passedQuestionIds?.length || 0}`;
+  const move = createStrategyDialogueMove(family, "variant", key);
   if ((starter?.index || 0) > 0) {
     const lighterVariants = [
       `这次老师少提示一点。${prompt} 你先试这个关键处：${firstStep}`,
@@ -4969,10 +5008,10 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
       `这题和刚才是同一种方法。${prompt} 你先说关键一步：${firstStep}`,
       `这次看看你能不能迁移。${prompt} 先不用讲完整，只回答：${firstStep}`,
     ];
-    return softenTeacherScaffoldText(pickNaturalVariant(lighterVariants, key));
+    return softenTeacherScaffoldText(`${move || ""}${pickNaturalVariant(lighterVariants, key)}`);
   }
   const strategyVariant = createStrategyVariantQuestionMessage(family, prompt, firstStep, key);
-  if (strategyVariant) return softenTeacherScaffoldText(strategyVariant);
+  if (strategyVariant) return softenTeacherScaffoldText(`${move || ""}${strategyVariant}`);
   const variants = {
     makeTenAdd: [
       `换个小题，还是用凑十。${prompt} 先想：${firstStep}`,
@@ -7039,6 +7078,7 @@ function changeLesson(reason, targetIndex = null) {
   state.teachingState = "GUIDED_STEP";
   state.currentAtomName = starter?.label || "";
   state.engineSession = null;
+  state.masteryEvidence = createEmptyMasteryEvidence();
   state.passedQuestionIds = [];
   state.parentSignals = null;
   state.feynmanStatus = "还没开始讲";
@@ -8000,6 +8040,7 @@ function evaluateQuestionBankAttempt(text, inputType) {
   }
 
   if (stepMatched || (plan.isReason && looksLikeReason(normalized))) {
+    if (plan.isReason) recordMasteryEvidence("reasoning");
     advanceGuidedStepOrComplete(lesson, plan, inputType);
     return;
   }
@@ -8010,6 +8051,7 @@ function evaluateQuestionBankAttempt(text, inputType) {
       return;
     }
     if (plan.isFinal || plan.index >= plan.totalSteps - 1) {
+      if (hasProcessSignalForFullAnswer(normalized)) recordMasteryEvidence("reasoning");
       completeQuestionBankRound(lesson, inputType);
     } else {
       askReasonAfterFullAnswer(lesson, inputType);
@@ -8077,6 +8119,11 @@ function completeQuestionBankRound(lesson, inputType) {
     return;
   }
 
+  if (!state.masteryEvidence?.teachback) {
+    startKnowledgeTeachbackCheck(lesson, inputType);
+    return;
+  }
+
   state.phase = "summary";
   state.mastery = Math.max(state.mastery, 86);
   state.completedSteps = getLessonLadderSteps(lesson).length;
@@ -8092,6 +8139,50 @@ function completeQuestionBankRound(lesson, inputType) {
   resetGeneratedVisualForTurn();
   addEvidence("知识点过关", `已用 ${passedCount} 道小题确认掌握，没有继续机械刷题。`, inputType === "voice" ? "语音回答" : "键盘回答");
   speakCurrentMessage();
+}
+
+function startKnowledgeTeachbackCheck(lesson, inputType) {
+  const family = getLessonTeachingFamily(lesson);
+  const key = `${lesson?.id || ""}|${lesson?.activeQuestion?.id || lesson?.problem || ""}|teachback|${state.passedQuestionIds?.length || 0}`;
+  const move = createStrategyDialogueMove(family, "teachback", key);
+  state.phase = "teachback";
+  state.mastery = Math.max(state.mastery, 82);
+  state.completedSteps = getLessonLadderSteps(lesson).length;
+  state.currentStep = "最后一步：讲给老师听";
+  state.currentAtomName = "讲清方法";
+  state.teachingState = "FEYNMAN_CHECK";
+  state.aiContext = "孩子已通过直接题和变式题，进入讲给老师听。";
+  state.aiMessage = `${move || "现在换你当小老师。"}${createTeachbackCheckPrompt(lesson)}`;
+  state.feynmanStatus = "等待孩子讲";
+  state.showVisual = true;
+  resetGeneratedVisualForTurn();
+  addEvidence("进入费曼复述", "孩子做题和变式已通过，开始检查是否能用自己的话讲清。", inputType === "voice" ? "语音回答" : "键盘回答");
+  speakCurrentMessage();
+}
+
+function createTeachbackCheckPrompt(lesson) {
+  const family = getLessonTeachingFamily(lesson);
+  const topic = lesson?.node || lesson?.lesson || "这类题";
+  const prompts = {
+    money: `你只讲方法：遇到「${topic}」，为什么要先换单位？`,
+    moneyApplication: `你只讲方法：购物找零题，先看什么，再怎么算？`,
+    makeTenAdd: `你只讲方法：什么时候用凑十？先补什么，再算什么？`,
+    breakTenSubtract: `你只讲方法：个位不够减时，为什么要破十？`,
+    concreteAddition: `你只讲方法：为什么这类题要把两部分合起来？`,
+    concreteSubtraction: `你只讲方法：为什么这类题要从原来里面拿走？`,
+    multiplication: `你只讲方法：怎么从图里看出“几个几”？`,
+    division: `你只讲方法：为什么平均分可以用除法想？`,
+    compare: `你只讲方法：比较两边时，先看什么，再填什么？`,
+    calculation: `你只讲方法：做计算题时，先看符号还是先猜答案？`,
+    application: `你只讲方法：解决问题时，先看题目问什么，还是先乱算数字？`,
+    placeValue: `你只讲方法：十位和个位分别表示什么？`,
+    time: `你只讲方法：读钟面时先看哪根针，再看哪根针？`,
+    measure: `你只讲方法：选单位或量长度时，先看什么？`,
+    shape: `你只讲方法：判断图形时，不能只看像不像，要看什么？`,
+    data: `你只讲方法：读表时，先找什么，再比较什么？`,
+    logic: `你只讲方法：推理题为什么不能靠猜？`,
+  };
+  return prompts[family] || `你只讲方法：这类题先看什么，再做什么？`;
 }
 
 function createCompletionMessage(lesson = currentLesson(), prefix = "这个知识点先过关。你不是只背答案，也能说出怎么想。") {
@@ -8256,7 +8347,11 @@ function formatExpectedAnswer(question, lesson) {
 function recordQuestionPass(lesson = currentLesson()) {
   const id = lesson.activeQuestion?.id || lesson.problem;
   if (!id) return;
+  const beforeCount = (state.passedQuestionIds || []).length;
   state.passedQuestionIds = uniqueKeywords([...(state.passedQuestionIds || []), id]);
+  if ((state.passedQuestionIds || []).length > beforeCount) {
+    recordMasteryEvidence(beforeCount === 0 ? "direct" : "variant");
+  }
 }
 
 function maybeContinueWithVariantAfterTeachback(inputType) {
@@ -8292,12 +8387,38 @@ function maybeContinueWithVariantAfterTeachback(inputType) {
 function evaluateTeachback(text, inputType) {
   const lesson = currentLesson();
   const normalized = normalizeText(text);
+  if (isCannotAnswerText(normalized) || isUnclearChildText(normalized)) {
+    const family = getLessonTeachingFamily(lesson);
+    const move = createStrategyDialogueMove(family, "cannotAnswer", `${lesson?.id || ""}|teachback|${normalized}`, { includeHint: true });
+    state.phase = "repair";
+    state.mastery = Math.max(state.mastery, 72);
+    state.currentStep = "最后一步：再讲一次";
+    state.aiContext = "孩子讲不出来，老师给半句示范。";
+    state.aiMessage = `${move || "没关系，老师先示范一句。"}${lesson.repairPrompt || createTeachbackCheckPrompt(lesson)}`;
+    state.feynmanStatus = "会做但讲不清";
+    state.showVisual = true;
+    state.strategyIndex = 1;
+    state.bestStrategy = lesson.strategies[1]?.label || "画图";
+    resetGeneratedVisualForTurn();
+    addEvidence("讲不出来", "孩子还不能复述方法，AI 给半句示范，不直接判错。", "费曼补救");
+    speakCurrentMessage();
+    return;
+  }
   const mentionsConcept = includesAny(normalized, lesson.answer.conceptKeywords);
   const explainsWhy = includesAny(normalized, lesson.answer.whyKeywords);
   const usesOwnWords = includesAny(normalized, lesson.answer.ownWordsKeywords);
   const comparesResult = includesAny(normalized, lesson.answer.resultKeywords);
+  const methodLikeTeachback =
+    looksLikeReason(normalized) &&
+    (mentionsConcept || usesOwnWords || normalized.length >= 8);
+  const enoughTeachback =
+    mentionsConcept &&
+    explainsWhy &&
+    (comparesResult || usesOwnWords || methodLikeTeachback);
 
-  if (mentionsConcept && explainsWhy && comparesResult) {
+  if (enoughTeachback) {
+    recordMasteryEvidence("teachback");
+    recordMasteryEvidence("reasoning");
     recordQuestionPass(lesson);
     if (maybeContinueWithVariantAfterTeachback(inputType)) return;
 

@@ -25,6 +25,7 @@ const weakPoints = pointReports.filter((item) => item.level === "weak").length;
 const familyReady = familyReports.filter((item) => item.ready).length;
 const overlayCoveredPoints = pointReports.filter((item) => item.hasOverlay).length;
 const naturalnessScore = Math.round(average(pointReports.map((item) => item.naturalnessScore)));
+const answerabilityScore = Math.round(average(pointReports.map((item) => item.answerabilityScore)));
 const templatePhraseHits = pointReports.reduce((sum, item) => sum + item.templatePhraseHits, 0);
 const answerLeakHits = pointReports.reduce((sum, item) => sum + item.answerLeakHits, 0);
 
@@ -34,7 +35,8 @@ const completion = Math.round(
     (overlayCoveredPoints / Math.max(pointReports.length, 1)) * 0.1 +
     (average(pointReports.map((item) => item.assessmentScore)) / 100) * 0.08 +
     (average(pointReports.map((item) => item.remediationScore)) / 100) * 0.08 +
-    (naturalnessScore / 100) * 0.06) *
+    (naturalnessScore / 100) * 0.04 +
+    (answerabilityScore / 100) * 0.02) *
     100,
 );
 
@@ -48,6 +50,7 @@ const summary = {
   needsWorkPoints,
   weakPoints,
   naturalnessScore,
+  answerabilityScore,
   templatePhraseHits,
   answerLeakHits,
   teachingDataCompletion: completion,
@@ -151,6 +154,7 @@ function scorePoint(point) {
     assessmentScore: assessments.length >= 4 && dimensions.has("direct_problem") && dimensions.has("variant_problem") && dimensions.has("reasoning") ? 100 : 55,
     remediationScore: remediationRules.length >= atoms.length ? 100 : remediationRules.length >= 3 ? 70 : 50,
     naturalnessScore: naturalness.score,
+    answerabilityScore: naturalness.answerabilityScore,
     templatePhraseHits: naturalness.templatePhraseHits,
     answerLeakHits: naturalness.answerLeakHits,
   };
@@ -182,6 +186,7 @@ function scoreNaturalness(point, atoms) {
   const modelSteps = atoms.filter((atom) => /先|方法|因为|表示|看|找|换|凑|破|平均|数位|单位/.test(atom.teach_prompt || "")).length;
   const questionSteps = atoms.filter((atom) => /多少|几|哪|什么|为什么|吗|？|\?/.test(atom.teach_prompt || "")).length;
   const reasonSteps = atoms.filter((atom) => /为什么|原因|说清|因为/.test(atom.atom_name || atom.teach_prompt || "")).length;
+  const answerability = scoreAnswerability(atoms);
 
   let score = 100;
   const gaps = [];
@@ -205,13 +210,48 @@ function scoreNaturalness(point, atoms) {
     score -= 10;
     gaps.push("缺少说理环节");
   }
+  if (answerability.score < 82) {
+    score -= Math.min(16, Math.round((82 - answerability.score) * 0.35));
+    gaps.push(...answerability.gaps);
+  }
   return {
     score: Math.max(0, score),
     penalty: Math.max(0, 100 - score) * 0.18,
     gaps,
+    answerabilityScore: answerability.score,
     templatePhraseHits,
     answerLeakHits,
   };
+}
+
+function scoreAnswerability(atoms) {
+  const teachPrompts = atoms.map((atom) => String(atom.teach_prompt || "")).filter(Boolean);
+  if (!teachPrompts.length) return { score: 55, gaps: ["缺少儿童可回答提问"] };
+  const clearActionPattern = /多少|几|哪|什么|为什么|吗|？|\?|说|回答|填|选|找|看|比|算|读|讲|判断|指出|写|圈|数/;
+  const modelOnlyPattern = /老师先|先听老师|老师带你|老师示范|老师把/;
+  const clearCount = teachPrompts.filter((text) => clearActionPattern.test(text) || modelOnlyPattern.test(text)).length;
+  const tooLongCount = teachPrompts.filter((text) => normalizeForLength(text).length > 96).length;
+  const vagueCount = teachPrompts.filter((text) => /认识[^。！？!?]{0,18}$|理解[^。！？!?]{0,18}$|掌握[^。！？!?]{0,18}$/.test(normalizeForLength(text))).length;
+  const clearRatio = clearCount / teachPrompts.length;
+  let score = 100;
+  const gaps = [];
+  if (clearRatio < 0.72) {
+    score -= Math.round((0.72 - clearRatio) * 60);
+    gaps.push("部分提问不够明确，孩子可能不知道答什么");
+  }
+  if (tooLongCount > 0) {
+    score -= Math.min(18, tooLongCount * 3);
+    gaps.push("部分老师话术过长");
+  }
+  if (vagueCount > 0) {
+    score -= Math.min(12, vagueCount * 4);
+    gaps.push("部分小台阶只写知识名，缺少可回答动作");
+  }
+  return { score: Math.max(0, score), gaps };
+}
+
+function normalizeForLength(text) {
+  return String(text || "").replace(/\s+/g, "");
 }
 
 function countPatternHits(text, patterns) {
@@ -241,6 +281,7 @@ function printHumanSummary(data) {
   console.log(`- 需要继续打磨的知识点：${data.needsWorkPoints}`);
   console.log(`- 明显薄弱的知识点：${data.weakPoints}`);
   console.log(`- 话术自然度估算：${data.naturalnessScore}%`);
+  console.log(`- 儿童可回答度估算：${data.answerabilityScore}%`);
   console.log(`- 机械模板命中：${data.templatePhraseHits}`);
   console.log(`- 疑似提前泄露答案命中：${data.answerLeakHits}`);
   console.log(`- 教学数据完成度估算：${data.teachingDataCompletion}%`);

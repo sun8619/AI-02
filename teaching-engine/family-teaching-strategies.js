@@ -10,6 +10,48 @@
       variants: [],
       stepBridge: [],
       reasonBridge: [],
+      dialogueMoves: {
+        modelFirst: [
+          "这一步老师先示范一句，不用你马上想完整。",
+          "这里先听老师讲一个小方法，等会儿你接半句就行。",
+          "这个地方容易卡，我们先把方法说清楚。",
+        ],
+        advance: [
+          "刚才那点对了，我们只往前走一小步。",
+          "可以，先把这个想法放稳，再看下一点。",
+          "好，继续看眼前这个小地方。",
+        ],
+        repair: [
+          "这次没关系，不重来整题，只补一个小地方。",
+          "刚才那句还没接到题上，老师把问题缩小。",
+          "先别急着猜答案，我们回到这一小步。",
+        ],
+        offTopic: [
+          "这句话先放一边，我们回到题目里的小问题。",
+          "老师听到了，不过现在先看眼前这一步。",
+          "我们先不跑远，继续看这道题。",
+        ],
+        cannotAnswer: [
+          "不会说也可以，老师先给你一句能跟上的。",
+          "这一步有点绕，老师先讲，你照着接半句。",
+          "先不用自己编，跟着老师把关键话说出来。",
+        ],
+        variant: [
+          "换个小变化，方法还是刚才那个。",
+          "这次数字或图变了，想法不变。",
+          "再来一道同类题，看看方法是不是稳了。",
+        ],
+        teachback: [
+          "现在换你当小老师，只讲方法，不用讲很长。",
+          "你可以用自己的话说一遍：先看什么，再做什么。",
+          "像教老师一样说一句：为什么这样做。",
+        ],
+        completion: [
+          "这个知识点先过关，你不是只会答案，也知道怎么想。",
+          "这一步稳了，可以休息一下，也可以继续下一个小知识点。",
+          "今天这个小目标完成了，后面再换题确认一下就更稳。",
+        ],
+      },
       stuckHint: "",
       ...data,
     };
@@ -436,11 +478,23 @@
     return `${opener}${payload?.prompt ? ` 看这题：${payload.prompt}` : ""} ${payload?.firstStep || ""}`.trim();
   }
 
+  function createDialogueMove(payload) {
+    const family = payload?.family || "generic";
+    const item = strategies[family] || strategies.generic;
+    const kind = payload?.kind || "advance";
+    const key = payload?.key || "";
+    const move = pick(item.dialogueMoves?.[kind] || strategies.generic.dialogueMoves[kind] || [], key);
+    const step = payload?.step ? ` ${payload.step}` : "";
+    const hint = payload?.includeHint && item.stuckHint ? ` ${item.stuckHint}` : "";
+    return `${move}${hint}${step}`.trim();
+  }
+
   window.LezhiTeachingStrategies = {
     getTeachingStandards,
     getStrategy,
     createScaffoldHint,
     getProgressBridge,
     createVariantMessage,
+    createDialogueMove,
   };
 })();
