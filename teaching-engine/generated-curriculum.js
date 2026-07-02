@@ -771,18 +771,56 @@ function pick(items, key) {
 function teacherModelStep(label, explain, repeatSentence, keywords = [], options = {}) {
   const repeat = String(repeatSentence || label).trim().replace(/[。！？.!?]+$/, "");
   const opener = pick(modelPromptOpeners, `${label}-${repeat}`);
-  const closer = pick(childTryClosers, `${repeat}-${label}`);
+  const teachingLine = createModelTeachingLine(label, explain, repeat, `${label}-${repeat}-${explain}`);
   return makeStep(
     label,
-    `${opener}：${explain} 现在只练一句：${repeat}。${closer}`,
+    teachingLine || `${opener}：${explain} 现在试着抓住：${repeat}。`,
     unique([...keywords, ...phraseKeywords(repeat)]),
-    options.repair || `${explain} 如果一下子说不出来，就先说关键词：${phraseKeywords(repeat).slice(0, 2).join("、") || repeat}。`,
+    options.repair || createModelRepairLine(label, explain, repeat),
     {
       ...options,
       repeatSentence: repeat,
-      noResponse: options.noResponse || `没关系，老师先把方法句放在这里：${repeat}。你可以只跟读最后几个字。`,
+      noResponse: options.noResponse || createModelNoResponseLine(label, explain, repeat),
     }
   );
+}
+
+function createModelTeachingLine(label, explain, repeat, key) {
+  const cleanExplain = cleanPromptSentence(explain);
+  const cleanRepeat = cleanPromptSentence(repeat);
+  const variants = [
+    `老师先讲清楚：${cleanExplain} 你听完抓住这句：${cleanRepeat}。`,
+    `${cleanExplain} 我们先把它变成一句短话：${cleanRepeat}。`,
+    `这一点先不让你猜。${cleanExplain} 现在你只接一句：${cleanRepeat}。`,
+    `把题和图连起来看：${cleanExplain} 你可以先说关键词：${cleanRepeat}。`,
+    `这一步老师先示范。${cleanExplain} 等会儿你用自己的话说：${cleanRepeat}。`,
+  ];
+  return pick(variants, key);
+}
+
+function createModelRepairLine(label, explain, repeat) {
+  const cleanExplain = cleanPromptSentence(explain);
+  const cleanRepeat = cleanPromptSentence(repeat);
+  const keywords = phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat;
+  const variants = [
+    `${cleanExplain} 这次不用说完整，先抓关键词：${keywords}。`,
+    `刚才差一点连到方法上。再看这句：${cleanRepeat}。`,
+    `老师把问题缩小：${cleanExplain} 你先说「${keywords}」也可以。`,
+    `先别急着报整题答案，回到这一步：${cleanRepeat}。`,
+  ];
+  return pick(variants, `${label}-${repeat}-repair`);
+}
+
+function createModelNoResponseLine(label, explain, repeat) {
+  const cleanExplain = cleanPromptSentence(explain);
+  const cleanRepeat = cleanPromptSentence(repeat);
+  const variants = [
+    `没关系，这一步老师先带着走。${cleanExplain} 你可以只跟最后半句：${cleanRepeat}。`,
+    `不会说也可以。先听方法：${cleanExplain} 然后试着说一个词。`,
+    `我们先不答整题，只把这句放稳：${cleanRepeat}。`,
+    `这一步可以跟读，不用自己编。老师说：${cleanRepeat}。`,
+  ];
+  return pick(variants, `${label}-${repeat}-no-response`);
 }
 
 function teacherAskStep(label, teach, keywords = [], options = {}) {

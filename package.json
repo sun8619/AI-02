@@ -11,6 +11,7 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "audit:teaching": "node teaching-engine/teaching-quality-audit.js"
+    "audit:teaching": "node teaching-engine/teaching-quality-audit.js",
+    "audit:scenarios": "node teaching-engine/teaching-scenario-audit.js"
   }
 }

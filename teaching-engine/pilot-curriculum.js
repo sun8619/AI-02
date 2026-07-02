@@ -461,14 +461,67 @@ function createPilotAtomTeaching(point, atom) {
 }
 
 function pilotTeaching(explain, repeatSentence, extraKeywords = []) {
-  const repeat = String(repeatSentence || "").trim().replace(/[。！？.!?]+$/, "");
+  const repeat = cleanPilotSentence(repeatSentence || "");
   return {
-    teachPrompt: `${explain} 这一小步先只练一句：${repeat}。你说半句也可以。`,
-    repairPrompt: `${explain} 如果不会，先说关键词：${repeat}。`,
-    noResponsePrompt: `没关系，先不急着答完整。老师把方法句放在这里：${repeat}。你可以只跟读后半句。`,
+    teachPrompt: createPilotTeachPrompt(explain, repeat),
+    repairPrompt: createPilotRepairPrompt(explain, repeat),
+    noResponsePrompt: createPilotNoResponsePrompt(explain, repeat),
     repeatSentence: repeat,
     extraKeywords,
   };
+}
+
+function createPilotTeachPrompt(explain, repeat) {
+  const cleanExplain = cleanPilotSentence(explain);
+  const cleanRepeat = cleanPilotSentence(repeat);
+  const variants = [
+    `老师先示范方法：${cleanExplain} 接下来你抓住这句：${cleanRepeat}。`,
+    `这一步先听懂，不急着算完整题。${cleanExplain} 你可以用自己的话说：${cleanRepeat}。`,
+    `我们把大题缩小来看。${cleanExplain} 现在只要连上这个意思：${cleanRepeat}。`,
+    `先看图和题怎么连起来：${cleanExplain} 你试着说出关键词：${cleanRepeat}。`,
+    `这次老师先铺路。${cleanExplain} 等会儿你接着说：${cleanRepeat}。`,
+  ];
+  return pickPilotLine(variants, `${cleanExplain}-${cleanRepeat}-teach`);
+}
+
+function createPilotRepairPrompt(explain, repeat) {
+  const cleanExplain = cleanPilotSentence(explain);
+  const cleanRepeat = cleanPilotSentence(repeat);
+  const cue = cleanRepeat.split(/[，,；;、\s]+/).filter(Boolean).slice(0, 2).join("、") || cleanRepeat;
+  const variants = [
+    `刚才差一点。我们退回这一步：${cleanExplain} 先说「${cue}」就行。`,
+    `不重做整题，只补这个小地方：${cleanRepeat}。`,
+    `老师把问题缩小：${cleanExplain} 你先抓住「${cue}」。`,
+    `先别猜最后答案，回到方法：${cleanRepeat}。`,
+    `这一步还没稳。再看一次：${cleanExplain} 然后说一个关键词。`,
+  ];
+  return pickPilotLine(variants, `${cleanExplain}-${cleanRepeat}-repair`);
+}
+
+function createPilotNoResponsePrompt(explain, repeat) {
+  const cleanExplain = cleanPilotSentence(explain);
+  const cleanRepeat = cleanPilotSentence(repeat);
+  const variants = [
+    `说不出来也正常，老师先带一遍：${cleanExplain} 你听完说一个词就可以。`,
+    `这一步先不用自己想句子。老师说：${cleanRepeat}。你跟着说一遍。`,
+    `我们先把方法放稳：${cleanExplain} 你只要记住「${cleanRepeat}」。`,
+    `没关系，先看老师怎么说：${cleanRepeat}。下一轮再让你自己讲。`,
+    `先不答整题，只练这个意思：${cleanRepeat}。`,
+  ];
+  return pickPilotLine(variants, `${cleanExplain}-${cleanRepeat}-no-response`);
+}
+
+function cleanPilotSentence(text) {
+  return String(text || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/[。！？.!?]+$/, "");
+}
+
+function pickPilotLine(items, key) {
+  const text = String(key || "");
+  const index = Array.from(text).reduce((sum, char) => sum + char.codePointAt(0), 0) % items.length;
+  return items[index];
 }
 
 function uniquePilotKeywords(values) {
