@@ -2477,7 +2477,7 @@ function shouldModelBeforeAsking(plan) {
 function formatTeacherModelFirstPrompt(plan) {
   const hint = stripTeacherFollowInstruction(ensureChineseSentence(plan.teacherHint));
   const follow = createContextualFollowSentence(plan);
-  return `${hint}你先跟老师说一句：${follow}。`;
+  return `${hint}现在只练一句：${follow}。你说半句也可以。`;
 }
 
 function createContextualFollowSentence(plan) {
@@ -2672,6 +2672,8 @@ function createFamilyProgressBridge(nextPlan, previousPlan = null, lesson = curr
 function teacherRepairMessage(prefix, plan) {
   const lastStudentText = normalizeText(state?.lastStudentText || "");
   const saysCannot = isCannotAnswerText(lastStudentText);
+  const repairCount = getGuidedRepairAttemptCount(plan);
+  const shouldModelAnswer = saysCannot || repairCount >= 2;
   const rawLead = String(prefix || (saysCannot ? "没关系，我们把这一步讲小一点。" : "这次还没对上。")).replace(/[。！？!?]*$/, "。");
   const lead = saysCannot
     ? "没关系，这一步老师先示范。"
@@ -2683,16 +2685,18 @@ function teacherRepairMessage(prefix, plan) {
   let message = "";
   if (plan?.isReason) {
     const sentence = String(plan.repeatSentence || createReasonRepeatSentence(plan.label, plan.prompt, plan.answerKeywords)).replace(/[。！？!?]+$/, "");
-    const retry = saysCannot ? "你不用自己编，先照着这句说一遍。" : "你可以换成自己的话再说一遍。";
+    const retry = shouldModelAnswer ? "你不用自己编，先照着这句说一遍。" : "你先说半句原因就行。";
     message = `${lead}原因不用想很长：${sentence}。${retry}`;
     return softenTeacherScaffoldText(message);
   }
-  if (plan?.teacherHint) {
-    const hint = stripTeacherFollowInstruction(ensureChineseSentence(plan.teacherHint));
-    message = `${lead}${ensureChineseSentence(hint)}${createRetryInstructionForStep(plan, saysCannot)}`;
+  const hint = shouldModelAnswer
+    ? stripTeacherFollowInstruction(ensureChineseSentence(plan?.teacherHint || ""))
+    : createNonLeakingRepairHint(plan);
+  if (hint) {
+    message = `${lead}${ensureChineseSentence(hint)}${createRetryInstructionForStep(plan, shouldModelAnswer)}`;
     return softenTeacherScaffoldText(message);
   }
-  message = `${lead}我们不重来，只把问题缩小：${formatChildStepPrompt(plan)}${createRetryInstructionForStep(plan, saysCannot)}`;
+  message = `${lead}我们不重来，只把问题缩小：${formatChildStepPrompt(plan)}${createRetryInstructionForStep(plan, shouldModelAnswer)}`;
   return softenTeacherScaffoldText(message);
 }
 
@@ -2702,15 +2706,84 @@ function ensureChineseSentence(text) {
   return /[。！？!?]$/.test(value) ? value : `${value}。`;
 }
 
-function createRetryInstructionForStep(plan, saysCannot = false) {
+function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
   const hasAnswerKeywords = Array.isArray(plan?.answerKeywords) && plan.answerKeywords.some((item) => String(item || "").trim());
   const answer = hasAnswerKeywords ? createContextualFollowSentence(plan) : "";
-  if (saysCannot) {
+  if (shouldModelAnswer) {
     if (answer) return `现在不用说完整，先说这个关键词：${answer}。`;
     return "现在不用说完整，先把你看到的一个数或一个词说出来。";
   }
-  if (answer) return `再试一次，先回答这一小步：${answer}。`;
-  return "再试一次，先回答这一小步。";
+  return "你再试一次，只回答眼前这一小步。";
+}
+
+function getGuidedRepairKey(plan, lesson = currentLesson()) {
+  const question = lesson?.activeQuestion || null;
+  return [
+    lesson?.id || "",
+    question?.id || question?.prompt || lesson?.problem || "",
+    Number(plan?.index) || 0,
+    normalizeText(plan?.label || ""),
+  ].join("|");
+}
+
+function getGuidedRepairAttemptCount(plan, lesson = currentLesson()) {
+  const key = getGuidedRepairKey(plan, lesson);
+  return Number(state?.guidedRepairCounts?.[key]) || 0;
+}
+
+function recordGuidedRepairAttempt(lesson, plan) {
+  const key = getGuidedRepairKey(plan, lesson);
+  state.guidedRepairCounts = { ...(state.guidedRepairCounts || {}), [key]: (Number(state.guidedRepairCounts?.[key]) || 0) + 1 };
+  return state.guidedRepairCounts[key];
+}
+
+function clearGuidedRepairAttempts() {
+  state.guidedRepairCounts = {};
+}
+
+function createNonLeakingRepairHint(plan) {
+  const lesson = currentLesson();
+  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const label = normalizeText(plan?.label || "");
+  const prompt = normalizeText(plan?.prompt || "");
+  const text = normalizeText(`${label} ${prompt}`);
+
+  if (family === "compare" || /比较|符号|大于|小于|等号/.test(text)) {
+    if (/符号|大于|小于|等号/.test(text)) return "符号的开口要朝大的那边。先看哪边大，再选符号。";
+    return "先别急着填符号，只看左边和右边，找出哪边大。";
+  }
+  if (family === "money" || family === "moneyApplication" || /元|角|分|钱|找回|找零/.test(text)) {
+    if (/换|单位|元|角|分/.test(text)) return "元、角、分不能混着算，先换成同一种单位，再继续算。";
+    return "购物题先看价钱和付的钱，再想是合起来、换单位，还是找回。";
+  }
+  if (family === "makeTenAdd") return "凑十法先找快到10的数，再把另一个数拆成两部分。";
+  if (family === "breakTenSubtract") return "破十法先看个位够不够减，不够就把十几拆成10和几。";
+  if (/加|合起来|一共/.test(text)) return "加法先看两部分，把它们合起来。可以从大数接着数。";
+  if (/减|剩|去掉|拿走|少/.test(text)) return "减法先看原来有多少，再看去掉多少，最后看还剩多少。";
+  if (family === "multiplication") return "乘法先找一组有几个，再看一共有几组。";
+  if (family === "division") return "平均分先看总数，再看分成几份或每份几个。";
+  if (family === "placeValue") return "数位题先看十位、个位，再把每个数位的意思说清楚。";
+  if (family === "time") return "时间题先看时针，再看分针，不要把两根针混在一起。";
+  if (family === "measure") return "测量题先看单位和起点，再看终点刻度。";
+  if (family === "shape") return "图形题先说边、角、面这些特征，再说名字。";
+  if (family === "data") return "读表题先找对应的行或列，再读数量。";
+  if (family === "logic") return "推理题先找确定的一条线索，再排除不可能的情况。";
+
+  const hint = stripAnswerLeakFromRepairHint(plan?.teacherHint || "");
+  return hint || "先看图里的关键数，不急着说最后答案。";
+}
+
+function stripAnswerLeakFromRepairHint(text) {
+  let value = stripTeacherFollowInstruction(String(text || "")).trim();
+  if (!value) return "";
+  value = value
+    .replace(/所以这里填「[^」]+」[。！？!?]?/g, "想一想这里该选哪一种。")
+    .replace(/所以答案是[^。！？!?]+[。！？!?]?/g, "")
+    .replace(/答案是[^。！？!?]+[。！？!?]?/g, "")
+    .replace(/所以[^。！？!?]*(等于|是|为)[^。！？!?]+[。！？!?]?/g, "")
+    .replace(/你可以先学着说半句，再换成自己的话[。！？!?]?/g, "")
+    .trim();
+  return value;
 }
 
 function createForwardButUsefulRepair(plan, studentText) {
@@ -4763,6 +4836,7 @@ let state = {
   strategyIndex: 0,
   mastery: 64,
   completedSteps: 0,
+  guidedRepairCounts: {},
   todayQuestion: 2,
   transcript: "",
   lastStudentText: "",
@@ -6956,6 +7030,7 @@ function changeLesson(reason, targetIndex = null) {
   state.strategyIndex = 0;
   state.mastery = 60;
   state.completedSteps = 0;
+  clearGuidedRepairAttempts();
   state.transcript = "";
   state.lastStudentText = "";
   state.aiContext = reason || lesson.initialContext;
@@ -7959,6 +8034,7 @@ function advanceGuidedStepOrComplete(lesson, plan, inputType) {
   const nextPlan = createGuidedStepPlan(lesson, plan.index + 1);
   state.phase = "guiding";
   state.completedSteps = nextPlan.index;
+  clearGuidedRepairAttempts();
   state.mastery = Math.max(state.mastery, 58 + nextPlan.index * 5);
   state.teachingState = "GUIDED_STEP";
   state.currentAtomName = nextPlan.label;
@@ -7977,6 +8053,7 @@ function askReasonAfterFullAnswer(lesson, inputType) {
   const reasonPlan = createGuidedStepPlan(lesson, reasonIndex >= 0 ? reasonIndex : steps.length - 1);
   state.phase = "guiding";
   state.completedSteps = reasonPlan.index;
+  clearGuidedRepairAttempts();
   state.mastery = Math.max(state.mastery, 70);
   state.teachingState = "GUIDED_STEP";
   state.currentAtomName = reasonPlan.label;
@@ -8025,6 +8102,7 @@ function createCompletionMessage(lesson = currentLesson(), prefix = "这个知�
 
 function keepOnCurrentGuidedStep(lesson, plan, prefix, inputType, signal) {
   state.phase = "repair";
+  recordGuidedRepairAttempt(lesson, plan);
   state.mastery = Math.max(50, state.mastery - 1);
   state.teachingState = "GUIDED_STEP";
   state.currentAtomName = plan.label;
@@ -8194,6 +8272,7 @@ function maybeContinueWithVariantAfterTeachback(inputType) {
 
   state.phase = "guiding";
   state.completedSteps = starter.index;
+  clearGuidedRepairAttempts();
   state.mastery = Math.max(state.mastery, 76);
   state.strategyIndex = 0;
   state.currentAtomName = starter.label;

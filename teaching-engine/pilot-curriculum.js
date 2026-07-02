@@ -463,9 +463,9 @@ function createPilotAtomTeaching(point, atom) {
 function pilotTeaching(explain, repeatSentence, extraKeywords = []) {
   const repeat = String(repeatSentence || "").trim().replace(/[。！？.!?]+$/, "");
   return {
-    teachPrompt: `${explain} 你先跟老师说一句：${repeat}。`,
-    repairPrompt: `${explain} 如果不会，就先跟着说：${repeat}。`,
-    noResponsePrompt: `没关系，老师先说：${repeat}。你跟着说一遍就行。`,
+    teachPrompt: `${explain} 这一小步先只练一句：${repeat}。你说半句也可以。`,
+    repairPrompt: `${explain} 如果不会，先说关键词：${repeat}。`,
+    noResponsePrompt: `没关系，先不急着答完整。老师把方法句放在这里：${repeat}。你可以只跟读后半句。`,
     repeatSentence: repeat,
     extraKeywords,
   };

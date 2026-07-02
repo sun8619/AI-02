@@ -24,13 +24,17 @@ const needsWorkPoints = pointReports.filter((item) => item.level === "needs-work
 const weakPoints = pointReports.filter((item) => item.level === "weak").length;
 const familyReady = familyReports.filter((item) => item.ready).length;
 const overlayCoveredPoints = pointReports.filter((item) => item.hasOverlay).length;
+const naturalnessScore = Math.round(average(pointReports.map((item) => item.naturalnessScore)));
+const templatePhraseHits = pointReports.reduce((sum, item) => sum + item.templatePhraseHits, 0);
+const answerLeakHits = pointReports.reduce((sum, item) => sum + item.answerLeakHits, 0);
 
 const completion = Math.round(
-  ((readyPoints / Math.max(pointReports.length, 1)) * 0.52 +
+  ((readyPoints / Math.max(pointReports.length, 1)) * 0.46 +
     (familyReady / Math.max(familyReports.length, 1)) * 0.22 +
     (overlayCoveredPoints / Math.max(pointReports.length, 1)) * 0.1 +
     (average(pointReports.map((item) => item.assessmentScore)) / 100) * 0.08 +
-    (average(pointReports.map((item) => item.remediationScore)) / 100) * 0.08) *
+    (average(pointReports.map((item) => item.remediationScore)) / 100) * 0.08 +
+    (naturalnessScore / 100) * 0.06) *
     100,
 );
 
@@ -43,6 +47,9 @@ const summary = {
   readyPoints,
   needsWorkPoints,
   weakPoints,
+  naturalnessScore,
+  templatePhraseHits,
+  answerLeakHits,
   teachingDataCompletion: completion,
   weakFamilies: familyReports.filter((item) => !item.ready).map((item) => ({ family: item.family, gaps: item.gaps })),
   weakestPoints: pointReports
@@ -86,6 +93,7 @@ function scorePoint(point) {
   const remediationRules = point.remediation_rules || [];
   const feynmanSignals = point.feynman_prompt?.required_signals || [];
   const dimensions = new Set(assessments.map((item) => item.dimension));
+  const naturalness = scoreNaturalness(point, atoms);
   const gaps = [];
   let score = 0;
 
@@ -127,6 +135,9 @@ function scorePoint(point) {
   if ((point.lesson_ids || []).length && point.entry_question) score += 5;
   else gaps.push("入口题或知识点别名不足");
 
+  if (naturalness.score < 82) gaps.push(...naturalness.gaps);
+  score = Math.max(0, score - naturalness.penalty);
+
   const level = score >= 82 ? "ready" : score >= 66 ? "needs-work" : "weak";
   return {
     id: point.id,
@@ -139,7 +150,72 @@ function scorePoint(point) {
     hasOverlay: Boolean(overlay),
     assessmentScore: assessments.length >= 4 && dimensions.has("direct_problem") && dimensions.has("variant_problem") && dimensions.has("reasoning") ? 100 : 55,
     remediationScore: remediationRules.length >= atoms.length ? 100 : remediationRules.length >= 3 ? 70 : 50,
+    naturalnessScore: naturalness.score,
+    templatePhraseHits: naturalness.templatePhraseHits,
+    answerLeakHits: naturalness.answerLeakHits,
   };
+}
+
+function scoreNaturalness(point, atoms) {
+  const prompts = atoms.flatMap((atom) => [
+    atom.teach_prompt,
+    atom.repair_prompt,
+    atom.no_response_prompt,
+    atom.return_prompt,
+  ]).map((item) => String(item || ""));
+  const allText = prompts.join("\n");
+  const templatePatterns = [
+    /你先跟老师说一句/g,
+    /先说一个关键词也可以/g,
+    /可以先照着老师说/g,
+    /老师先说结果/g,
+    /这题最后要得到/g,
+  ];
+  const leakPatterns = [
+    /老师先说结果/g,
+    /这题最后是/g,
+    /可以说：\s*[^。！？\n]{1,12}[。！？]/g,
+    /照着老师说：\s*[^。！？\n]{1,12}[。！？]/g,
+  ];
+  const templatePhraseHits = countPatternHits(allText, templatePatterns);
+  const answerLeakHits = countPatternHits(allText, leakPatterns);
+  const modelSteps = atoms.filter((atom) => /先|方法|因为|表示|看|找|换|凑|破|平均|数位|单位/.test(atom.teach_prompt || "")).length;
+  const questionSteps = atoms.filter((atom) => /多少|几|哪|什么|为什么|吗|？|\?/.test(atom.teach_prompt || "")).length;
+  const reasonSteps = atoms.filter((atom) => /为什么|原因|说清|因为/.test(atom.atom_name || atom.teach_prompt || "")).length;
+
+  let score = 100;
+  const gaps = [];
+  if (templatePhraseHits > 0) {
+    score -= Math.min(24, templatePhraseHits * 4);
+    gaps.push("仍有机械模板话术");
+  }
+  if (answerLeakHits > 0) {
+    score -= Math.min(30, answerLeakHits * 10);
+    gaps.push("不会时可能提前泄露答案");
+  }
+  if (modelSteps < 2) {
+    score -= 12;
+    gaps.push("讲解示范不足");
+  }
+  if (questionSteps < 2) {
+    score -= 10;
+    gaps.push("追问互动不足");
+  }
+  if (reasonSteps < 1) {
+    score -= 10;
+    gaps.push("缺少说理环节");
+  }
+  return {
+    score: Math.max(0, score),
+    penalty: Math.max(0, 100 - score) * 0.18,
+    gaps,
+    templatePhraseHits,
+    answerLeakHits,
+  };
+}
+
+function countPatternHits(text, patterns) {
+  return patterns.reduce((sum, pattern) => sum + ((String(text || "").match(pattern) || []).length), 0);
 }
 
 function loadBrowserGlobal(relativePath, globalName) {
@@ -164,6 +240,9 @@ function printHumanSummary(data) {
   console.log(`- 达到当前标准的知识点：${data.readyPoints}`);
   console.log(`- 需要继续打磨的知识点：${data.needsWorkPoints}`);
   console.log(`- 明显薄弱的知识点：${data.weakPoints}`);
+  console.log(`- 话术自然度估算：${data.naturalnessScore}%`);
+  console.log(`- 机械模板命中：${data.templatePhraseHits}`);
+  console.log(`- 疑似提前泄露答案命中：${data.answerLeakHits}`);
   console.log(`- 教学数据完成度估算：${data.teachingDataCompletion}%`);
 
   if (data.weakFamilies.length) {

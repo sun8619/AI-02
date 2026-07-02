@@ -14,6 +14,34 @@ const direct = MasteryDimension.DIRECT;
 const variant = MasteryDimension.VARIANT;
 const reasoning = MasteryDimension.REASONING;
 
+const modelPromptOpeners = [
+  "先听老师把这一步说清楚",
+  "这一小步先放慢一点",
+  "我们只抓住这一句方法",
+  "先把方法句放在嘴边",
+];
+
+const childTryClosers = [
+  "你跟着说这一句就行。",
+  "你可以只说后半句。",
+  "说不完整也没关系，先说关键词。",
+  "这一步不用讲整题，只说这一句。",
+];
+
+const askRepairs = [
+  "先不用讲整题，只看这一小步。",
+  "把眼睛放回题目里，先说你看到的一个数或一个词。",
+  "先别猜答案，先说当前这一步在问什么。",
+  "可以先说半句，老师会接住你的话。",
+];
+
+const noResponseHints = [
+  "没关系，我们先把问题变小。",
+  "先不急着答完整。",
+  "老师先把图和题目再连起来。",
+  "这一步卡住很正常，先说一个词也可以。",
+];
+
 const questionBankLessonAliases = {
   "G1V1-U5-KP01": "g1a-carry-add-20",
   "G1V2-U5-KP01": "renminbi-conversion",
@@ -248,8 +276,8 @@ function createFamilySteps(family, point, question) {
     ...step,
     canDo: step.canDo || `孩子能完成「${title}」的第${index + 1}个小台阶：${step.label}。`,
     teach: step.teach || `我们学「${title}」。${step.prompt || ""}`,
-    noResponse: step.noResponse || `没关系。老师先示范：${step.repeatSentence || step.prompt || step.label}。你先说一个关键词也可以。`,
-    repair: step.repair || `我们把「${step.label}」再拆小一点。${step.prompt || ""}`,
+    noResponse: step.noResponse || makeNoResponsePrompt(step, title),
+    repair: step.repair || makeRepairPrompt(step, title),
   }));
 }
 
@@ -258,16 +286,14 @@ function createTeacherLikeFamilySteps(family, context) {
   const answerWords = answerKeywords(question);
   const numbers = extractNumbers(prompt).map(String);
   const title = point.title || point.node || "这个知识点";
-  const finalAnswer = answer ? `这题最后要得到${answer}。` : "这题最后要把答案说完整。";
-  const explainAnswer = answer ? `可以先照着老师说：${answer}。` : "可以先说你看到的结果。";
   const finalStep = (label = "说出结果", teach = "现在只算当前这一步，结果是多少？", extra = []) =>
     teacherAskStep(label, teach, answerWords.concat(extra), {
       acceptsFinal: true,
-      repair: `先别急着讲整题。${explainAnswer}`,
-      noResponse: `没关系，老师先说结果：${answer || "答案"}。你再跟着说一遍。`,
+      repair: makeFinalRepairPrompt(label, teach),
+      noResponse: makeFinalNoResponsePrompt(label, teach),
     });
   const reasonStep = (label, repeat, extra = []) =>
-    teacherModelStep(label, `会做以后，还要能说清楚为什么。`, repeat, ["因为", "所以", "先", "再", ...extra], { isReason: true });
+    teacherModelStep(label, "答案会算只是第一层，老师还想听你说出小原因。", repeat, ["因为", "所以", "先", "再", ...extra], { isReason: true });
 
   if (family === "calculation") return createCalculationTeacherSteps(context, finalStep, reasonStep);
   if (family === "compare") return createCompareTeacherSteps(context, finalStep, reasonStep);
@@ -464,6 +490,8 @@ function createCalculationTeacherSteps(context, finalStep, reasonStep) {
   const prompt = normalizeText(question.prompt || "");
   const allText = normalizeText(`${question.prompt || ""} ${question.explanation || ""} ${familyText || ""}`);
   const numbers = extractNumbers(prompt).map(String);
+  const simpleAdd = String(prompt || "").match(/(\d+)\s*[+＋]\s*(\d+)/);
+  const simpleSubtract = String(prompt || "").match(/(\d+)\s*[-－]\s*(\d+)/);
 
   if (/×|乘|口诀|几个几/.test(prompt)) {
     return [
@@ -483,6 +511,36 @@ function createCalculationTeacherSteps(context, finalStep, reasonStep) {
   }
   if (/十几减|破十|退位|-\d/.test(prompt) && /1\d/.test(prompt)) {
     return createTeacherLikeFamilySteps("breakTenSubtract", { question, prompt, answer: cleanAnswer(question.answer || ""), point: {}, sourceSteps: [] });
+  }
+
+  if (simpleAdd && !isMakeTenText("", prompt)) {
+    const a = Number(simpleAdd[1]);
+    const b = Number(simpleAdd[2]);
+    const bigger = Math.max(a, b);
+    const smaller = Math.min(a, b);
+    if (Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b >= 0 && a + b <= 10) {
+      return [
+        teacherModelStep("看加号意思", "加法不是先背答案，加号表示把两部分合起来。", "加法是合起来", ["加号", "加法", "合起来"]),
+        teacherAskStep("说两部分", `这题的两部分是${a}和${b}。先只说两部分。`, [String(a), String(b), "两部分"]),
+        teacherModelStep("接着数", `小数加法可以从较大的数${bigger}开始，接着数${smaller}下。`, `从${bigger}接着数${smaller}下`, ["接着数", String(bigger), String(smaller)]),
+        finalStep("说出一共", "接着数完以后，一共是多少？", ["一共", "合起来"]),
+        reasonStep("说清加法方法", "因为加法是把两部分合起来，所以可以接着数。", ["加法", "合起来", "接着数"]),
+      ];
+    }
+  }
+
+  if (simpleSubtract) {
+    const a = Number(simpleSubtract[1]);
+    const b = Number(simpleSubtract[2]);
+    if (Number.isFinite(a) && Number.isFinite(b) && a >= b && a <= 20 && !isBreakTenText("", prompt)) {
+      return [
+        teacherModelStep("看减号意思", "减法不是先背答案，减号表示从原来的数里去掉一些。", "减法是去掉后剩下", ["减号", "减法", "去掉", "剩下"]),
+        teacherAskStep("说原来和去掉", `这题原来是${a}，要去掉${b}。先只说原来和去掉。`, [String(a), String(b), "原来", "去掉"]),
+        teacherModelStep("倒着数", `小数减法可以从${a}开始，倒着数${b}下。`, `从${a}倒着数${b}下`, ["倒着数", String(a), String(b)]),
+        finalStep("说还剩多少", "倒着数完以后，还剩多少？", ["还剩", "剩下"]),
+        reasonStep("说清减法方法", "因为减法是从原来的数里去掉一部分，所以可以倒着数。", ["减法", "去掉", "倒着数"]),
+      ];
+    }
   }
 
   if (/两位数|笔算|个位|十位|进1|进一|借1|退位/.test(allText)) {
@@ -668,17 +726,61 @@ function createMeasureTeacherSteps(question, familyText, finalStep, reasonStep) 
   ];
 }
 
+function makeNoResponsePrompt(step, title) {
+  const label = step?.label || "这一小步";
+  const repeat = cleanPromptSentence(step?.repeatSentence || step?.prompt || label);
+  const head = pick(noResponseHints, `${title}-${label}`);
+  if (repeat && repeat !== label) return `${head} 你可以只跟着说半句：${repeat}。`;
+  return `${head} 先看「${label}」，能说一个关键词就可以。`;
+}
+
+function makeRepairPrompt(step, title) {
+  const label = step?.label || "这一小步";
+  const teach = cleanPromptSentence(step?.prompt || step?.teach || "");
+  const head = pick(askRepairs, `${title}-${label}`);
+  if (teach && teach !== label) return `${head} 老师把问题缩小：${teach}`;
+  return `${head} 现在只回答「${label}」这一点。`;
+}
+
+function makeFinalRepairPrompt(label, teach) {
+  const prompt = cleanPromptSentence(teach);
+  if (/答案|结果|多少|几/.test(prompt)) {
+    return `先别急着报整题答案。回到方法：先说你算到的中间数，或者说“我先看什么”。`;
+  }
+  return `最后一步卡住时，不直接猜。先把上一步的中间结果说出来，再接着算。`;
+}
+
+function makeFinalNoResponsePrompt(label, teach) {
+  const prompt = cleanPromptSentence(teach);
+  return `没关系，先不报答案。我们只看最后一步：${prompt || label} 你可以先说“我先算……”`;
+}
+
+function cleanPromptSentence(text) {
+  return String(text || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/[。！？.!?]+$/, "");
+}
+
+function pick(items, key) {
+  const text = String(key || "");
+  const index = Array.from(text).reduce((sum, char) => sum + char.codePointAt(0), 0) % items.length;
+  return items[index];
+}
+
 function teacherModelStep(label, explain, repeatSentence, keywords = [], options = {}) {
   const repeat = String(repeatSentence || label).trim().replace(/[。！？.!?]+$/, "");
+  const opener = pick(modelPromptOpeners, `${label}-${repeat}`);
+  const closer = pick(childTryClosers, `${repeat}-${label}`);
   return makeStep(
     label,
-    `${explain} 你先跟老师说一句：${repeat}。`,
+    `${opener}：${explain} 现在只练一句：${repeat}。${closer}`,
     unique([...keywords, ...phraseKeywords(repeat)]),
-    options.repair || `${explain} 如果说不出来，就先跟读：${repeat}。`,
+    options.repair || `${explain} 如果一下子说不出来，就先说关键词：${phraseKeywords(repeat).slice(0, 2).join("、") || repeat}。`,
     {
       ...options,
       repeatSentence: repeat,
-      noResponse: options.noResponse || `没关系，老师先说：${repeat}。你跟着说一遍就行。`,
+      noResponse: options.noResponse || `没关系，老师先把方法句放在这里：${repeat}。你可以只跟读最后几个字。`,
     }
   );
 }
@@ -688,12 +790,30 @@ function teacherAskStep(label, teach, keywords = [], options = {}) {
     label,
     teach,
     unique([label, ...keywords]),
-    options.repair || "这一步先不用说整题，先说一个关键词也可以。",
+    options.repair || makeAskRepairPrompt(label, teach),
     {
       ...options,
-      noResponse: options.noResponse || "没关系。先看图或题目里对应的位置，能说一个词就可以。",
+      noResponse: options.noResponse || makeAskNoResponsePrompt(label, teach),
     }
   );
+}
+
+function makeAskRepairPrompt(label, teach) {
+  const prompt = cleanPromptSentence(teach);
+  const head = pick(askRepairs, `${label}-${prompt}`);
+  if (/为什么|原因/.test(prompt)) return `${head} 可以先用“因为……”开头，说一个小原因。`;
+  if (/哪边|谁大|谁小|比较/.test(prompt)) return `${head} 先分别说左边和右边，再说哪边大。`;
+  if (/单位|元|角|分|厘米|米|克|千克/.test(prompt)) return `${head} 先只说单位或单位关系。`;
+  if (/先算|中间|第一步/.test(prompt)) return `${head} 只算第一步，不用管后面。`;
+  return `${head} 你可以只回答一个数、一个单位，或一个关键词。`;
+}
+
+function makeAskNoResponsePrompt(label, teach) {
+  const prompt = cleanPromptSentence(teach);
+  const head = pick(noResponseHints, `${prompt}-${label}`);
+  if (/多少|几/.test(prompt)) return `${head} 先把题里的两个数找出来，再说你想先算哪一个。`;
+  if (/为什么|原因/.test(prompt)) return `${head} 先说“因为”，后面接一个你看到的理由。`;
+  return `${head} 先看图中对应的位置，能说一个词就可以。`;
 }
 
 function phraseKeywords(phrase) {
