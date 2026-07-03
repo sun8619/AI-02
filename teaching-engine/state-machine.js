@@ -121,7 +121,7 @@ function normalizeSession(session, pointId, atomId) {
 
 function classifyChildAttempt({ point, atom, text, lesson }) {
   const normalized = normalizeText(text);
-  if (looksLikeNoResponse(normalized) || looksInvalidForLearning(normalized)) {
+  if (looksLikeNoResponse(normalized)) {
     return { passed: false, error_tag: ErrorTag.NO_RESPONSE };
   }
 
@@ -135,6 +135,10 @@ function classifyChildAttempt({ point, atom, text, lesson }) {
 
   if (atomHit || targetHit || finalAnswerHit || processHit) {
     return { passed: true, error_tag: "" };
+  }
+
+  if (looksInvalidForLearning(normalized)) {
+    return { passed: false, error_tag: ErrorTag.NO_RESPONSE };
   }
 
   if (mentionsOnlyResult(normalized, answerSignals.resultKeywords || []) && !processHit && !atom?.accepts_final_answer) {
@@ -620,29 +624,48 @@ function returnToAssessmentQuestion({ point, session, atom, assessment, inputTyp
 function evaluateAssessmentAnswer(text, template, point) {
   const normalized = normalizeText(text);
   if (!template) return makeDiagnosis(false, ErrorTag.PROCESS_DROP, 0.1, "没有找到当前检验题。");
-  if (looksLikeNoResponse(normalized) || looksInvalidForLearning(normalized)) {
+  if (looksLikeNoResponse(normalized)) {
     return makeDiagnosis(false, ErrorTag.NO_RESPONSE, 0.9, "孩子没有给出可判定答案。");
-  }
-  if (looksOffTopicAssessment(normalized, template, point)) {
-    return makeDiagnosis(false, ErrorTag.OFF_TOPIC, 0.8, "孩子这句话没有回答当前题目。");
   }
 
   const structured = evaluateStructuredAnswer(text, template);
   if (structured) return structured;
 
   const expectedSignals = template.expected_keywords || [];
-  if (includesAny(normalized, expectedSignals)) return makeDiagnosis(true, "", 0.86, "命中当前题的标准答案表达。");
   if (template.dimension === MasteryDimension.REASONING) {
-    const reasoningPassed = includesAny(normalized, point.feynman_prompt?.required_signals || []);
+    const reasoningSignals = getReasoningSignals(template, point);
+    const hitCount = reasoningSignals.filter((signal) => normalized.includes(normalizeText(signal))).length;
+    const hasReasonWord = ["因为", "所以", "先", "再", "单位", "方法", "理由"].some((item) => normalized.includes(item));
+    const reasoningPassed = hitCount >= 2 || (hitCount >= 1 && hasReasonWord);
     return reasoningPassed
-      ? makeDiagnosis(true, "", 0.82, "说理题命中了关键原因。")
+      ? makeDiagnosis(true, "", 0.82, `说理题命中了 ${hitCount} 个关键原因。`)
       : makeDiagnosis(false, ErrorTag.EXPRESSION_WEAK, 0.62, "孩子还没有说出关键原因。");
+  }
+  if (includesAny(normalized, expectedSignals)) return makeDiagnosis(true, "", 0.86, "命中当前题的标准答案表达。");
+
+  if (looksInvalidForLearning(normalized)) {
+    return makeDiagnosis(false, ErrorTag.NO_RESPONSE, 0.9, "孩子没有给出可判定答案。");
+  }
+  if (looksOffTopicAssessment(normalized, template, point)) {
+    return makeDiagnosis(false, ErrorTag.OFF_TOPIC, 0.8, "孩子这句话没有回答当前题目。");
   }
 
   if (hasNumberishAnswer(normalized)) {
     return makeDiagnosis(false, ErrorTag.CALCULATION_SLIP, 0.7, "孩子给了数字，但和当前题期待答案不一致。");
   }
   return makeDiagnosis(false, ErrorTag.AMBIGUOUS_RESPONSE, 0.45, "孩子的回答和当前题有关，但还不够清楚。");
+}
+
+function getReasoningSignals(template, point) {
+  const genericSignals = new Set(["因为", "所以", "先", "再", "能独立做一道直接题", "换数字或情境后还能做"]);
+  const pointNames = [point?.point_name, point?.child_title].map(normalizeText).filter(Boolean);
+  return unique([...(point?.feynman_prompt?.required_signals || []), ...(template?.expected_keywords || [])]).filter((signal) => {
+    const normalized = normalizeText(signal);
+    if (!normalized || genericSignals.has(normalized)) return false;
+    if (/^[<>=对错]$/.test(normalized)) return false;
+    if (pointNames.includes(normalized)) return false;
+    return normalized.length >= 2 || /\d/.test(normalized);
+  });
 }
 
 function evaluateStructuredAnswer(text, template) {

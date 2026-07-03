@@ -38,6 +38,18 @@ npm start
 http://127.0.0.1:4173
 ```
 
+## 上线前教学体检
+
+```bash
+npm run audit:teaching
+npm run audit:scenarios
+npm run audit:paths
+```
+
+- `audit:teaching` 检查 42 个知识点的讲法、变式、说理和费曼复述配置是否完整。
+- `audit:scenarios` 检查答对、答错、不会、跑题、变式、讲给老师听六类场景。
+- `audit:paths` 模拟真实孩子路径，确认每个知识点不会因为空白、跑题、短答案、敷衍复述而误推进。
+
 ## Railway 环境变量
 
 如果用 Railway，在 Railway 的 Variables 里添加：
