@@ -287,7 +287,7 @@ function createTeacherLikeFamilySteps(family, context) {
   const numbers = extractNumbers(prompt).map(String);
   const title = point.title || point.node || "这个知识点";
   const finalStep = (label = "说出结果", teach = "现在只算当前这一步，结果是多少？", extra = []) =>
-    teacherAskStep(label, teach, answerWords.concat(extra), {
+    teacherAskStep(label, ensureChildAnswerTarget(teach), answerWords.concat(extra), {
       acceptsFinal: true,
       repair: makeFinalRepairPrompt(label, teach),
       noResponse: makeFinalNoResponsePrompt(label, teach),
@@ -483,6 +483,14 @@ function createTeacherLikeFamilySteps(family, context) {
   };
 
   return families[family] || null;
+}
+
+function ensureChildAnswerTarget(teach) {
+  const text = String(teach || "").trim();
+  if (!text) return "你现在回答这一小步。";
+  if (/如果问/.test(text)) return `${text} 你现在先回答这一点。`;
+  if (/[？?]|你|请|回答|填|比一比|数一数|看一看|想一想|说出|说一说|先说|只说|现在说|是多少|多少|几|该/.test(text)) return text;
+  return `${text} 你现在回答这一小步。`;
 }
 
 function createCalculationTeacherSteps(context, finalStep, reasonStep) {
@@ -730,15 +738,15 @@ function makeNoResponsePrompt(step, title) {
   const label = step?.label || "这一小步";
   const repeat = cleanPromptSentence(step?.repeatSentence || step?.prompt || label);
   const head = pick(noResponseHints, `${title}-${label}`);
-  if (repeat && repeat !== label) return `${head} 你可以只跟着说半句：${repeat}。`;
-  return `${head} 先看「${label}」，能说一个关键词就可以。`;
+  if (repeat && repeat !== label) return `${head} 你现在只跟着说半句：${repeat}。`;
+  return `${head} 先看「${label}」，你现在只说一个关键词就可以。`;
 }
 
 function makeRepairPrompt(step, title) {
   const label = step?.label || "这一小步";
   const teach = cleanPromptSentence(step?.prompt || step?.teach || "");
   const head = pick(askRepairs, `${title}-${label}`);
-  if (teach && teach !== label) return `${head} 老师把问题缩小：${teach}`;
+  if (teach && teach !== label) return `${head} 老师把问题缩小：${teach} 你现在只回答这一小步。`;
   return `${head} 现在只回答「${label}」这一点。`;
 }
 
@@ -789,11 +797,11 @@ function createModelTeachingLine(label, explain, repeat, key) {
   const cleanExplain = cleanPromptSentence(explain);
   const cleanRepeat = cleanPromptSentence(repeat);
   const variants = [
-    `老师先讲清楚：${cleanExplain} 你听完抓住这句：${cleanRepeat}。`,
-    `${cleanExplain} 我们先把它变成一句短话：${cleanRepeat}。`,
+    `老师先讲清楚：${cleanExplain} 你现在只要跟着说：${cleanRepeat}。`,
+    `${cleanExplain} 我们先把它变成一句短话。你先说：${cleanRepeat}。`,
     `这一点先不让你猜。${cleanExplain} 现在你只接一句：${cleanRepeat}。`,
     `把题和图连起来看：${cleanExplain} 你可以先说关键词：${cleanRepeat}。`,
-    `这一步老师先示范。${cleanExplain} 等会儿你用自己的话说：${cleanRepeat}。`,
+    `这一步老师先示范。${cleanExplain} 你听完用自己的话说：${cleanRepeat}。`,
   ];
   return pick(variants, key);
 }
@@ -803,10 +811,10 @@ function createModelRepairLine(label, explain, repeat) {
   const cleanRepeat = cleanPromptSentence(repeat);
   const keywords = phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat;
   const variants = [
-    `${cleanExplain} 这次不用说完整，先抓关键词：${keywords}。`,
-    `刚才差一点连到方法上。再看这句：${cleanRepeat}。`,
+    `${cleanExplain} 这次不用说完整，你先抓关键词：${keywords}。`,
+    `刚才差一点连到方法上。再看这句，你现在只说：${cleanRepeat}。`,
     `老师把问题缩小：${cleanExplain} 你先说「${keywords}」也可以。`,
-    `先别急着报整题答案，回到这一步：${cleanRepeat}。`,
+    `先别急着报整题答案，回到这一步。你现在只说：${cleanRepeat}。`,
   ];
   return pick(variants, `${label}-${repeat}-repair`);
 }
@@ -816,22 +824,23 @@ function createModelNoResponseLine(label, explain, repeat) {
   const cleanRepeat = cleanPromptSentence(repeat);
   const variants = [
     `没关系，这一步老师先带着走。${cleanExplain} 你可以只跟最后半句：${cleanRepeat}。`,
-    `不会说也可以。先听方法：${cleanExplain} 然后试着说一个词。`,
-    `我们先不答整题，只把这句放稳：${cleanRepeat}。`,
-    `这一步可以跟读，不用自己编。老师说：${cleanRepeat}。`,
+    `不会说也可以。先听方法：${cleanExplain} 然后你试着说一个词。`,
+    `我们先不答整题，只把这句放稳。你现在只要说：${cleanRepeat}。`,
+    `这一步可以跟读，不用自己编。老师说：${cleanRepeat}。你跟着说一遍。`,
   ];
   return pick(variants, `${label}-${repeat}-no-response`);
 }
 
 function teacherAskStep(label, teach, keywords = [], options = {}) {
+  const childTeach = ensureChildAnswerTarget(teach);
   return makeStep(
     label,
-    teach,
+    childTeach,
     unique([label, ...keywords]),
-    options.repair || makeAskRepairPrompt(label, teach),
+    options.repair || makeAskRepairPrompt(label, childTeach),
     {
       ...options,
-      noResponse: options.noResponse || makeAskNoResponsePrompt(label, teach),
+      noResponse: options.noResponse || makeAskNoResponsePrompt(label, childTeach),
     }
   );
 }
@@ -868,7 +877,7 @@ function makeStep(label, teach, keywords = [], repair = "", options = {}) {
     teach,
     repair,
     noResponse: options.noResponse || `没关系。先听老师说：${repeatSentence || teach}`,
-    returnPrompt: options.returnPrompt || `我们先回到这一小步：${label}。`,
+    returnPrompt: options.returnPrompt || `我们先回到这一小步：${label}。你现在只回答这一小步。`,
     repeatSentence,
     keywords: unique([label, ...keywords].map(String)),
     acceptsFinal: Boolean(options.acceptsFinal),

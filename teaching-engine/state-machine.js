@@ -554,10 +554,12 @@ function getReasoningSentence(family, point = null) {
 
 function makeNextAtomMessage({ point, previousAtom, nextAtom, session }) {
   const opener = pickText([
-    "这一步站住了，我们往前走一小步。",
-    "好，刚才那个点可以了。现在只看下一小点。",
-    "不错，我们不一下子跳太远，接着看一个小动作。",
-    "这一小步过了，下面换一个角度看。",
+    "这一步可以了，下面只看一个新小点。",
+    "刚才答对了，现在换下一小步。",
+    "这个点站稳了，接着看一个小动作。",
+    "这一小步过了，下面换个角度问你。",
+    "很好，我们往前走一点点。",
+    "这关先收住，下一句只看一个地方。",
   ], `${point?.id}|${previousAtom?.id}|${nextAtom?.id}|${session?.completed_atom_ids?.length}`);
   return `${opener}${makeTeachMessage(nextAtom)}`;
 }
@@ -585,8 +587,8 @@ function makeNextAssessmentMessage(nextQuestion, nextIndex, templates, point, se
 function makeTeachbackPrompt(point) {
   const base = point?.feynman_prompt?.child_prompt;
   const sentence = getReasoningSentence(point?.teaching_family || "generic", point);
-  if (base) return `${base} 说不完整也没关系，可以用这句开头：“${sentence}”`;
-  return `现在你当小老师，讲一遍这个方法。可以先说：“${sentence}”`;
+  if (base) return `${base} 说不完整也没关系，你可以用这句开头：“${sentence}”`;
+  return `现在你当小老师，讲一遍这个方法。你可以先说：“${sentence}”`;
 }
 
 function pickText(options, key = "") {
@@ -759,12 +761,12 @@ function makeClarifyAssessmentMessage(template, atom, point) {
   if (template?.id === "g1b-money-r1" || atomName.includes("说清为什么先换单位")) {
     return makeMoneyReasonRepeatMessage("我没听清。");
   }
-  if (prompt.includes("25角")) return "我没听清。你是想说2元5角吗？先说成“几元几角”。";
-  if (prompt.includes("几角") || atomName.includes("元等于10角") || atomName.includes("换成几十角")) return "我没听清。我们只看这一小步：答案是几角？";
-  if (prompt.includes("找回")) return "我没听清。我们只说找回多少钱，比如：3元。";
-  if (prompt.includes("连加式")) return "我没听清。请说成连加式，比如：3加3加3。";
-  if (prompt.includes("几个几")) return "我没听清。先说成“几个几”。";
-  return `我没听清。我们回到这一小问：${template?.prompt || atom?.atom_name || point?.point_name || "你再说一次答案"}`;
+  if (prompt.includes("25角")) return "我没听清。你现在只回答：这是几元几角？";
+  if (prompt.includes("几角") || atomName.includes("元等于10角") || atomName.includes("换成几十角")) return "我没听清。你现在只回答一个数加单位：几角？";
+  if (prompt.includes("找回")) return "我没听清。你现在只说找回多少钱，比如：几元。";
+  if (prompt.includes("连加式")) return "我没听清。你现在说成连加式，比如：3加3加3。";
+  if (prompt.includes("几个几")) return "我没听清。你现在只说成“几个几”。";
+  return `我没听清。我们回到这一小问：${template?.prompt || atom?.atom_name || point?.point_name || "你再说一次答案"} 你现在只回答这一问。`;
 }
 
 function makeAssessmentRepairMessage(template, atom, point, diagnosis = {}) {
@@ -938,7 +940,7 @@ function makeReturnToQuestionMessage(atom, point) {
 function makeFeynmanScaffold(requiredSignals) {
   const first = requiredSignals[0] || "先看第一步";
   const second = requiredSignals[1] || "再说为什么";
-  return `差一点就讲清楚了。你接这半句：我先${first}，因为${second}。`;
+  return `差一点就讲清楚了。你现在只接这半句：我先${first}，因为${second}。`;
 }
 
 function errorTagToChildSignal(errorTag) {

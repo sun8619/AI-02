@@ -44,11 +44,13 @@ http://127.0.0.1:4173
 npm run audit:teaching
 npm run audit:scenarios
 npm run audit:paths
+npm run audit:page
 ```
 
 - `audit:teaching` 检查 42 个知识点的讲法、变式、说理和费曼复述配置是否完整。
 - `audit:scenarios` 检查答对、答错、不会、跑题、变式、讲给老师听六类场景。
 - `audit:paths` 模拟真实孩子路径，确认每个知识点不会因为空白、跑题、短答案、敷衍复述而误推进。
+- `audit:page` 从页面体验角度检查老师回复是否明确告诉孩子“现在答什么”、图示是否跟当前小台阶同步、是否疑似提前泄露答案、同一路径是否过于机械重复。
 
 ## Railway 环境变量
 
