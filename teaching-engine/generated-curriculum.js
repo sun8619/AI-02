@@ -160,7 +160,7 @@ function createFamilySteps(family, point, question) {
       makeStep("看清元角分", `先看钱的单位。题里有元、角，还是分？`, ["元", "角", "分", "人民币", "单位"], "先不算答案，先找看到的单位。"),
       makeStep("记住换算关系", "先记住：1元=10角，1角=10分。你可以先说出关键数。", ["1元", "10角", "1角", "10分", "十"], "1元能换成10个1角，1角能换成10个1分。"),
       makeStep("先换成同一种单位", "遇到不同单位，先换成同一种单位。现在要先换成什么单位？", ["同一种单位", "换成角", "换成分", "单位不同"], "元和角不能直接拼在一起，先换成同一种单位。"),
-      makeStep("再算出结果", "换好单位后，再把剩下的数合起来。答案是多少？", answerKeywords(question), `只看最后一步。${answer ? `这题最后是${answer}。` : ""}`, { acceptsFinal: true }),
+      makeStep("再算出结果", "换好单位后，再把剩下的数合起来。答案是多少？", answerKeywords(question), "只看最后一步，把答案说出来，记得带单位。", { acceptsFinal: true }),
       makeStep("说清为什么先换单位", "用一句话说原因：为什么要先换成同一种单位？", ["单位不同", "先换", "同一种单位", "因为"], "元、角、分单位不同，不能直接合起来，先换成同一种单位。", { isReason: true }),
     ],
     compare: [
@@ -824,9 +824,11 @@ function createModelNoResponseLine(label, explain, repeat) {
   const cleanRepeat = cleanPromptSentence(repeat);
   const variants = [
     `没关系，这一步老师先带着走。${cleanExplain} 你可以只跟最后半句：${cleanRepeat}。`,
-    `不会说也可以。先听方法：${cleanExplain} 然后你试着说一个词。`,
+    `卡住没关系。先听方法：${cleanExplain} 然后你试着说一个词。`,
     `我们先不答整题，只把这句放稳。你现在只要说：${cleanRepeat}。`,
     `这一步可以跟读，不用自己编。老师说：${cleanRepeat}。你跟着说一遍。`,
+    `老师先把话变短。你先跟读：${cleanRepeat}。`,
+    `先不自己想完整句。${cleanExplain} 你先接关键词：${phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat}。`,
   ];
   return pick(variants, `${label}-${repeat}-no-response`);
 }

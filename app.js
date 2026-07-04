@@ -2466,12 +2466,20 @@ function formatChildStepPrompt(plan) {
   if (!prompt) return "先说你看到的一个线索。";
   if (plan?.isReason) {
     const sentence = String(plan.repeatSentence || createReasonRepeatSentence(plan.label, prompt, plan.answerKeywords)).replace(/[。！？!?]+$/, "");
-    return `先说一句理由：${sentence}。也可以用自己的话说。`;
+    return `说一句理由：${sentence}。`;
   }
   if (shouldModelBeforeAsking(plan)) return formatTeacherModelFirstPrompt(plan);
   if (/为什么|怎么想|怎么知道|怎么比较|怎么检查/.test(prompt)) return `${prompt} 先说一句就行。`;
   if (/先说|先答|先看|再答|最后|答案是多少|是多少|几/.test(prompt)) return prompt;
   return `${prompt} 先说一步就行。`;
+}
+
+function formatCompactStepPrompt(plan) {
+  return formatChildStepPrompt(plan)
+    .replace(/也可以用自己的话说。/g, "")
+    .replace(/先说一步就行。/g, "说一步。")
+    .replace(/先说一句就行。/g, "说一句。")
+    .trim();
 }
 
 function shouldModelBeforeAsking(plan) {
@@ -2485,7 +2493,7 @@ function shouldModelBeforeAsking(plan) {
 function formatTeacherModelFirstPrompt(plan) {
   const hint = stripTeacherFollowInstruction(ensureChineseSentence(plan.teacherHint));
   const follow = createContextualFollowSentence(plan);
-  return `${hint}现在只练一句：${follow}。你说半句也可以。`;
+  return `${hint}先接一句：“${follow}”。`;
 }
 
 function createContextualFollowSentence(plan) {
@@ -2610,24 +2618,24 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
   const move = createStrategyDialogueMove(family, nextPlan?.isReason ? "teachback" : "advance", moveKey) || childGuideBridge(nextPlan, previousPlan);
   let message = "";
   if (familyBridge && !bridge) {
-    const nextPrompt = follow || formatChildStepPrompt(nextPlan);
+    const nextPrompt = follow || formatCompactStepPrompt(nextPlan);
     message = `${familyBridge}${nextPrompt}`;
     return softenTeacherScaffoldText(message);
   }
   if (bridge) {
-    const nextPrompt = follow || formatChildStepPrompt(nextPlan);
+    const nextPrompt = follow || formatCompactStepPrompt(nextPlan);
     message = `${move}${bridge} ${nextLead}：${nextPrompt}`;
     return softenTeacherScaffoldText(message);
   }
   if (nextPlan?.isReason) {
-    message = `${move}${follow || formatChildStepPrompt(nextPlan)}`;
+    message = `${move}${follow || formatCompactStepPrompt(nextPlan)}`;
     return softenTeacherScaffoldText(message);
   }
   if (previousPlan?.label && nextPlan?.label) {
-    message = `${move}${nextLead}：${formatChildStepPrompt(nextPlan)}`;
+    message = `${move}${nextLead}：${formatCompactStepPrompt(nextPlan)}`;
     return softenTeacherScaffoldText(message);
   }
-  message = `${move}下一步：${formatChildStepPrompt(nextPlan)}`;
+  message = `${move}下一步：${formatCompactStepPrompt(nextPlan)}`;
   return softenTeacherScaffoldText(message);
 }
 
@@ -2737,8 +2745,8 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
   const hasAnswerKeywords = Array.isArray(plan?.answerKeywords) && plan.answerKeywords.some((item) => String(item || "").trim());
   const answer = hasAnswerKeywords ? createContextualFollowSentence(plan) : "";
   if (shouldModelAnswer) {
-    if (answer) return `现在不用说完整，先说这个关键词：${answer}。`;
-    return "现在不用说完整，先把你看到的一个数或一个词说出来。";
+    if (answer) return `先接：${answer}。`;
+    return "先说一个数或一个词。";
   }
   const lesson = typeof currentLesson === "function" ? currentLesson() : null;
   return pickNaturalVariant(
@@ -2870,7 +2878,7 @@ function createForwardButUsefulRepair(plan, studentText) {
 }
 
 function teacherReasonMessage(reasonPlan) {
-  return softenTeacherScaffoldText(`结果对了。老师想确认你不是背答案，我们补一句为什么：${formatChildStepPrompt(reasonPlan)}`);
+  return softenTeacherScaffoldText(`答案对了。再补一句为什么：${formatCompactStepPrompt(reasonPlan)}`);
 }
 
 function parseMoneyQuestion(question) {
@@ -5016,15 +5024,20 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
   const move = createStrategyDialogueMove(family, "variant", key);
   if ((starter?.index || 0) > 0) {
     const lighterVariants = [
-      `这次老师少提示一点。${prompt} 你先试这一小问：${firstStep}`,
-      `换个小变化，不从头拆了。${prompt} 先看这一问：${firstStep}`,
-      `这题和刚才是同一种方法。${prompt} 你先说关键一步：${firstStep}`,
-      `这次看看你能不能换个题也会。${prompt} 不用讲完整，先回答：${firstStep}`,
+      `这次少提示一点。${prompt} 先试：${firstStep}`,
+      `换个小变化。${prompt} 先看：${firstStep}`,
+      `方法还是刚才那个。${prompt} 先说关键一步：${firstStep}`,
+      `题目变了，想法不变。${prompt} 先答：${firstStep}`,
     ];
-    return softenTeacherScaffoldText(`${move || ""}${pickNaturalVariant(lighterVariants, key)}`);
+    const lead = pickNaturalVariant([move, ""], `${key}|lead`);
+    const body = pickNaturalVariant(lighterVariants, key);
+    return softenTeacherScaffoldText(`${lead && lead !== body ? ensureChineseSentence(lead) : ""}${body}`);
   }
   const strategyVariant = createStrategyVariantQuestionMessage(family, prompt, firstStep, key);
-  if (strategyVariant) return softenTeacherScaffoldText(`${move || ""}${strategyVariant}`);
+  if (strategyVariant) {
+    const lead = pickNaturalVariant([move, ""], `${key}|strategy-lead`);
+    return softenTeacherScaffoldText(`${lead ? ensureChineseSentence(lead) : ""}${strategyVariant}`);
+  }
   const variants = {
     makeTenAdd: [
       `换个小题，还是用凑十。${prompt} 先想：${firstStep}`,
@@ -5123,9 +5136,9 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
     ],
   };
   const fallback = [
-    `换个小变化。${prompt} 先只回答一步：${firstStep}`,
-    `再来一题，不用一次说完。${prompt} ${firstStep}`,
-    `老师换一种问法确认一下。${prompt} 先看：${firstStep}`,
+    `换个小变化。${prompt} 先答一步：${firstStep}`,
+    `再来一题。${prompt} ${firstStep}`,
+    `老师换个问法。${prompt} 先看：${firstStep}`,
   ];
   return softenTeacherScaffoldText(pickNaturalVariant(variants[family] || fallback, key));
 }
@@ -7864,7 +7877,7 @@ function applyGatewayTutor(payload, inputType) {
   if (unclearChildText && ["teachback", "summary"].includes(nextPhase)) {
     nextPhase = "guiding";
     payload.aiContext = "孩子输入不完整，前端已阻止误判通过。";
-    payload.aiMessage = `我没听清。我们只看这题：${lesson.activeQuestion?.prompt || lesson.problem}`;
+    payload.aiMessage = `老师没抓到答案。回到这题：${lesson.activeQuestion?.prompt || lesson.problem}`;
     payload.teachingState = "GUIDED_STEP";
     payload.currentStep = `小台阶 1：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0] || "先读题"}`;
     payload.evidenceSignal = "输入不完整";
@@ -7959,7 +7972,7 @@ function evaluateAttempt(text, inputType) {
     state.mastery = Math.max(48, state.mastery - 1);
     state.currentStep = `小台阶 1：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0] || "先读题"}`;
     state.aiContext = "孩子输入不完整，先拉回当前题。";
-    state.aiMessage = `我没听清。我们只看这题：${activeQuestion?.prompt || lesson.problem}`;
+    state.aiMessage = `老师没抓到答案。回到这题：${activeQuestion?.prompt || lesson.problem}`;
     state.showVisual = true;
     resetGeneratedVisualForTurn();
     addEvidence("输入不完整", "孩子没有给出可判断的回答，AI 没有默认判对。", inputType === "voice" ? "语音回答" : "键盘回答");
@@ -8000,7 +8013,7 @@ function evaluateAttempt(text, inputType) {
     state.mastery = Math.max(56, state.mastery);
     state.currentStep = "小台阶：检查答案";
     state.aiContext = "孩子说到了一部分方法，但答案还不稳。";
-    state.aiMessage = `想法有一点对。现在只回答这题：${activeQuestion?.prompt || lesson.problem}`;
+    state.aiMessage = `想法碰到一点了。我们先把答案说清：${activeQuestion?.prompt || lesson.problem}`;
     state.showVisual = true;
     resetGeneratedVisualForTurn();
     addEvidence("方法部分正确", "孩子说到过程词，但还没有答出当前题答案。", inputType === "voice" ? "语音回答" : "键盘回答");
@@ -8011,7 +8024,7 @@ function evaluateAttempt(text, inputType) {
   state.phase = "repair";
   state.mastery = Math.max(52, state.mastery - 2);
   state.aiContext = "孩子回答和当前题不匹配，先给一个更小提示。";
-  state.aiMessage = `这次先不急。看这题：${activeQuestion?.prompt || lesson.problem}。你可以先说：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0]}。`;
+  state.aiMessage = `先停一下。回到题目：${activeQuestion?.prompt || lesson.problem}。先说一个线索：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0]}。`;
   state.currentStep = "小台阶 1：先找题目条件";
   state.showVisual = true;
   state.strategyIndex = 1;

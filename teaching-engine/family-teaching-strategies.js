@@ -12,13 +12,13 @@
       reasonBridge: [],
       dialogueMoves: {
         modelFirst: [
-          "这一步老师先示范一句，不用你马上想完整。",
-          "这里先听老师讲一个小方法，等会儿你接半句就行。",
+          "这个小地方老师先示范一句。",
+          "先听一个小方法，等会儿你接一句。",
           "这个地方容易卡，我们先把方法说清楚。",
         ],
         advance: [
           "刚才那点对了，我们只往前走一小步。",
-          "这一步对了，我们看下一小步。",
+          "对，继续看下一小步。",
           "好，继续看眼前这个小地方。",
         ],
         repair: [
@@ -35,11 +35,14 @@
           "不会说也可以，老师先给你一句能跟上的。",
           "这一步有点绕，老师先讲，你照着接半句。",
           "先不用自己编，跟着老师把关键话说出来。",
+          "卡住没关系，老师把句子变短一点。",
+          "先听老师示范，你只接最后几个字。",
+          "我们不急着答完整，先说一个关键词。",
         ],
         variant: [
-          "换个小变化，方法还是刚才那个。",
-          "这次数字或图变了，想法不变。",
-          "再来一题，看看这个方法还能不能用。",
+          "题目换一下，方法不换。",
+          "这次图或数字变了，想法不变。",
+          "再试一题，看方法能不能迁移。",
         ],
         teachback: [
           "现在你当小老师，只说方法里最重要的一句。",
@@ -475,7 +478,8 @@
     const item = strategies[payload?.family] || strategies.generic;
     const opener = pick(item.variants, payload?.key);
     if (!opener) return "";
-    return `${opener}${payload?.prompt ? ` 看这题：${payload.prompt}` : ""} ${payload?.firstStep || ""}`.trim();
+    const prompt = payload?.prompt ? `题目：${payload.prompt}` : "";
+    return `${opener}${prompt ? ` ${prompt}` : ""} ${payload?.firstStep || ""}`.trim();
   }
 
   function createDialogueMove(payload) {

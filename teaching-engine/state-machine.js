@@ -501,8 +501,8 @@ function makeAssessmentPromptMessage(template, prefix = "", point = null) {
 }
 
 function makeMoneyReasonRepeatMessage(prefix = "") {
-  const lead = prefix ? `${prefix}这一问只说原因。` : "";
-  return `${lead}老师先示范：因为元和角不是同一种单位，所以要先把元换成角。你可以先说“单位不同，所以先换成角”。`;
+  const lead = prefix ? `${prefix.replace(/[。！？!?]*$/, "。")}` : "";
+  return `${lead}元和角单位不同，要先换成同一种单位。你先说：单位不同，先换成角。`;
 }
 
 function makeReasoningPromptMessage(template, point, prefix = "") {
@@ -554,12 +554,16 @@ function getReasoningSentence(family, point = null) {
 
 function makeNextAtomMessage({ point, previousAtom, nextAtom, session }) {
   const opener = pickText([
-    "这一步可以了，下面只看一个新小点。",
-    "刚才答对了，现在换下一小步。",
-    "这一步会了，接着看一个小动作。",
+    "可以了，下面只看一个新小点。",
+    "答对了，换下一小步。",
+    "这个小点会了，接着看一个小动作。",
     "这一小步过了，下面换个问法。",
     "很好，我们往前走一点点。",
-    "这一步先过关，下一句只看一个地方。",
+    "先过关，下一句只看一个地方。",
+    "嗯，方向对了，继续往下接。",
+    "好，这个地方站住了。",
+    "小台阶过了，我们看旁边那一步。",
+    "你已经抓住这个点了。",
   ], `${point?.id}|${previousAtom?.id}|${nextAtom?.id}|${session?.completed_atom_ids?.length}`);
   return `${opener}${makeTeachMessage(nextAtom)}`;
 }
@@ -575,10 +579,14 @@ function makeEnterAssessmentMessage(firstQuestion, point) {
 
 function makeNextAssessmentMessage(nextQuestion, nextIndex, templates, point, session) {
   const opener = pickText([
-    "这题可以。换个样子再试一题：",
-    "刚才是会做了，现在看一个小变形：",
-    "我们再确认一下，不多做，只看这一题：",
+    "这题过了，换个样子：",
+    "刚才会做了，现在看一个小变形：",
+    "再确认一下，只看这一题：",
     "这一关过了，下一关换问法：",
+    "方法先稳住，题目换一下：",
+    "不刷很多题，只换一个角度：",
+    "再试一小题，看方法能不能用：",
+    "刚才那题放下，看看新题：",
   ], `${point?.id}|${nextQuestion?.id}|${nextIndex}|${session?.assessment_records?.length}`);
   const progress = templates?.length ? `第${nextIndex + 1}小题，` : "";
   return makeAssessmentPromptMessage(nextQuestion, `${opener}${progress}`, point);
@@ -598,6 +606,22 @@ function pickText(options, key = "") {
   const source = String(key || "");
   for (let i = 0; i < source.length; i += 1) hash = (hash * 33 + source.charCodeAt(i)) >>> 0;
   return list[hash % list.length];
+}
+
+function makeChildTargetPrompt(target, key = "", lead = "") {
+  const cleanTarget = String(target || "这一小步")
+    .replace(/\s+/g, " ")
+    .replace(/[。！？!?]+$/g, "")
+    .trim();
+  const sentence = pickText([
+    `你先回答：${cleanTarget}`,
+    `这一小问请说：${cleanTarget}`,
+    `看一看后告诉老师：${cleanTarget}`,
+    `请只说这一步：${cleanTarget}`,
+    `请把答案缩短成一句：${cleanTarget}`,
+    `现在请补这一句：${cleanTarget}`,
+  ], key);
+  return `${sentence}${/[？?]$/.test(sentence) ? "" : "。"}${lead}`;
 }
 
 function returnToAssessmentQuestion({ point, session, atom, assessment, inputType }) {
@@ -758,15 +782,20 @@ function makeDiagnosis(passed, errorTag = "", confidence = 0.5, evidence = "") {
 function makeClarifyAssessmentMessage(template, atom, point) {
   const prompt = normalizeText(template?.prompt || "");
   const atomName = atom?.atom_name || "";
+  const lead = pickText(
+    ["老师没抓到答案。", "这句有点轻，我们再确认一下。", "答案还不清楚。", "刚才那句还不能判断。"],
+    `${point?.id || ""}|${template?.id || ""}|clarify`,
+  );
   if (template?.id === "g1b-money-r1" || atomName.includes("说清为什么先换单位")) {
-    return makeMoneyReasonRepeatMessage("我没听清。");
+    return makeMoneyReasonRepeatMessage(lead);
   }
-  if (prompt.includes("25角")) return "我没听清。你现在只回答：这是几元几角？";
-  if (prompt.includes("几角") || atomName.includes("元等于10角") || atomName.includes("换成几十角")) return "我没听清。你现在只回答一个数加单位：几角？";
-  if (prompt.includes("找回")) return "我没听清。你现在只说找回多少钱，比如：几元。";
-  if (prompt.includes("连加式")) return "我没听清。你现在说成连加式，比如：3加3加3。";
-  if (prompt.includes("几个几")) return "我没听清。你现在只说成“几个几”。";
-  return `我没听清。我们回到这一小问：${template?.prompt || atom?.atom_name || point?.point_name || "你再说一次答案"} 你现在只回答这一问。`;
+  const key = `${point?.id || ""}|${template?.id || ""}|${atom?.id || atomName}|clarify-target`;
+  if (prompt.includes("25角")) return makeChildTargetPrompt("这是几元几角？", key, lead);
+  if (prompt.includes("几角") || atomName.includes("元等于10角") || atomName.includes("换成几十角")) return makeChildTargetPrompt("一个数加单位：几角？", key, lead);
+  if (prompt.includes("找回")) return makeChildTargetPrompt("找回多少钱，比如几元。", key, lead);
+  if (prompt.includes("连加式")) return makeChildTargetPrompt("连加式，比如3加3加3。", key, lead);
+  if (prompt.includes("几个几")) return makeChildTargetPrompt("几个几。", key, lead);
+  return makeChildTargetPrompt(template?.prompt || atom?.atom_name || point?.point_name || "再说一次答案", key, lead);
 }
 
 function makeAssessmentRepairMessage(template, atom, point, diagnosis = {}) {
@@ -917,24 +946,36 @@ function makeNoResponseMessage(atom, point) {
 
 function makeReturnToQuestionMessage(atom, point) {
   const atomName = atom?.atom_name || "";
-  if (atomName.includes("1元等于10角")) return "这句还没有回答题目。我们回到这一小问：1元等于几角？";
-  if (atomName.includes("1角等于10分")) return "这句还没有回答题目。我们回到这一小问：1角等于几分？";
-  if (atomName.includes("换成几十角")) return "这句还没有回答题目。现在只看3元：3元是几角？";
-  if (atomName.includes("再加原来的几角")) return "这句还没有回答题目。现在只算：30角加5角是多少？";
+  const lead = pickText(
+    ["这句先放一边。", "老师先拉回题目。", "我们回到小问题。", "先不跑远。", "回到眼前这一步。"],
+    `${point?.id || ""}|${atom?.id || ""}|${atomName}|return`,
+  );
+  const key = `${point?.id || ""}|${atom?.id || atomName}|return-target`;
+  if (atomName.includes("1元等于10角")) return makeChildTargetPrompt("1元等于几角？", key, lead);
+  if (atomName.includes("1角等于10分")) return makeChildTargetPrompt("1角等于几分？", key, lead);
+  if (atomName.includes("换成几十角")) return makeChildTargetPrompt("3元是几角？", key, lead);
+  if (atomName.includes("再加原来的几角")) return makeChildTargetPrompt("30角加5角是多少？", key, lead);
   if (atomName.includes("说清为什么先换单位")) return makeMoneyReasonRepeatMessage("这句还没有说到原因。");
-  if (atomName.includes("看清商品价格")) return "这句还没有回答题目。先只看价格：本子要多少钱？";
-  if (atomName.includes("看清付了多少钱")) return "这句还没有回答题目。先只看付了多少钱？";
-  if (atomName.includes("找回就是剩下的钱")) return "这句还没有回答题目。找回的钱，是剩下的钱，还是又要付的钱？";
-  if (atomName.includes("用减法算找回")) return "这句还没有回答题目。现在只算：5减4等于几？";
-  if (atomName.includes("每组同样多")) return "这句还没有回答题目。先只看每一组：每组有几个？";
-  if (atomName.includes("数有几组")) return "这句还没有回答题目。先只数一数：一共有几组？";
-  if (atomName.includes("用连加表示几个几")) return "这句还没有回答题目。先说连加式：3个4可以写成什么？";
-  if (atomName.includes("用乘法表示几个几")) return "这句还没有回答题目。先说：这是几个4？";
-  if (atomName.includes("看到9先想差1到10")) return "这句还没有回答题目。现在只看：9还差几就到10？";
-  if (atomName.includes("把另一个数拆成")) return "这句还没有回答题目。现在只拆4：4可以拆成1和几？";
-  if (atomName.includes("10再加剩下的数")) return "这句还没有回答题目。现在只算：10加3等于几？";
-  if (atom?.return_prompt) return atom.return_prompt;
-  return `这句还没有回答题目。我们先回到：${atomName || point?.point_name || "这一小步"}。`;
+  if (atomName.includes("看清商品价格")) return makeChildTargetPrompt("本子要多少钱？", key, lead);
+  if (atomName.includes("看清付了多少钱")) return makeChildTargetPrompt("付了多少钱？", key, lead);
+  if (atomName.includes("找回就是剩下的钱")) return makeChildTargetPrompt("找回是剩下的钱，还是又要付的钱？", key, lead);
+  if (atomName.includes("用减法算找回")) return makeChildTargetPrompt("5减4等于几？", key, lead);
+  if (atomName.includes("每组同样多")) return makeChildTargetPrompt("每组有几个？", key, lead);
+  if (atomName.includes("数有几组")) return makeChildTargetPrompt("一共有几组？", key, lead);
+  if (atomName.includes("用连加表示几个几")) return makeChildTargetPrompt("3个4可以写成什么连加式？", key, lead);
+  if (atomName.includes("用乘法表示几个几")) return makeChildTargetPrompt("这是几个4？", key, lead);
+  if (atomName.includes("看到9先想差1到10")) return makeChildTargetPrompt("9还差几就到10？", key, lead);
+  if (atomName.includes("把另一个数拆成")) return makeChildTargetPrompt("4可以拆成1和几？", key, lead);
+  if (atomName.includes("10再加剩下的数")) return makeChildTargetPrompt("10加3等于几？", key, lead);
+  if (atom?.return_prompt) {
+    const target = atom.return_prompt
+      .replace(/^我们先回到这一小步[:：]/, "")
+      .replace(/你现在只回答这一小步。?/g, "")
+      .replace(/。{2,}/g, "。")
+      .trim();
+    return makeChildTargetPrompt(target || atomName || point?.point_name || "这一小步", key, lead);
+  }
+  return makeChildTargetPrompt(atomName || point?.point_name || "这一小步", key, lead);
 }
 
 function makeFeynmanScaffold(requiredSignals) {

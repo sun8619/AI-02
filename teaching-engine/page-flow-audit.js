@@ -33,6 +33,20 @@ const summary = {
   averageVisualSyncScore: Math.round(average(reports.map((item) => item.visualSyncScore))),
   averageAnswerLeakScore: Math.round(average(reports.map((item) => item.answerLeakScore))),
   criticalFindings: collectCriticalFindings(reports),
+    naturalnessFindings: reports
+    .filter((item) => item.naturalnessScore < 90)
+    .sort((a, b) => a.naturalnessScore - b.naturalnessScore)
+    .slice(0, 10)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      family: item.family,
+      naturalnessScore: item.naturalnessScore,
+      gaps: item.gaps.filter((gap) => /机械|重复|过长/.test(gap)).slice(0, 4),
+      repeatedOpeners: item.naturalnessDetails?.repeatedOpeners || [],
+      repeatedFirstPhrases: item.naturalnessDetails?.repeatedFirstPhrases || [],
+      longSamples: item.naturalnessDetails?.longSamples || [],
+    })),
   weakestPoints: reports
     .filter((item) => item.level !== "ready")
     .sort((a, b) => a.score - b.score)
@@ -147,6 +161,7 @@ function auditPageFlow(point) {
     answerLeakScore: answerLeak.score,
     gaps: uniqueGaps,
     blockingGaps,
+    naturalnessDetails: naturalness.details,
   };
 }
 
@@ -224,7 +239,8 @@ function scoreNaturalness(events) {
   const longMessages = messages.filter((message) => compact(message).length > 190);
   const firstPhrases = messages.map(firstPhrase).filter(Boolean);
   const repeatedFirstPhrases = countRepeated(firstPhrases);
-  const repeatedOpeners = countRepeated(messages.map((message) => compact(message).slice(0, 12)).filter(Boolean));
+  const openerPhrases = messages.map((message) => compact(message).slice(0, 12)).filter(Boolean);
+  const repeatedOpeners = countRepeated(openerPhrases);
   let score = 100;
   score -= Math.min(40, templateHits * 8);
   score -= Math.min(20, repeatedFirstPhrases * 4);
@@ -237,6 +253,11 @@ function scoreNaturalness(events) {
       ...(repeatedFirstPhrases >= 2 ? [`同一路径开头重复偏多：${repeatedFirstPhrases} 处`] : []),
       ...(longMessages.length ? [`有 ${longMessages.length} 条老师回复过长`] : []),
     ],
+    details: {
+      repeatedFirstPhrases: topRepeated(firstPhrases).slice(0, 3),
+      repeatedOpeners: topRepeated(openerPhrases).slice(0, 3),
+      longSamples: longMessages.slice(0, 2).map((message) => shorten(message, 80)),
+    },
   };
 }
 
@@ -455,6 +476,15 @@ function countRepeated(items) {
   const counts = new Map();
   for (const item of items) counts.set(item, (counts.get(item) || 0) + 1);
   return Array.from(counts.values()).filter((count) => count > 1).reduce((sum, count) => sum + count - 1, 0);
+}
+
+function topRepeated(items) {
+  const counts = new Map();
+  for (const item of items) counts.set(item, (counts.get(item) || 0) + 1);
+  return Array.from(counts.entries())
+    .filter(([, count]) => count > 1)
+    .sort((a, b) => b[1] - a[1])
+    .map(([text, count]) => ({ text, count }));
 }
 
 function countPatternHits(text, patterns) {
