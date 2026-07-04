@@ -2728,8 +2728,8 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
   }
   if (bridge) {
     if (nextPlan?.isReason) {
-      const reasonPrompt = follow || formatReasonChildPrompt(nextPlan);
-      message = `${move}${bridge} ${reasonPrompt}`;
+      const reasonPrompt = follow || createReasonOpenQuestion(nextPlan, family, `${moveKey}|bridge-reason`);
+      message = `${move}${createNonLeakingReasonBridge(bridge, nextPlan, family, moveKey)} ${reasonPrompt}`;
       return softenTeacherScaffoldText(message);
     }
     const nextPrompt = follow || formatCompactStepPrompt(nextPlan);
@@ -2737,7 +2737,7 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
     return softenTeacherScaffoldText(message);
   }
   if (nextPlan?.isReason) {
-    message = `${move}${follow || formatCompactStepPrompt(nextPlan)}`;
+    message = `${move}${follow || createReasonOpenQuestion(nextPlan, family, `${moveKey}|reason`)}`;
     return softenTeacherScaffoldText(message);
   }
   if (previousPlan?.label && nextPlan?.label) {
@@ -2830,8 +2830,11 @@ function teacherRepairMessage(prefix, plan) {
   let message = "";
   if (plan?.isReason) {
     const sentence = String(plan.repeatSentence || createReasonRepeatSentence(plan.label, plan.prompt, plan.answerKeywords)).replace(/[。！？!?]+$/, "");
-    const retry = shouldModelAnswer ? "你不用自己编，先照着这句说一遍。" : "你先说半句原因就行。";
-    message = `${lead}原因不用想很长：${sentence}。${retry}`;
+    if (shouldModelAnswer) {
+      message = `${lead}原因不用想很长：${sentence}。你不用自己编，先照着这句说一遍。`;
+    } else {
+      message = `${lead}${createReasonOpenQuestion(plan, family, `${lesson?.id || ""}|${plan?.label || ""}|repair`)}`;
+    }
     return softenTeacherScaffoldText(message);
   }
   const hint = shouldModelAnswer
@@ -3029,7 +3032,7 @@ function createForwardButUsefulRepair(plan, studentText) {
       return "你已经开始比较了。先把两边说清：左边是多少，右边是多少？请先说这两个数。";
     }
     if (/大于|小于|等于|>|<|=/.test(studentText) && /原因|为什么|说清/.test(label)) {
-      return "符号说出来了，现在补一句原因：因为哪边多，符号开口就朝哪边。你先说：因为。";
+      return "符号说出来了，现在补一句原因：先说哪边多，再说符号朝哪边。";
     }
   }
 
@@ -3082,7 +3085,6 @@ function teacherReasonMessage(reasonPlan) {
   const lesson = safeCurrentLesson();
   const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
   const key = `${lesson?.id || ""}|${lesson?.activeQuestion?.id || lesson?.activeQuestion?.prompt || ""}|${reasonPlan?.label || ""}|${safeStateField("lastStudentText", "")}`;
-  const sentence = getReasonRepeatSentence(reasonPlan);
   const familyLeads = {
     compare: ["你已经比出来了。现在讲清：为什么这边大？", "符号快稳了，再说一句比较方法。"],
     money: ["结果会了，接下来讲单位为什么要先换。", "钱数算出来了，现在说清元、角、分的关系。"],
@@ -3100,8 +3102,120 @@ function teacherReasonMessage(reasonPlan) {
     logic: ["答案推出来了。现在讲清你先用了哪条线索。"],
   };
   const lead = pickNaturalVariant(familyLeads[family] || ["答案这步过了。现在像小老师一样说一句原因。", "结果先放稳，接下来讲讲你是怎么想的。"], key);
-  const childAction = sentence ? `你可以这样开头：${sentence}。` : formatReasonChildPrompt(reasonPlan);
+  const childAction = createReasonOpenQuestion(reasonPlan, family, `${key}|first-reason`);
   return softenTeacherScaffoldText(`${lead}${childAction}`);
+}
+
+function createNonLeakingReasonBridge(bridge, nextPlan, family, key = "") {
+  const raw = String(bridge || "").trim();
+  if (!raw) return "";
+  const text = normalizeText(`${raw}${nextPlan?.label || ""}${nextPlan?.prompt || ""}`);
+  const hasLikelyAnswer = /左边\d+比右边\d+|右边\d+比左边\d+|答案|所以|等于|开口要朝|先换成|用减法|用加法|可以用乘法|可以用除法/.test(text);
+  if (!hasLikelyAnswer) return ensureChineseSentence(raw);
+  const alternatives = {
+    compare: ["符号选出来了。现在别急着背答案，讲讲你怎么看出大小。", "会填符号了，接下来只说比较的方法。"],
+    money: ["数算出来了。现在讲讲为什么要先看单位。", "答案先放稳，接下来只说元角分怎么想。"],
+    moneyApplication: ["购物题的答案先放稳。现在讲讲为什么这样找回。", "会算了，接下来只说付钱、价钱和找回的关系。"],
+    makeTenAdd: ["答案先放稳。现在只说凑十的小方法。"],
+    breakTenSubtract: ["答案先放稳。现在只说为什么要破十。"],
+    multiplication: ["结果先放稳。现在只说这是几个几。"],
+    division: ["结果先放稳。现在只说为什么要平均分。"],
+  };
+  return ensureChineseSentence(pickNaturalVariant(alternatives[family] || ["答案先放稳。现在只说你怎么想。"], key));
+}
+
+function createReasonOpenQuestion(reasonPlan, family, key = "") {
+  const label = normalizeText(reasonPlan?.label || "");
+  const prompt = normalizeText(reasonPlan?.prompt || "");
+  const text = `${label}${prompt}`;
+  const optionsByFamily = {
+    compare: [
+      "请说一句小方法：你先看哪边的数量？",
+      "不用说很长，先说你怎么知道哪边大。",
+      "你先说：左边和右边，谁多谁少？",
+    ],
+    money: [
+      "请说一句小方法：为什么不能把元和角直接混着算？",
+      "不用说很长，先说要把它们换成什么单位。",
+      "你先说：元和角哪里不一样？",
+    ],
+    moneyApplication: [
+      "请说一句小方法：找回的钱是剩下的钱，还是花掉的钱？",
+      "不用说很长，先说为什么要用付的钱减价钱。",
+      "你先说：购物题要先看价钱，还是先看找回？",
+    ],
+    makeTenAdd: [
+      "请说一句小方法：为什么先把一个数凑成10？",
+      "不用说很长，先说你想把谁变成10。",
+      "你先说：凑十法先找什么？",
+    ],
+    breakTenSubtract: [
+      "请说一句小方法：个位不够减时先怎么办？",
+      "不用说很长，先说为什么要把十几拆开。",
+      "你先说：破十法先看哪一位够不够减？",
+    ],
+    concreteAddition: [
+      "请说一句小方法：为什么这里要合起来？",
+      "不用说很长，先说这是把两部分合起来，还是拿走一部分。",
+      "你先说：故事里是在变多，还是变少？",
+    ],
+    concreteSubtraction: [
+      "请说一句小方法：为什么这里要拿走？",
+      "不用说很长，先说原来有多少、拿走多少、还剩多少。",
+      "你先说：故事里是在变多，还是变少？",
+    ],
+    multiplication: [
+      "请说一句小方法：你先看每组几个，还是先看一共有几组？",
+      "不用说很长，先说这是几个几。",
+      "你先说：一组有几个？有几组？",
+    ],
+    division: [
+      "请说一句小方法：为什么要让每份一样多？",
+      "不用说很长，先说总数怎么平均分。",
+      "你先说：这是平均分，还是随便分？",
+    ],
+    time: [
+      "请说一句小方法：读时间时先看短针，还是先看长针？",
+      "不用说很长，先说两根针分别告诉我们什么。",
+      "你先说：短针看几时，长针看几分。",
+    ],
+    placeValue: [
+      "请说一句小方法：为什么要先看十位和个位？",
+      "不用说很长，先说这个数字站在哪一位。",
+      "你先说：十位表示几个十，个位表示几个一。",
+    ],
+    shape: [
+      "请说一句小方法：你是看哪个特征判断的？",
+      "不用说很长，先说它有几条边，或者有没有角。",
+      "你先说一个图形特征就行。",
+    ],
+    data: [
+      "请说一句小方法：你从表里的哪里读到数量？",
+      "不用说很长，先说你看的是哪一行或哪一列。",
+      "你先说：我先找对应的位置，再看数量。",
+    ],
+    logic: [
+      "请说一句小方法：你先用了哪条线索？",
+      "不用说很长，先说哪个条件最确定。",
+      "你先说：我先排除哪一种不可能。",
+    ],
+    measure: [
+      "请说一句小方法：为什么要先看单位或起点？",
+      "不用说很长，先说你先看单位，还是先看刻度。",
+      "你先说：从哪里开始量，到哪里结束。",
+    ],
+  };
+  let options = optionsByFamily[family] || [
+    "请说一句小方法：你先看什么，再做什么？",
+    "不用说很长，先说你怎么想的。",
+    "你先补一句原因：为什么这样做？",
+  ];
+  if (/符号|比较|大于|小于|等号|哪边/.test(text)) options = optionsByFamily.compare;
+  if (/元|角|分|钱|单位/.test(text)) options = optionsByFamily.money;
+  if (/找回|找零|购物|价钱|付的钱/.test(text)) options = optionsByFamily.moneyApplication;
+  if (/凑十/.test(text)) options = optionsByFamily.makeTenAdd;
+  if (/破十|退位|不够减/.test(text)) options = optionsByFamily.breakTenSubtract;
+  return ensureChineseSentence(pickNaturalVariant(options, key));
 }
 
 function parseMoneyQuestion(question) {
@@ -6055,8 +6169,8 @@ function renderKeyboardComposer() {
   const locked = state.isProcessing || state.voiceStatus === "processing" || state.recording;
   return `
     <form class="keyboard-composer" data-form="typed-answer">
-      <input name="answer" autocomplete="off" placeholder="也可以打字，例如：我想换知识点" ${locked ? "disabled" : ""} />
-      <button class="btn btn-primary" type="submit" ${locked ? "disabled" : ""}>发送</button>
+      <input name="answer" aria-label="打字回答" autocomplete="off" placeholder="也可以打字，例如：我想换知识点" ${locked ? "disabled" : ""} />
+      <button class="btn btn-primary" data-action="send-text" type="submit" ${locked ? "disabled" : ""}>${locked ? "老师在想" : "发送"}</button>
     </form>
   `;
 }
