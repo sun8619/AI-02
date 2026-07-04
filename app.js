@@ -2590,7 +2590,7 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
   const bridge = String(previousPlan?.bridgeMessage || "").trim();
   const follow = String(nextPlan?.followPrompt || "").trim();
   const leadOptions = nextPlan?.isReason
-    ? ["现在把想法说出来", "接下来讲一讲为什么", "最后当小老师说一句", "把刚才的方法说给老师听"]
+    ? ["现在把想法说出来", "接下来讲一讲为什么", "最后当小老师说一句", "用一句话说说为什么"]
     : [
         `现在只看「${nextPlan?.label || "下一步"}」`,
         `接下来换到「${nextPlan?.label || "下一步"}」`,
