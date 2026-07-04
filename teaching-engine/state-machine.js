@@ -344,7 +344,7 @@ function evaluateFeynman({ point, session, text, inputType }) {
       },
       phase: "summary",
       aiContext: "孩子通过费曼复述，知识点标记为稳定掌握。",
-      aiMessage: "你讲清楚了步骤，也讲到了为什么。这个知识点更稳了。",
+      aiMessage: "步骤和原因都说出来了。这个知识点更稳了。",
       currentStep: "完成：能用自己的话讲",
       feynmanStatus: "能讲清楚",
       evidenceSignal: "费曼复述通过",
@@ -1204,7 +1204,7 @@ function makeReturnToQuestionMessage(atom, point, session = null) {
 function makeFeynmanScaffold(requiredSignals) {
   const first = requiredSignals[0] || "先看第一步";
   const second = requiredSignals[1] || "再说为什么";
-  return `差一点就讲清楚了。你现在只接这半句：我先${first}，因为${second}。`;
+  return `差一点就讲清楚了。请把方法补成一句话：我先${first}，因为${second}。`;
 }
 
 function errorTagToChildSignal(errorTag) {

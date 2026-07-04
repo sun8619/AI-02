@@ -32,11 +32,11 @@
           "我们先不跑远，继续看这道题。",
         ],
         cannotAnswer: [
-          "不会说也可以，老师先给你一句能跟上的。",
-          "这一步有点绕，老师先讲，你照着接半句。",
+          "卡住很正常，老师先把这一步变短。",
+          "这一步有点绕，先听老师讲一个小抓手。",
           "先不用自己编，跟着老师把关键话说出来。",
           "卡住没关系，老师把句子变短一点。",
-          "先听老师示范，你只接最后几个字。",
+          "先听老师示范，你只说最后这个小答案。",
           "我们不急着答完整，先说一个关键词。",
         ],
         variant: [
@@ -478,8 +478,16 @@
     const item = strategies[payload?.family] || strategies.generic;
     const opener = pick(item.variants, payload?.key);
     if (!opener) return "";
-    const prompt = payload?.prompt ? `题目：${payload.prompt}` : "";
-    return `${opener}${prompt ? ` ${prompt}` : ""} ${payload?.firstStep || ""}`.trim();
+    const prompt = String(payload?.prompt || "").trim();
+    const firstStep = String(payload?.firstStep || "").trim();
+    const key = `${payload?.key || ""}|variant`;
+    const lines = [
+      `${opener}${prompt ? ` 看这题：${prompt}。` : ""}${firstStep ? `先只做一步：${firstStep}` : ""}`,
+      `${opener}${prompt ? ` 这次题目是：${prompt}。` : ""}${firstStep ? `先告诉老师：${firstStep}` : ""}`,
+      `${opener}${prompt ? ` 题目变了，先读：${prompt}。` : ""}${firstStep ? `现在只回答：${firstStep}` : ""}`,
+      `${opener}${prompt ? ` 我们换个小场景：${prompt}。` : ""}${firstStep ? `第一步还是：${firstStep}` : ""}`,
+    ];
+    return pick(lines, key).trim();
   }
 
   function createDialogueMove(payload) {

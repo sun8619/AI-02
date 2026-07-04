@@ -37,7 +37,7 @@ const customLessons = [
     stepHint: "分母不一样时，先不要急着比分子，要想办法让它们能比较。",
     teachbackPrompt: "这次换你当小老师，讲给我听：为什么 3/4 比 2/3 大？",
     repairPrompt: "我们看着图慢慢说：为什么 9 小格比 8 小格多？",
-    doneMessage: "你讲清楚了。你不是只说答案，还说出了为什么。",
+    doneMessage: "这次不只是答案对了，你也说出了为什么。",
     prerequisites: ["认识分数", "知道分母表示平均分成几份", "同分母分数比较"],
     microSteps: ["先看分母", "变成能比较的样子", "说出为什么 3/4 更大"],
     commonGaps: ["直接比分子", "不知道为什么要通分", "会算但讲不清"],
@@ -2504,7 +2504,100 @@ function shouldModelBeforeAsking(plan) {
 function formatTeacherModelFirstPrompt(plan) {
   const hint = stripTeacherFollowInstruction(ensureChineseSentence(plan.teacherHint));
   const follow = createContextualFollowSentence(plan);
-  return `${hint}先接一句：“${follow}”。`;
+  const lesson = safeCurrentLesson();
+  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const key = [
+    lesson?.id || "",
+    lesson?.activeQuestion?.id || lesson?.activeQuestion?.prompt || "",
+    plan?.label || "",
+    plan?.prompt || "",
+    safeStateField("lastStudentText", ""),
+  ].join("|");
+  const lead = createTeacherLeadForModelStep(plan, family, key);
+  const action = createTeacherActionForModelStep(plan, family, follow, key);
+  return softenTeacherScaffoldText(`${lead}${hint}${action}`);
+}
+
+function createTeacherLeadForModelStep(plan, family, key) {
+  const text = normalizeText(`${plan?.label || ""} ${plan?.prompt || ""}`);
+  const familyLeads = {
+    compare: ["先看图，不急着填符号。", "比较题先把两边看清。", "这一题先比多少，再说符号。"],
+    money: ["钱的题先看单位。", "元角分先把关系站稳。", "先别急着算，把单位关系看清。"],
+    moneyApplication: ["购物题先分清付钱和价钱。", "找零题先把钱换成同一种单位。", "先看故事里谁付钱、谁是价钱。"],
+    makeTenAdd: ["凑十法先找谁快到10。", "这题先不硬数，先想凑十。", "加法可以先凑成10再算。"],
+    breakTenSubtract: ["退位减先看个位够不够减。", "这题先别硬减，先想破十。", "不够减时，先把十几拆开。"],
+    concreteAddition: ["加法故事先看两部分。", "一共多少，先把两边合起来。"],
+    concreteSubtraction: ["减法故事先看原来和拿走。", "还剩多少，先把拿走的去掉。"],
+    multiplication: ["乘法先看几个几。", "口诀前面先看一组几个。"],
+    division: ["平均分先看是不是一样多。", "除法先看总数和分法。"],
+    time: ["钟表题先分清短针和长针。", "时间题先看一根针，再看另一根。"],
+    placeValue: ["数位题先看数字站在哪一位。", "十位个位先分清。"],
+    shape: ["图形题先看特征。", "先找边、角、面这些线索。"],
+    data: ["统计题先看表格里的对应位置。", "读表先找行和列。"],
+    logic: ["推理题先抓一条确定线索。", "先排除不可能的情况。"],
+  };
+  const general = /看|找|数|读|分清|比较/.test(text)
+    ? ["先只看图里的一个线索。", "把题目缩小，只看眼前这一点。"]
+    : ["老师先把这一小步讲清。", "这一点先不让你猜，先听方法。", "先把关键句放稳。"];
+  return pickNaturalVariant(familyLeads[family] || general, `${key}|lead`);
+}
+
+function createTeacherActionForModelStep(plan, family, follow, key) {
+  const cleanFollow = String(follow || simplifyStepLabelForRepeat(plan?.label || plan?.prompt || "这一步"))
+    .replace(/[。！？!?]+$/, "")
+    .trim();
+  const text = normalizeText(`${plan?.label || ""} ${plan?.prompt || ""}`);
+  const target = createAnswerShapeInstruction(plan);
+  const moneyTarget = createMoneyAnswerInstruction(text, target || cleanFollow);
+  const visualAction = /看|找|数|读|左边|右边|时针|分针|图|表格|一一配对|起点|终点/.test(text);
+  const relationAction = /认识|知道|记住|单位|关系|等于|口诀|规则|特征|条件/.test(text);
+  const calculateAction = /算|换成|加|减|乘|除|合起来|拿走|剩|找回|凑十|破十/.test(text);
+
+  const familyActions = {
+    compare: [
+      `现在只回答一个小问题：${target || cleanFollow}。`,
+      `看两边，先说：${cleanFollow}。`,
+      `不用急着整题，先告诉老师：${target || cleanFollow}。`,
+    ],
+    money: [
+      `请把这句说出来：${cleanFollow}。`,
+      `现在只说单位关系：${cleanFollow}。`,
+      `这一步只回答钱数：${moneyTarget}。`,
+    ],
+    moneyApplication: [
+      `先说这个关系：${cleanFollow}。`,
+      `现在只说第一步：${target || cleanFollow}。`,
+      `别急着最后答案，先把这一步说清：${cleanFollow}。`,
+    ],
+    time: [`只看这一根针，回答：${cleanFollow}。`, `现在先说时间里的这一小步：${target || cleanFollow}。`],
+    division: [`先说分法里的这一点：${cleanFollow}。`, `现在只回答：${target || cleanFollow}。`],
+    multiplication: [`先说“几个几”的这一点：${cleanFollow}。`, `口诀先不急，先回答：${target || cleanFollow}。`],
+  };
+
+  const generalActions = [];
+  if (visualAction) {
+    generalActions.push(`看图，先说你看到的：${cleanFollow}。`);
+    generalActions.push(`现在只从图里找一个答案：${target || cleanFollow}。`);
+  }
+  if (relationAction) {
+    generalActions.push(`先把这句短话说出来：${cleanFollow}。`);
+    generalActions.push(`请说这个关系：${cleanFollow}。`);
+  }
+  if (calculateAction) {
+    generalActions.push(`请只算这一小步：${target || cleanFollow}。`);
+    generalActions.push(`先不报整题答案，只回答：${target || cleanFollow}。`);
+  }
+  generalActions.push(`你现在只回答这一问：${target || cleanFollow}。`);
+  generalActions.push(`请说一个数、一个词，或者这句短话：${cleanFollow}。`);
+
+  return pickNaturalVariant(familyActions[family] || generalActions, `${key}|action`);
+}
+
+function createMoneyAnswerInstruction(text, fallback = "这一步") {
+  if (/几分|多少分|等于[几多少0-9一二三四五六七八九十百]+分|换成分|分[？?]/.test(text)) return "几分";
+  if (/角/.test(text)) return "几角";
+  if (/元/.test(text)) return "几元";
+  return fallback;
 }
 
 function createContextualFollowSentence(plan) {
@@ -2568,12 +2661,12 @@ function childGuideBridge(plan, previousPlan = null) {
     "对，我们不用一口气做完整题。",
     "好，继续看眼前这一点。",
   ];
-  const lesson = typeof currentLesson === "function" ? currentLesson() : null;
+  const lesson = safeCurrentLesson();
   const activeQuestion = lesson?.activeQuestion || {};
   const key = [
     lesson?.id || "",
     activeQuestion.id || activeQuestion.prompt || "",
-    state?.lastStudentText || "",
+    safeStateField("lastStudentText", ""),
     plan?.label || "",
     plan?.prompt || "",
     previousPlan?.label || "",
@@ -2617,15 +2710,15 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
         `下面换个小角度，看「${nextPlan?.label || "下一步"}」`,
         `先不急着整题，看看「${nextPlan?.label || "下一步"}」`,
       ];
-  const lesson = typeof currentLesson === "function" ? currentLesson() : null;
+  const lesson = safeCurrentLesson();
   const activeQuestion = lesson?.activeQuestion || {};
   const family = inferActiveQuestionFamily(lesson, activeQuestion);
   const nextLead = pickNaturalVariant(
     leadOptions,
-    `${lesson?.id || ""}|${activeQuestion.id || activeQuestion.prompt || ""}|${state?.lastStudentText || ""}|${nextPlan?.label || ""}|${previousPlan?.label || ""}|${nextPlan?.index || 0}`,
+    `${lesson?.id || ""}|${activeQuestion.id || activeQuestion.prompt || ""}|${safeStateField("lastStudentText", "")}|${nextPlan?.label || ""}|${previousPlan?.label || ""}|${nextPlan?.index || 0}`,
   );
   const familyBridge = createFamilyProgressBridge(nextPlan, previousPlan, lesson);
-  const moveKey = `${lesson?.id || ""}|${activeQuestion.id || activeQuestion.prompt || ""}|${state?.lastStudentText || ""}|${nextPlan?.label || ""}|${previousPlan?.label || ""}|${state?.passedQuestionIds?.length || 0}`;
+  const moveKey = `${lesson?.id || ""}|${activeQuestion.id || activeQuestion.prompt || ""}|${safeStateField("lastStudentText", "")}|${nextPlan?.label || ""}|${previousPlan?.label || ""}|${safePassedQuestionCount()}`;
   const move = createStrategyDialogueMove(family, nextPlan?.isReason ? "teachback" : "advance", moveKey) || childGuideBridge(nextPlan, previousPlan);
   let message = "";
   if (familyBridge && !bridge) {
@@ -2655,12 +2748,13 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
   return softenTeacherScaffoldText(message);
 }
 
-function createFamilyProgressBridge(nextPlan, previousPlan = null, lesson = currentLesson()) {
+function createFamilyProgressBridge(nextPlan, previousPlan = null, lesson = null) {
   if (!nextPlan) return "";
+  lesson = lesson || safeCurrentLesson();
   const question = lesson?.activeQuestion || null;
   const family = inferActiveQuestionFamily(lesson, question);
   const label = normalizeText(nextPlan.label || "");
-  const key = `${lesson?.id || ""}|${question?.id || question?.prompt || ""}|${state?.lastStudentText || ""}|${label}|${previousPlan?.label || ""}`;
+  const key = `${lesson?.id || ""}|${question?.id || question?.prompt || ""}|${safeStateField("lastStudentText", "")}|${label}|${previousPlan?.label || ""}`;
   const strategyBridge = getStrategyProgressBridge(family, Boolean(nextPlan.isReason), key);
   if (strategyBridge) return strategyBridge;
   const reasonBridge = {
@@ -2710,9 +2804,9 @@ function createFamilyProgressBridge(nextPlan, previousPlan = null, lesson = curr
 }
 
 function teacherRepairMessage(prefix, plan) {
-  const lesson = typeof currentLesson === "function" ? currentLesson() : null;
+  const lesson = safeCurrentLesson();
   const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
-  const lastStudentText = normalizeText(state?.lastStudentText || "");
+  const lastStudentText = normalizeText(safeStateField("lastStudentText", ""));
   const saysCannot = isCannotAnswerText(lastStudentText);
   const repairCount = getGuidedRepairAttemptCount(plan);
   const shouldModelAnswer = saysCannot || repairCount >= 2;
@@ -2766,7 +2860,7 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
   }
   const target = createAnswerShapeInstruction(plan);
   if (target) return ensureChineseSentence(target);
-  const lesson = typeof currentLesson === "function" ? currentLesson() : null;
+  const lesson = safeCurrentLesson();
   return pickNaturalVariant(
     [
       "你可以先说一个词。",
@@ -2779,7 +2873,7 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
 
 function createAnswerShapeInstruction(plan) {
   if (!plan) return "";
-  const lesson = typeof currentLesson === "function" ? currentLesson() : null;
+  const lesson = safeCurrentLesson();
   const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
   const label = normalizeText(plan.label || "");
   const prompt = normalizeText(plan.prompt || "");
@@ -2797,7 +2891,7 @@ function createAnswerShapeInstruction(plan) {
   }
   if (family === "money" || /元|角|分/.test(text)) {
     if (/单位|换成什么|先换/.test(text)) return "这次只说：先换成角";
-    return "这次只说一个带单位的小答案";
+    return `这次只说：${createMoneyAnswerInstruction(text, "几元或几角")}`;
   }
   if (family === "division" || /平均分|每份|分成/.test(text)) {
     if (/总数|一共/.test(text)) return "这次只说总数是多少";
@@ -2930,11 +3024,84 @@ function createForwardButUsefulRepair(plan, studentText) {
     return "你已经在想最后答案了，挺好。我们先把中间这一步说清楚，后面答案自然会出来。";
   }
 
+  if (family === "compare") {
+    if (/大于|小于|等于|左边|右边|一样|相等|>|<|=/.test(studentText) && /看清|两边|先看|数量/.test(label)) {
+      return "你已经开始比较了。先把两边说清：左边是多少，右边是多少？请先说这两个数。";
+    }
+    if (/大于|小于|等于|>|<|=/.test(studentText) && /原因|为什么|说清/.test(label)) {
+      return "符号说出来了，现在补一句原因：因为哪边多，符号开口就朝哪边。你先说：因为。";
+    }
+  }
+
+  if (family === "multiplication") {
+    if (/口诀|得|等于|一共|总共/.test(studentText) && !/结果|答案|一共/.test(label)) {
+      return "你已经想到乘法结果了。乘法先讲意思：一组有几个？一共有几组？先回答这一小步。";
+    }
+    if (/加法|连加|几个几/.test(studentText) && /结果|答案|一共/.test(label)) {
+      return "意思说对了。现在把几个几换成乘法算式，算出一共是多少。";
+    }
+  }
+
+  if (family === "time") {
+    if (/点|时|分|半/.test(studentText) && /时针|短针/.test(label)) {
+      return "你已经在说完整时间了。先拆小一点：短针指向几？请只说短针。";
+    }
+    if (/点|时|分|半/.test(studentText) && /分针|长针/.test(label)) {
+      return "完整时间先放一下。现在只看长针：长针指向几，表示几分？";
+    }
+  }
+
+  if (family === "shape") {
+    if (/长方形|正方形|三角形|圆|角|边|面/.test(studentText) && !/特征|为什么|原因/.test(label)) {
+      return "你已经说到图形了。现在先抓一个特征：它有几条边，或者有没有角？";
+    }
+  }
+
+  if (family === "placeValue") {
+    if (/十|个位|十位|一/.test(studentText) && !/表示|数位|十位|个位/.test(label)) {
+      return "你已经想到数位了。现在只说这一位：这个数字在十位还是个位？";
+    }
+  }
+
+  if (family === "data") {
+    if (/最多|最少|一共|相差|多|少/.test(studentText) && !/行|列|表/.test(label)) {
+      return "你已经在想结果了。读表题先找位置：这道题要看哪一行或哪一列？";
+    }
+  }
+
+  if (family === "logic") {
+    if (/所以|因为|不是|只能|排除/.test(studentText) && !/线索|条件|排除/.test(label)) {
+      return "你已经在推理了。先说第一条线索：题里哪一句话最确定？";
+    }
+  }
+
   return "";
 }
 
 function teacherReasonMessage(reasonPlan) {
-  return softenTeacherScaffoldText(`答案对了。现在补一句原因，${formatReasonChildPrompt(reasonPlan)}`);
+  const lesson = safeCurrentLesson();
+  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const key = `${lesson?.id || ""}|${lesson?.activeQuestion?.id || lesson?.activeQuestion?.prompt || ""}|${reasonPlan?.label || ""}|${safeStateField("lastStudentText", "")}`;
+  const sentence = getReasonRepeatSentence(reasonPlan);
+  const familyLeads = {
+    compare: ["你已经比出来了。现在讲清：为什么这边大？", "符号快稳了，再说一句比较方法。"],
+    money: ["结果会了，接下来讲单位为什么要先换。", "钱数算出来了，现在说清元、角、分的关系。"],
+    moneyApplication: ["找回的钱会算了。现在说清为什么用“付的钱减价钱”。", "购物题不只要答案，还要讲清为什么先换单位。"],
+    makeTenAdd: ["答案出来了。现在讲清为什么先凑成10。", "凑十法会用了，再把方法说成一句话。"],
+    breakTenSubtract: ["答案出来了。现在讲清为什么要破十。", "退位减会算了，再说清不够减怎么办。"],
+    concreteAddition: ["一共多少会算了。现在讲清为什么用加法。", "把两部分合起来的意思说出来。"],
+    concreteSubtraction: ["还剩多少会算了。现在讲清为什么用减法。", "把原来、拿走、还剩的故事说出来。"],
+    multiplication: ["口诀会用了。现在讲清这是几个几。", "乘法答案前面，要把几个几说出来。"],
+    division: ["答案会分了。现在讲清为什么是平均分。", "每份多少会算了，再说一句“每份一样多”。"],
+    time: ["时间会读了。现在讲清先看哪根针、再看哪根针。"],
+    placeValue: ["数会写了。现在讲清这个数字站在哪一位。"],
+    shape: ["图形名字会说了。现在讲清一个特征。"],
+    data: ["数量读出来了。现在讲清你看的是哪一行或哪一列。"],
+    logic: ["答案推出来了。现在讲清你先用了哪条线索。"],
+  };
+  const lead = pickNaturalVariant(familyLeads[family] || ["答案这步过了。现在像小老师一样说一句原因。", "结果先放稳，接下来讲讲你是怎么想的。"], key);
+  const childAction = sentence ? `你可以这样开头：${sentence}。` : formatReasonChildPrompt(reasonPlan);
+  return softenTeacherScaffoldText(`${lead}${childAction}`);
 }
 
 function parseMoneyQuestion(question) {
@@ -4769,7 +4936,7 @@ function createCurriculumLesson(spec) {
     stepHint: spec.stepHint || spec.microSteps[0],
     teachbackPrompt: `这次换你当小老师，讲给我听：${spec.node} 这题应该先想什么？`,
     repairPrompt: `没关系，我们换个更小的说法。先看图，再说：${spec.microSteps[0]}。`,
-    doneMessage: "你讲清楚了。你不是只说答案，还说出了怎么想。",
+    doneMessage: "这次不只是答案对了，你也说出了怎么想。",
     prerequisites: createPrerequisites(spec),
     microSteps: spec.microSteps,
     commonGaps: spec.commonGaps,
@@ -4993,6 +5160,30 @@ function currentLesson() {
   return lessons[state.lessonIndex] || lessons[0];
 }
 
+function safeCurrentLesson() {
+  try {
+    return typeof currentLesson === "function" ? currentLesson() : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeStateField(field, fallback = "") {
+  try {
+    return state?.[field] ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safePassedQuestionCount() {
+  try {
+    return state?.passedQuestionIds?.length || 0;
+  } catch {
+    return 0;
+  }
+}
+
 function getNextLessonIndex() {
   return (state.lessonIndex + 1) % lessons.length;
 }
@@ -5080,10 +5271,10 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
   const move = createStrategyDialogueMove(family, "variant", key);
   if ((starter?.index || 0) > 0) {
     const lighterVariants = [
-      `这次少提示一点。${prompt} 先试：${firstStep}`,
-      `换个小变化。${prompt} 先看：${firstStep}`,
-      `方法还是刚才那个。${prompt} 先说关键一步：${firstStep}`,
-      `题目变了，想法不变。${prompt} 先答：${firstStep}`,
+      `这次老师少提示一点。看题：${prompt}。先试这一小步：${firstStep}`,
+      `换个小变化。题目是：${prompt}。先看：${firstStep}`,
+      `方法还是刚才那个。先读题：${prompt}。请说关键一步：${firstStep}`,
+      `题目变了，想法不变。${prompt} 现在只答：${firstStep}`,
     ];
     const lead = pickNaturalVariant([move, ""], `${key}|lead`);
     const body = pickNaturalVariant(lighterVariants, key);
@@ -5096,28 +5287,28 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
   }
   const variants = {
     makeTenAdd: [
-      `换个小题，还是用凑十。${prompt} 先想：${firstStep}`,
-      `这次数字变了，方法不变。看题：${prompt} 先找哪个数快到10。${firstStep}`,
-      `老师想确认你会不会迁移。${prompt} 先看凑十的第一步：${firstStep}`,
+      `换个小题，还是用凑十。看题：${prompt}。先想：${firstStep}`,
+      `这次数字变了，方法不变。看题：${prompt}。先找哪个数快到10。${firstStep}`,
+      `老师想确认你会不会迁移。题目是：${prompt}。先看凑十第一步：${firstStep}`,
     ],
     breakTenSubtract: [
-      `换一道退位减法。${prompt} 先看个位够不够减：${firstStep}`,
+      `换一道退位减法。看题：${prompt}。先看个位够不够减：${firstStep}`,
       `这题也别硬背答案，先用破十法。${prompt} ${firstStep}`,
-      `我们再试一个小变化。${prompt} 先把十几拆开想：${firstStep}`,
+      `我们再试一个小变化。题目是：${prompt}。先把十几拆开想：${firstStep}`,
     ],
     concreteAddition: [
       `换个小故事，还是看“合起来”。${prompt} ${firstStep}`,
-      `这次先找两部分。${prompt} 先看一小步：${firstStep}`,
+      `这次先找两部分。题目是：${prompt}。先看一小步：${firstStep}`,
       `同样是加法意思，题目变一下。${prompt} ${firstStep}`,
     ],
     concreteSubtraction: [
       `换个小故事，还是看“拿走后还剩”。${prompt} ${firstStep}`,
-      `这次先找原来有多少、少了多少。${prompt} ${firstStep}`,
+      `这次先找原来有多少、少了多少。题目是：${prompt}。${firstStep}`,
       `同样是减法意思，题目变一下。${prompt} 先看：${firstStep}`,
     ],
     calculation: [
       `换个算式，别急着报答案。${prompt} 先说第一步：${firstStep}`,
-      `我们用同一个方法再试一次。${prompt} ${firstStep}`,
+      `我们用同一个方法再试一次。看题：${prompt}。${firstStep}`,
       `这题换了数字，先看方法有没有稳住。${prompt} ${firstStep}`,
     ],
     application: [
@@ -5501,7 +5692,7 @@ function getKidShoppingPrompt(lesson, plan, story) {
   const phase = getShoppingBoardPhase(plan);
   const prompts = {
     question: "题目要找回多少钱？",
-    relation: "跟着说：找回的钱=付的钱-价钱。",
+    relation: "先说关系：找回的钱=付的钱-价钱。",
     unit: "元和角不能混着减，先都换成什么单位？",
     pay: `${story.pay.text} = （  ）角？`,
     price: `${story.price.text} = （  ）角？`,
@@ -8478,7 +8669,7 @@ function maybeContinueWithVariantAfterTeachback(inputType) {
   state.currentAtomName = starter.label;
   state.currentStep = `小台阶 ${starter.index + 1}：${starter.label}`;
   state.aiContext = "孩子讲清楚了一题，进入同知识点变式题。";
-  state.aiMessage = `你讲清楚了。${createVariantQuestionMessage(lesson, nextQuestion, starter, "讲清后变式")}`;
+  state.aiMessage = `${createTeachbackVariantBridge(lesson, starter, nextQuestion)}${createVariantQuestionMessage(lesson, nextQuestion, starter, "讲清后变式")}`;
   state.feynmanStatus = "已讲清一题，继续变式";
   state.showVisual = true;
   state.lastStudentText = "";
@@ -8487,6 +8678,25 @@ function maybeContinueWithVariantAfterTeachback(inputType) {
   addEvidence("进入变式题", `已通过 ${state.passedQuestionIds.length} 道，继续：${nextQuestion.prompt}`, inputType === "voice" ? "语音复述" : "打字复述");
   speakCurrentMessage();
   return true;
+}
+
+function createTeachbackVariantBridge(lesson, starter, nextQuestion) {
+  const family = inferActiveQuestionFamily(lesson, nextQuestion || lesson?.activeQuestion || null);
+  const key = `${lesson?.id || ""}|${nextQuestion?.id || nextQuestion?.prompt || ""}|${starter?.label || ""}|${state?.passedQuestionIds?.length || 0}`;
+  const familyBridges = {
+    money: ["单位关系说清了。", "这题的钱数想法稳了。"],
+    moneyApplication: ["找零方法说出来了。", "购物题的关系讲明白了。"],
+    makeTenAdd: ["凑十的办法讲出来了。", "你不是背答案，已经会想凑十了。"],
+    breakTenSubtract: ["破十的办法讲出来了。", "不够减怎么拆，你已经说到了。"],
+    compare: ["比较方法说清了。", "谁多谁少讲明白了。"],
+    multiplication: ["几个几讲清了。", "乘法意思说出来了。"],
+    division: ["平均分的意思讲清了。", "每份一样多这点稳了。"],
+    time: ["短针长针讲清了。", "读时间的方法说出来了。"],
+  };
+  return pickNaturalVariant(
+    familyBridges[family] || ["这题方法说出来了。", "可以，老师换个小变化看看稳不稳。", "刚才那题过关了。"],
+    key,
+  );
 }
 
 function evaluateTeachback(text, inputType) {

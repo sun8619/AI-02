@@ -475,11 +475,11 @@ function createPilotTeachPrompt(explain, repeat) {
   const cleanExplain = cleanPilotSentence(explain);
   const cleanRepeat = cleanPilotSentence(repeat);
   const variants = [
-    `老师先示范方法：${cleanExplain} 接下来你只要说：${cleanRepeat}。`,
+    `老师先示范方法：${cleanExplain} 接下来请说这一句：${cleanRepeat}。`,
     `这一步先听懂，不急着算完整题。${cleanExplain} 你可以用自己的话说：${cleanRepeat}。`,
     `我们把大题缩小来看。${cleanExplain} 你现在只说这个意思：${cleanRepeat}。`,
     `先看图和题怎么连起来：${cleanExplain} 你试着说出关键词：${cleanRepeat}。`,
-    `这次老师先铺路。${cleanExplain} 你现在接着说：${cleanRepeat}。`,
+    `这次老师先铺路。${cleanExplain} 你现在先说：${cleanRepeat}。`,
   ];
   return pickPilotLine(variants, `${cleanExplain}-${cleanRepeat}-teach`);
 }
@@ -503,7 +503,7 @@ function createPilotNoResponsePrompt(explain, repeat) {
   const cleanRepeat = cleanPilotSentence(repeat);
   const variants = [
     `说不出来也正常，老师先带一遍：${cleanExplain} 你听完说一个词就可以。`,
-    `这一步先不用自己想句子。老师说：${cleanRepeat}。你跟着说一遍。`,
+    `这一步先不用自己想长句。老师说：${cleanRepeat}。请说这个意思。`,
     `我们先把方法放稳：${cleanExplain} 你只要记住「${cleanRepeat}」。`,
     `没关系，先看老师怎么说：${cleanRepeat}。下一轮再让你自己讲。`,
     `先不答整题，只练这个意思：${cleanRepeat}。`,
