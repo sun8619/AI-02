@@ -556,10 +556,10 @@ function makeNextAtomMessage({ point, previousAtom, nextAtom, session }) {
   const opener = pickText([
     "这一步可以了，下面只看一个新小点。",
     "刚才答对了，现在换下一小步。",
-    "这个点站稳了，接着看一个小动作。",
-    "这一小步过了，下面换个角度问你。",
+    "这一步会了，接着看一个小动作。",
+    "这一小步过了，下面换个问法。",
     "很好，我们往前走一点点。",
-    "这关先收住，下一句只看一个地方。",
+    "这一步先过关，下一句只看一个地方。",
   ], `${point?.id}|${previousAtom?.id}|${nextAtom?.id}|${session?.completed_atom_ids?.length}`);
   return `${opener}${makeTeachMessage(nextAtom)}`;
 }

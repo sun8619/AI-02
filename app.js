@@ -2466,7 +2466,7 @@ function formatChildStepPrompt(plan) {
   if (!prompt) return "先说你看到的一个线索。";
   if (plan?.isReason) {
     const sentence = String(plan.repeatSentence || createReasonRepeatSentence(plan.label, prompt, plan.answerKeywords)).replace(/[。！？!?]+$/, "");
-    return `老师先给一句参考：${sentence}。你可以先照着说半句，再换成自己的话。`;
+    return `先说一句理由：${sentence}。也可以用自己的话说。`;
   }
   if (shouldModelBeforeAsking(plan)) return formatTeacherModelFirstPrompt(plan);
   if (/为什么|怎么想|怎么知道|怎么比较|怎么检查/.test(prompt)) return `${prompt} 先说一句就行。`;
@@ -2565,6 +2565,10 @@ function childGuideBridge(plan, previousPlan = null) {
 
 function softenTeacherScaffoldText(text) {
   return String(text || "")
+    .replace(/可以，先把这个想法放稳，再看下一点。/g, "这一步对了，我们看下一小步。")
+    .replace(/刚才那句还没接到题上，老师把问题缩小。/g, "没关系，老师把问题变小一点。")
+    .replace(/先抓这一小步/g, "先看这一问")
+    .replace(/只回答眼前这一小步/g, "先说这一小问")
     .replace(/你只说[:：]?/g, "你可以先说：")
     .replace(/只说这个符号就行/g, "先说这个符号就行")
     .replace(/只回答一步/g, "先回答一步")
@@ -2577,6 +2581,7 @@ function softenTeacherScaffoldText(text) {
     .replace(/老师把答案范围缩小[:：]?/g, "老师把这一步讲清楚：")
     .replace(/跟老师说一句/g, "用自己的话说一句")
     .replace(/跟着说一个小答案/g, "先说一个小答案")
+    .replace(/\s+把刚才的方法/g, " 把刚才的方法")
     .replace(/^(对，[^。！？!?]+。)对，/g, "$1")
     .replace(/^(好，[^。！？!?]+。)好，/g, "$1");
 }
@@ -2606,7 +2611,7 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
   let message = "";
   if (familyBridge && !bridge) {
     const nextPrompt = follow || formatChildStepPrompt(nextPlan);
-    message = `${move}${familyBridge}${nextPrompt}`;
+    message = `${familyBridge}${nextPrompt}`;
     return softenTeacherScaffoldText(message);
   }
   if (bridge) {
@@ -2615,7 +2620,7 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
     return softenTeacherScaffoldText(message);
   }
   if (nextPlan?.isReason) {
-    message = `${move}${nextLead}：${follow || formatChildStepPrompt(nextPlan)}`;
+    message = `${move}${follow || formatChildStepPrompt(nextPlan)}`;
     return softenTeacherScaffoldText(message);
   }
   if (previousPlan?.label && nextPlan?.label) {
@@ -2735,7 +2740,15 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
     if (answer) return `现在不用说完整，先说这个关键词：${answer}。`;
     return "现在不用说完整，先把你看到的一个数或一个词说出来。";
   }
-  return "你再试一次，只回答眼前这一小步。";
+  const lesson = typeof currentLesson === "function" ? currentLesson() : null;
+  return pickNaturalVariant(
+    [
+      "你可以先说一个词。",
+      "先说这一小问就行。",
+      "看着图，说你看到的一个数或一个词。",
+    ],
+    `${lesson?.id || ""}|${plan?.label || ""}|${plan?.prompt || ""}|retry`,
+  );
 }
 
 function getGuidedRepairKey(plan, lesson = currentLesson()) {
@@ -5003,10 +5016,10 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
   const move = createStrategyDialogueMove(family, "variant", key);
   if ((starter?.index || 0) > 0) {
     const lighterVariants = [
-      `这次老师少提示一点。${prompt} 你先试这个关键处：${firstStep}`,
-      `换个小变化，不从头拆了。${prompt} 先抓这一小步：${firstStep}`,
+      `这次老师少提示一点。${prompt} 你先试这一小问：${firstStep}`,
+      `换个小变化，不从头拆了。${prompt} 先看这一问：${firstStep}`,
       `这题和刚才是同一种方法。${prompt} 你先说关键一步：${firstStep}`,
-      `这次看看你能不能迁移。${prompt} 先不用讲完整，只回答：${firstStep}`,
+      `这次看看你能不能换个题也会。${prompt} 不用讲完整，先回答：${firstStep}`,
     ];
     return softenTeacherScaffoldText(`${move || ""}${pickNaturalVariant(lighterVariants, key)}`);
   }
@@ -8164,25 +8177,48 @@ function createTeachbackCheckPrompt(lesson) {
   const family = getLessonTeachingFamily(lesson);
   const topic = lesson?.node || lesson?.lesson || "这类题";
   const prompts = {
-    money: `你只讲方法：遇到「${topic}」，为什么要先换单位？`,
-    moneyApplication: `你只讲方法：购物找零题，先看什么，再怎么算？`,
-    makeTenAdd: `你只讲方法：什么时候用凑十？先补什么，再算什么？`,
-    breakTenSubtract: `你只讲方法：个位不够减时，为什么要破十？`,
-    concreteAddition: `你只讲方法：为什么这类题要把两部分合起来？`,
-    concreteSubtraction: `你只讲方法：为什么这类题要从原来里面拿走？`,
-    multiplication: `你只讲方法：怎么从图里看出“几个几”？`,
-    division: `你只讲方法：为什么平均分可以用除法想？`,
-    compare: `你只讲方法：比较两边时，先看什么，再填什么？`,
-    calculation: `你只讲方法：做计算题时，先看符号还是先猜答案？`,
-    application: `你只讲方法：解决问题时，先看题目问什么，还是先乱算数字？`,
-    placeValue: `你只讲方法：十位和个位分别表示什么？`,
-    time: `你只讲方法：读钟面时先看哪根针，再看哪根针？`,
-    measure: `你只讲方法：选单位或量长度时，先看什么？`,
-    shape: `你只讲方法：判断图形时，不能只看像不像，要看什么？`,
-    data: `你只讲方法：读表时，先找什么，再比较什么？`,
-    logic: `你只讲方法：推理题为什么不能靠猜？`,
+    money: `说一句就行：为什么要先换单位？`,
+    moneyApplication: `说一句就行：购物找零题先看什么？`,
+    makeTenAdd: `说一句就行：为什么先凑成10？`,
+    breakTenSubtract: `说一句就行：个位不够减怎么办？`,
+    concreteAddition: `说一句就行：为什么把两部分合起来？`,
+    concreteSubtraction: `说一句就行：为什么从原来里面拿走？`,
+    multiplication: `说一句就行：怎么知道是几个几？`,
+    division: `说一句就行：为什么叫平均分？`,
+    compare: `说一句就行：先看什么，再填什么？`,
+    calculation: `说一句就行：先看符号，还是先猜答案？`,
+    application: `说一句就行：先看题目问什么，还是先算数字？`,
+    placeValue: `说一句就行：十位和个位有什么不同？`,
+    time: `说一句就行：读钟面先看哪根针？`,
+    measure: `说一句就行：选单位时先看什么？`,
+    shape: `说一句就行：判断图形要看什么？`,
+    data: `说一句就行：读表时先找什么？`,
+    logic: `说一句就行：推理题为什么不能靠猜？`,
   };
-  return prompts[family] || `你只讲方法：这类题先看什么，再做什么？`;
+  return `${prompts[family] || `说一句就行：${topic}先看什么？`} 可以这样开头：${createTeachbackStarterSentence(family)}。`;
+}
+
+function createTeachbackStarterSentence(family) {
+  const starters = {
+    money: "我先把元和角换成同一种单位",
+    moneyApplication: "我先看付了多少钱，再看东西多少钱",
+    makeTenAdd: "我先把一个数补成10",
+    breakTenSubtract: "我先看个位够不够减",
+    concreteAddition: "我先找两部分，再合起来",
+    concreteSubtraction: "我先看原来有多少，再看拿走多少",
+    multiplication: "我先看每组几个，再看有几组",
+    division: "我先看是不是每份一样多",
+    compare: "我先看左边，再看右边",
+    calculation: "我先看符号，再一步一步算",
+    application: "我先看题目问什么",
+    placeValue: "我先看数字站在哪一位",
+    time: "我先看短针，再看长针",
+    measure: "我先看要量什么，再选单位",
+    shape: "我先看边、角这些特征",
+    data: "我先找到表里的数量",
+    logic: "我先用一个条件排除不可能的",
+  };
+  return starters[family] || "我先看题目问什么";
 }
 
 function createCompletionMessage(lesson = currentLesson(), prefix = "这个知识点先过关。你不是只背答案，也能说出怎么想。") {
