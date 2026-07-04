@@ -475,11 +475,16 @@ function createPilotTeachPrompt(explain, repeat) {
   const cleanExplain = cleanPilotSentence(explain);
   const cleanRepeat = cleanPilotSentence(repeat);
   const variants = [
-    `老师先示范方法：${cleanExplain} 接下来请说这一句：${cleanRepeat}。`,
-    `这一步先听懂，不急着算完整题。${cleanExplain} 你可以用自己的话说：${cleanRepeat}。`,
-    `我们把大题缩小来看。${cleanExplain} 你现在只说这个意思：${cleanRepeat}。`,
-    `先看图和题怎么连起来：${cleanExplain} 你试着说出关键词：${cleanRepeat}。`,
-    `这次老师先铺路。${cleanExplain} 你现在先说：${cleanRepeat}。`,
+    `先看一个小方法：${cleanExplain} 接下来请你说：${cleanRepeat}。`,
+    `这一步先听懂，不急着算完整题。${cleanExplain} 你可以换自己的话说：${cleanRepeat}。`,
+    `${cleanExplain} 这一轮回答：${cleanRepeat}。`,
+    `先看图和题怎么连起来：${cleanExplain} 你试着说：${cleanRepeat}。`,
+    `乐之老师给你半句提示：${cleanExplain} 你接着说：${cleanRepeat}。`,
+    `把眼睛放到这一点：${cleanExplain} 你来说：${cleanRepeat}。`,
+    `这句话用得上：${cleanExplain} 请回答：${cleanRepeat}。`,
+    `如果一下子想不出，就先抓住这句：${cleanExplain} 你接：${cleanRepeat}。`,
+    `我们先练眼前这一步。${cleanExplain} 请说：${cleanRepeat}。`,
+    `先把方法说短一点：${cleanExplain} 你试试：${cleanRepeat}。`,
   ];
   return pickPilotLine(variants, `${cleanExplain}-${cleanRepeat}-teach`);
 }
@@ -490,9 +495,9 @@ function createPilotRepairPrompt(explain, repeat) {
   const cue = cleanRepeat.split(/[，,；;、\s]+/).filter(Boolean).slice(0, 2).join("、") || cleanRepeat;
   const variants = [
     `刚才差一点。我们退回这一步：${cleanExplain} 先说「${cue}」就行。`,
-    `不重做整题，只补这个小地方。你现在只说：${cleanRepeat}。`,
-    `老师把问题缩小：${cleanExplain} 你先抓住「${cue}」。`,
-    `先别猜最后答案，回到方法。你现在只说：${cleanRepeat}。`,
+    `不重做整题，只补这个小地方：${cleanRepeat}。`,
+    `乐之老师把问题缩小：${cleanExplain} 你抓住「${cue}」就可以。`,
+    `先别猜最后答案，回到方法：${cleanRepeat}。`,
     `这一步还没稳。再看一次：${cleanExplain} 然后你说一个关键词。`,
   ];
   return pickPilotLine(variants, `${cleanExplain}-${cleanRepeat}-repair`);

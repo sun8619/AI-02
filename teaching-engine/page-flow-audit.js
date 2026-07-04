@@ -234,6 +234,16 @@ function scoreNaturalness(events) {
     /老师把方法句放在这里/g,
     /老师先说结果/g,
     /这题最后是/g,
+    /老师先铺路/g,
+    /大题缩小/g,
+    /只说这个意思/g,
+    /先说关键词/g,
+    /答案会算只是第一层/g,
+    /这一点先不猜/g,
+    /把题和图连起来看/g,
+    /听完后，请用自己的话说/g,
+    /你现在只说/g,
+    /你现在先说/g,
   ];
   const templateHits = countPatternHits(combined, banned);
   const longMessages = messages.filter((message) => compact(message).length > 190);
@@ -304,7 +314,7 @@ function hasClearAsk(message) {
   const text = String(message || "");
   return (
     /[？?]/.test(text) ||
-    /你可以|你先|你现在|你不用|你别|请|说出|说一说|告诉|回答|填|算|数一数|比一比|看一看|想一想|先看|先说|再说|先判断|先找|只回答|只看|接一句|接这半句|跟着说|跟读|试着说|只要说|只说|现在说|用自己的话说|说一个|说成/.test(text)
+    /你可以|你先|你现在|你不用|你别|你来|你接|你试|请|说出|说一说|告诉|回答|填|算|数一数|比一比|看一看|想一想|先看|先说|再说|然后说|先判断|先找|只回答|只看|接一句|接这半句|接着说|跟着说|跟着读|跟读|试着说|只要说|只说|现在说|这一轮回答|这一轮说|用自己的话说|说一个|说成/.test(text)
   );
 }
 

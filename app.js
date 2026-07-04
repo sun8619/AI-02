@@ -2555,29 +2555,29 @@ function createTeacherActionForModelStep(plan, family, follow, key) {
 
   const familyActions = {
     compare: [
-      `现在只回答一个小问题：${target || cleanFollow}。`,
+      `先回答一个小问题：${target || cleanFollow}。`,
       `看两边，先说：${cleanFollow}。`,
       `不用急着整题，先告诉老师：${target || cleanFollow}。`,
     ],
     money: [
       `请把这句说出来：${cleanFollow}。`,
-      `现在只说单位关系：${cleanFollow}。`,
+      `先说单位关系：${cleanFollow}。`,
       `这一步只回答钱数：${moneyTarget}。`,
     ],
     moneyApplication: [
       `先说这个关系：${cleanFollow}。`,
-      `现在只说第一步：${target || cleanFollow}。`,
+      `先说第一步：${target || cleanFollow}。`,
       `别急着最后答案，先把这一步说清：${cleanFollow}。`,
     ],
     time: [`只看这一根针，回答：${cleanFollow}。`, `现在先说时间里的这一小步：${target || cleanFollow}。`],
-    division: [`先说分法里的这一点：${cleanFollow}。`, `现在只回答：${target || cleanFollow}。`],
+    division: [`先说分法里的这一点：${cleanFollow}。`, `这一轮先回答：${target || cleanFollow}。`],
     multiplication: [`先说“几个几”的这一点：${cleanFollow}。`, `口诀先不急，先回答：${target || cleanFollow}。`],
   };
 
   const generalActions = [];
   if (visualAction) {
     generalActions.push(`看图，先说你看到的：${cleanFollow}。`);
-    generalActions.push(`现在只从图里找一个答案：${target || cleanFollow}。`);
+    generalActions.push(`先从图里找一个答案：${target || cleanFollow}。`);
   }
   if (relationAction) {
     generalActions.push(`先把这句短话说出来：${cleanFollow}。`);
@@ -2587,7 +2587,7 @@ function createTeacherActionForModelStep(plan, family, follow, key) {
     generalActions.push(`请只算这一小步：${target || cleanFollow}。`);
     generalActions.push(`先不报整题答案，只回答：${target || cleanFollow}。`);
   }
-  generalActions.push(`你现在只回答这一问：${target || cleanFollow}。`);
+  generalActions.push(`这一轮先回答这一问：${target || cleanFollow}。`);
   generalActions.push(`请说一个数、一个词，或者这句短话：${cleanFollow}。`);
 
   return pickNaturalVariant(familyActions[family] || generalActions, `${key}|action`);
@@ -2704,7 +2704,7 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
   const leadOptions = nextPlan?.isReason
     ? ["现在把想法说出来", "接下来讲一讲为什么", "最后当小老师说一句", "用一句话说说为什么"]
     : [
-        `现在只看「${nextPlan?.label || "下一步"}」`,
+        `先看「${nextPlan?.label || "下一步"}」`,
         `接下来换到「${nextPlan?.label || "下一步"}」`,
         `这一轮先看「${nextPlan?.label || "下一步"}」`,
         `下面换个小角度，看「${nextPlan?.label || "下一步"}」`,
@@ -3003,15 +3003,15 @@ function createForwardButUsefulRepair(plan, studentText) {
       const total = numbers[0];
       const parts = numbers[1];
       if (Number.isFinite(total) && Number.isFinite(parts)) {
-        if (label.includes("看总数")) return `对，平均分这个意思已经有了。现在只补总数：一共有${total}个。你先说：总数是${total}。`;
-        return `对，平均分这个意思已经有了。现在只补分法：分成${parts}份。你先说：分成${parts}份。`;
+        if (label.includes("看总数")) return `对，平均分这个意思已经有了。先补总数：一共有${total}个。你先说：总数是${total}。`;
+        return `对，平均分这个意思已经有了。先补分法：分成${parts}份。你先说：分成${parts}份。`;
       }
-      return "对，平均分这个意思已经有了。现在只补眼前这个数量。";
+      return "对，平均分这个意思已经有了。先补眼前这个数量。";
     }
     if (label.includes("看分成") && /总数|一共|12/.test(studentText)) {
       const numbers = extractNumbers(lesson?.activeQuestion?.prompt || lesson?.problem || "");
       const parts = numbers[1];
-      if (Number.isFinite(parts)) return `总数说对了。现在只看分法：平均分给${parts}个小朋友，就是分成${parts}份。你先说：分成${parts}份。`;
+      if (Number.isFinite(parts)) return `总数说对了。接着看分法：平均分给${parts}个小朋友，就是分成${parts}份。你先说：分成${parts}份。`;
     }
     if (label.includes("看总数") && /分成|每份|小朋友|份/.test(studentText)) {
       const numbers = extractNumbers(lesson?.activeQuestion?.prompt || lesson?.problem || "");
@@ -3047,7 +3047,7 @@ function createForwardButUsefulRepair(plan, studentText) {
       return "你已经在说完整时间了。先拆小一点：短针指向几？请只说短针。";
     }
     if (/点|时|分|半/.test(studentText) && /分针|长针/.test(label)) {
-      return "完整时间先放一下。现在只看长针：长针指向几，表示几分？";
+      return "完整时间先放一下。先看长针：长针指向几，表示几分？";
     }
   }
 
@@ -3059,7 +3059,7 @@ function createForwardButUsefulRepair(plan, studentText) {
 
   if (family === "placeValue") {
     if (/十|个位|十位|一/.test(studentText) && !/表示|数位|十位|个位/.test(label)) {
-      return "你已经想到数位了。现在只说这一位：这个数字在十位还是个位？";
+      return "你已经想到数位了。先说这一位：这个数字在十位还是个位？";
     }
   }
 
@@ -5274,7 +5274,7 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
       `这次老师少提示一点。看题：${prompt}。先试这一小步：${firstStep}`,
       `换个小变化。题目是：${prompt}。先看：${firstStep}`,
       `方法还是刚才那个。先读题：${prompt}。请说关键一步：${firstStep}`,
-      `题目变了，想法不变。${prompt} 现在只答：${firstStep}`,
+      `题目变了，想法不变。${prompt} 这一轮先答：${firstStep}`,
     ];
     const lead = pickNaturalVariant([move, ""], `${key}|lead`);
     const body = pickNaturalVariant(lighterVariants, key);
@@ -5819,7 +5819,7 @@ function renderStepPanel() {
       </div>
       <h2>${escapeText(renderChildStepTitle(state.currentStep))}</h2>
       <p>${escapeText(renderStepHint())}</p>
-      ${state.currentAtomName ? `<p class="atom-note">现在只看：${escapeText(state.currentAtomName)}</p>` : ""}
+      ${state.currentAtomName ? `<p class="atom-note">这一轮看：${escapeText(state.currentAtomName)}</p>` : ""}
       <div class="step-ladder" aria-label="学习小台阶">
         ${ladderSteps
           .map(
@@ -6005,7 +6005,7 @@ function renderVoiceButtonAriaLabel() {
 function renderStepHint() {
   const lesson = currentLesson();
   if (lesson.useQuestionBankTutor && ["guiding", "repair"].includes(state.phase)) {
-    return `现在只回答：${formatChildStepPrompt(createGuidedStepPlan(lesson, state.completedSteps))}`;
+    return `这一轮先回答：${formatChildStepPrompt(createGuidedStepPlan(lesson, state.completedSteps))}`;
   }
   if (state.teachingState === "PRACTICE_SET") return "现在不是新讲解，是小闯关。答错也没关系，老师会只补那一个小地方。";
   if (state.teachingState === "REMEDIATION_TEACH" || state.teachingState === "REMEDIATION_RECHECK") return "我们只补刚才没稳的小台阶，不会整章重来。";

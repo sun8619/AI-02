@@ -677,7 +677,7 @@ function childTargetPromptOptions(target, family, mode) {
   const common = [
     `你只要说一句：${target}`,
     `请把答案缩短一点：${target}`,
-    `你现在只补眼前这句：${target}`,
+    `先补眼前这句：${target}`,
   ];
   const familyOptions = {
     compare: [
@@ -724,7 +724,7 @@ function childTargetPromptOptions(target, family, mode) {
     moneyApplication: [
       `你先分清价钱和付的钱，再说：${target}`,
       `请先看找回是剩下的钱：${target}`,
-      `你现在只回答购物题这一步：${target}`,
+      `购物题先看这一步：${target}`,
       `你先看花掉多少、付出多少，再答：${target}`,
       `请只说剩下要找回的钱：${target}`,
       `你先用付的钱减价格，再说：${target}`,
@@ -1103,19 +1103,19 @@ function makeTeachMessage(atom) {
   if (atom.teach_prompt) return atom.teach_prompt;
   if (atomName.includes("1元等于10角")) return "我们先只看1元。1元等于几角？";
   if (atomName.includes("1角等于10分")) return "再看角和分：1角等于几分？";
-  if (atomName.includes("换成几十角")) return "现在只换整元：3元是几角？";
+  if (atomName.includes("换成几十角")) return "先换整元：3元是几角？";
   if (atomName.includes("再加原来的几角")) return "现在把换好的角和原来的角合起来。30角加5角是多少？";
   if (atomName.includes("说清为什么先换单位")) return makeMoneyReasonRepeatMessage("这句有点难。");
   if (atomName.includes("看清商品价格")) return "先只看价格：商品多少钱？";
   if (atomName.includes("看清付了多少钱")) return "再只看付出去的钱：付了多少钱？";
   if (atomName.includes("找回就是剩下的钱")) return "找回的钱，是付出去后剩下的钱，还是还要再付的钱？";
-  if (atomName.includes("用减法算找回")) return "现在只算找回：5减4等于几？";
+  if (atomName.includes("用减法算找回")) return "先算找回：5减4等于几？";
   if (atomName.includes("说清为什么用减法")) return "你试着说一句：为什么找回的钱要用减法？";
   if (atomName.includes("每组同样多")) return "先看每一组：每组有几个？";
   if (atomName.includes("数有几组")) return "再数一数：一共有几组？";
   if (atomName.includes("用连加表示几个几")) return "先写连加式：3个4可以写成4+4+4吗？";
   if (atomName.includes("用乘法表示几个几")) return "几个几可以用乘法简写。3个4可以写成几乘几？";
-  if (atomName.includes("看到9先想差1到10")) return "现在只看9：9还差几就到10？";
+  if (atomName.includes("看到9先想差1到10")) return "先看9：9还差几就到10？";
   if (atomName.includes("把另一个数拆成")) return "为了给9凑成10，4可以拆成1和几？";
   if (atomName.includes("10再加剩下的数")) return "9拿到1变成10，还剩3。10加3等于几？";
   if (atomName.includes("说清为什么这样算")) return "你试着说一句：为什么9加几可以先凑10？";

@@ -286,14 +286,14 @@ function createTeacherLikeFamilySteps(family, context) {
   const answerWords = answerKeywords(question);
   const numbers = extractNumbers(prompt).map(String);
   const title = point.title || point.node || "这个知识点";
-  const finalStep = (label = "说出结果", teach = "现在只算当前这一步，结果是多少？", extra = []) =>
+  const finalStep = (label = "说出结果", teach = "这一轮只算当前这一步，结果是多少？", extra = []) =>
     teacherAskStep(label, ensureChildAnswerTarget(teach), answerWords.concat(extra), {
       acceptsFinal: true,
       repair: makeFinalRepairPrompt(label, teach),
       noResponse: makeFinalNoResponsePrompt(label, teach),
     });
   const reasonStep = (label, repeat, extra = []) =>
-    teacherModelStep(label, "答案会算只是第一层，老师还想听你说出小原因。", repeat, ["因为", "所以", "先", "再", ...extra], { isReason: true });
+    teacherModelStep(label, "会算以后，还要能说出为什么。我们把理由说短一点。", repeat, ["因为", "所以", "先", "再", ...extra], { isReason: true });
 
   if (family === "calculation") return createCalculationTeacherSteps(context, finalStep, reasonStep);
   if (family === "compare") return createCompareTeacherSteps(context, finalStep, reasonStep);
@@ -316,13 +316,13 @@ function createTeacherLikeFamilySteps(family, context) {
       teacherModelStep("看购物关系", "购物题先看三件事：商品多少钱、付了多少钱、问一共还是找回。", "先看价格和付的钱", ["价格", "付了", "找回", "一共", "购物"]),
       teacherModelStep("先统一单位", "如果钱里有元也有角，先统一成角，再做加减。", "先把元换成角", ["元", "角", "同一种单位", "换成角"]),
       teacherModelStep("看故事动作", "买东西找回，意思是从付的钱里拿走商品的钱。", "找回用付的钱减价钱", ["找回", "付的钱", "价钱", "减", "剩下"]),
-      finalStep("算出找回或总钱数", "现在只算这一小步：应该是多少？", ["找回", "一共", "带单位"]),
+      finalStep("算出找回或总钱数", "这一轮只算这个小结果：应该是多少？", ["找回", "一共", "带单位"]),
       reasonStep("说清购物方法", "因为找回是付的钱里剩下的部分，所以用付的钱减价钱。", ["找回", "付的钱", "价钱", "剩下"]),
     ],
     compare: [
       teacherModelStep("看清两边", "比较题先不填符号，先分别看左边和右边。", "先看左边，再看右边", ["左边", "右边", "两边"]),
       teacherModelStep("找比较方法", "小数可以数一数；图形可以一一配对；大数先看高位。", "用数数或配对比较", ["数数", "一一对应", "配对", "高位", "比较"]),
-      teacherAskStep("说哪边大", "现在只说哪边大、哪边小，还是一样大？", ["左边大", "右边大", "一样大", "相等", "大", "小"]),
+      teacherAskStep("说哪边大", "先说判断：哪边大、哪边小，还是一样大？", ["左边大", "右边大", "一样大", "相等", "大", "小"]),
       finalStep("填比较符号", "最后再填大于号、小于号或等号。该填什么？", [">", "<", "=", "大于", "小于", "等于"]),
       reasonStep("说清比较方法", "我先看两边，再用数数或配对比较，所以能选出符号。", ["比较", "符号", "两边"]),
     ],
@@ -394,7 +394,7 @@ function createTeacherLikeFamilySteps(family, context) {
     comparisonDifference: [
       teacherModelStep("先看谁多谁少", "求多多少或少多少，先找谁多、谁少。", "先看谁多谁少", ["多", "少", "相差"]),
       teacherModelStep("用大数减小数", "求相差多少，就是把多出来的一段找出来。", "用大数减小数", ["大数", "小数", "减"]),
-      finalStep("算出相差", "现在只算相差多少，答案是多少？", ["相差", "多多少", "少多少"]),
+      finalStep("算出相差", "这一轮只算相差多少，答案是多少？", ["相差", "多多少", "少多少"]),
       reasonStep("说清相差方法", "因为求的是两边差多少，所以用大数减小数。", ["相差", "大数减小数"]),
     ],
     arrangement: [
@@ -487,10 +487,10 @@ function createTeacherLikeFamilySteps(family, context) {
 
 function ensureChildAnswerTarget(teach) {
   const text = String(teach || "").trim();
-  if (!text) return "你现在回答这一小步。";
-  if (/如果问/.test(text)) return `${text} 你现在先回答这一点。`;
+  if (!text) return "这一小步要你回答一个数、一个单位，或一个关键词。";
+  if (/如果问/.test(text)) return `${text} 这一步先回答这一点。`;
   if (/[？?]|你|请|回答|填|比一比|数一数|看一看|想一想|说出|说一说|先说|只说|现在说|是多少|多少|几|该/.test(text)) return text;
-  return `${text} 你现在回答这一小步。`;
+  return `${text} 这一小步要你接着回答。`;
 }
 
 function createCalculationTeacherSteps(context, finalStep, reasonStep) {
@@ -593,7 +593,7 @@ function createCompareTeacherSteps(context, finalStep, reasonStep) {
   if (isBigNumber) {
     return [
       teacherModelStep("先看数位", "大数比较不要从后面看，要先看位数和最高位。", "先看位数和最高位", ["数位", "最高位", "位数", "高位"]),
-      teacherAskStep("比较最高位", "现在只看最高位，左边和右边谁更大？", ["最高位", "左边", "右边", "大", "小"]),
+      teacherAskStep("比较最高位", "先只看最高位，左边和右边谁更大？", ["最高位", "左边", "右边", "大", "小"]),
       teacherAskStep("再看下一位", "如果最高位一样，再看下一位。这里需要看哪一位？", ["下一位", "百位", "十位", "个位"]),
       finalStep("填比较符号", "确定谁大以后，再填大于号、小于号或等号。该填什么？", [">", "<", "=", "大于", "小于", "等于"]),
       reasonStep("说清高位比较", "因为高位表示的数更大，所以比较大数要从高位开始。", ["高位", "数位", "比较"]),
@@ -602,7 +602,7 @@ function createCompareTeacherSteps(context, finalStep, reasonStep) {
   return [
     teacherModelStep("看清两边", "比较题先不填符号，先分别看左边和右边。", "先看左边，再看右边", ["左边", "右边", "两边"]),
     teacherModelStep("找比较方法", "小数可以数一数；图形可以一一配对。", "用数数或配对比较", ["数数", "一一对应", "配对", "比较"]),
-    teacherAskStep("说哪边大", "现在只说哪边大、哪边小，还是一样大？", ["左边大", "右边大", "一样大", "相等", "大", "小"]),
+    teacherAskStep("说哪边大", "先说判断：哪边大、哪边小，还是一样大？", ["左边大", "右边大", "一样大", "相等", "大", "小"]),
     finalStep("填比较符号", "最后再填大于号、小于号或等号。该填什么？", [">", "<", "=", "大于", "小于", "等于"]),
     reasonStep("说清比较方法", "我先看两边，再用数数或配对比较，所以能选出符号。", ["比较", "符号", "两边"]),
   ];
@@ -636,7 +636,7 @@ function createMixedCalculationTeacherSteps(context, finalStep, reasonStep) {
   if (hasMulDivAndAddSub || /乘加|乘减|两级混合|先乘除/.test(allText)) {
     return [
       teacherModelStep("先找乘除", "混合运算里如果有乘除又有加减，先不要从左往右，先找乘法或除法。", "先算乘除，再算加减", ["乘除", "加减", "先算", "混合运算"]),
-      teacherAskStep("先算乘除这一步", "现在只算乘法或除法那一步，得到多少？", ["乘法", "除法", "中间结果"]),
+      teacherAskStep("先算乘除这一步", "先算乘法或除法那一步，得到多少？", ["乘法", "除法", "中间结果"]),
       teacherModelStep("放回原式", "乘除算完，要把这个中间结果放回原来的式子里，再继续算。", "把中间结果放回去", ["中间结果", "放回", "原式"]),
       finalStep("再算加减", "现在再算剩下的加法或减法，最后是多少？", ["最后", "结果"]),
       reasonStep("说清混合顺序", "因为混合运算要先乘除、后加减，所以不能只从左往右算。", ["先乘除", "后加减", "顺序"]),
@@ -672,7 +672,7 @@ function createShapeTeacherSteps(context, finalStep, reasonStep) {
   }
   return [
     teacherModelStep("先看边和角", "平面图形先看边有几条、角有几个，圆没有直直的边。", "先看边和角", ["边", "角", "圆", "平面图形"]),
-    teacherAskStep("数边或角", "现在只数边或角，有几条边、几个角？", ["边", "角", "几条", "几个"]),
+    teacherAskStep("数边或角", "先数边或角，有几条边、几个角？", ["边", "角", "几条", "几个"]),
     finalStep("说图形名称", "根据边和角，答案是什么？", ["长方形", "正方形", "三角形", "圆"]),
     reasonStep("说清图形特征", "因为不同图形的边和角不同，所以先看特征再判断。", ["边", "角", "特征"]),
   ];
@@ -738,16 +738,16 @@ function makeNoResponsePrompt(step, title) {
   const label = step?.label || "这一小步";
   const repeat = cleanPromptSentence(step?.repeatSentence || step?.prompt || label);
   const head = pick(noResponseHints, `${title}-${label}`);
-  if (repeat && repeat !== label) return `${head} 老师把句子变短：${repeat}。请说这一个意思。`;
-  return `${head} 先看「${label}」，你现在只说一个关键词就可以。`;
+  if (repeat && repeat !== label) return `${head} 乐之老师把句子变短：${repeat}。你可以跟着说一遍，也可以换自己的话。`;
+  return `${head} 先看「${label}」，说一个你看见的数、单位或关键词。`;
 }
 
 function makeRepairPrompt(step, title) {
   const label = step?.label || "这一小步";
   const teach = cleanPromptSentence(step?.prompt || step?.teach || "");
   const head = pick(askRepairs, `${title}-${label}`);
-  if (teach && teach !== label) return `${head} 老师把问题缩小：${teach} 现在只回答这一小步。`;
-  return `${head} 现在只回答「${label}」这一点。`;
+  if (teach && teach !== label) return `${head} 乐之老师把问题缩小：${teach} 这一轮只答眼前这一问。`;
+  return `${head} 这一轮只看「${label}」这一点。`;
 }
 
 function makeFinalRepairPrompt(label, teach) {
@@ -797,11 +797,18 @@ function createModelTeachingLine(label, explain, repeat, key) {
   const cleanExplain = cleanPromptSentence(explain);
   const cleanRepeat = cleanPromptSentence(repeat);
   const variants = [
-    `老师先讲方法：${cleanExplain} 现在说这一句：${cleanRepeat}。`,
-    `${cleanExplain} 我们先把它变成一句短话。请说：${cleanRepeat}。`,
-    `这一点先不猜。${cleanExplain} 你现在只回答这个意思：${cleanRepeat}。`,
-    `把题和图连起来看：${cleanExplain} 先说关键词：${cleanRepeat}。`,
-    `这一步老师先示范。${cleanExplain} 听完后，请用自己的话说：${cleanRepeat}。`,
+    `先看一个小方法：${cleanExplain} 接下来你说：${cleanRepeat}。`,
+    `${cleanExplain} 这一句很关键，你试着说：${cleanRepeat}。`,
+    `${cleanExplain} 这一轮回答：${cleanRepeat}。`,
+    `看图时先抓这一点：${cleanExplain} 你来说：${cleanRepeat}。`,
+    `${cleanExplain} 如果还不熟，先跟着读：${cleanRepeat}。`,
+    `乐之老师给一个小提示：${cleanExplain} 你接：${cleanRepeat}。`,
+    `先把眼睛放到这一步：${cleanExplain} 请回答：${cleanRepeat}。`,
+    `这一小步不难，我们先抓方法：${cleanExplain} 你说成：${cleanRepeat}。`,
+    `先别急着算完整题。${cleanExplain} 你先答：${cleanRepeat}。`,
+    `把这一步看清：${cleanExplain} 然后说：${cleanRepeat}。`,
+    `我们换成更短的话：${cleanExplain} 你试试：${cleanRepeat}。`,
+    `先听一半，再由你接上。${cleanExplain} 你接：${cleanRepeat}。`,
   ];
   return pick(variants, key);
 }
@@ -811,10 +818,10 @@ function createModelRepairLine(label, explain, repeat) {
   const cleanRepeat = cleanPromptSentence(repeat);
   const keywords = phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat;
   const variants = [
-    `${cleanExplain} 这次不用说完整，你先抓关键词：${keywords}。`,
-    `刚才差一点连到方法上。再看这句，你现在只说：${cleanRepeat}。`,
-    `老师把问题缩小：${cleanExplain} 你先说「${keywords}」也可以。`,
-    `先别急着报整题答案，回到这一步。你现在只说：${cleanRepeat}。`,
+    `${cleanExplain} 不用一次说完整，先抓住：${keywords}。`,
+    `刚才差一点连到方法上。再看这句：${cleanRepeat}。`,
+    `乐之老师把问题缩小：${cleanExplain} 你说「${keywords}」也可以。`,
+    `先别急着报整题答案，回到这一步：${cleanRepeat}。`,
   ];
   return pick(variants, `${label}-${repeat}-repair`);
 }
@@ -823,12 +830,12 @@ function createModelNoResponseLine(label, explain, repeat) {
   const cleanExplain = cleanPromptSentence(explain);
   const cleanRepeat = cleanPromptSentence(repeat);
   const variants = [
-    `没关系，这一步老师先带着走。${cleanExplain} 你先说一个关键词：${phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat}。`,
-    `卡住没关系。先听方法：${cleanExplain} 然后你试着说一个词。`,
-    `我们先不答整题，只把这句放稳。你现在只要说：${cleanRepeat}。`,
-    `这一步可以先照样说，不用自己编。老师说：${cleanRepeat}。请说这个意思。`,
-    `老师先把话变短：${cleanRepeat}。你现在说这个意思。`,
-    `先不自己想完整句。${cleanExplain} 你先接关键词：${phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat}。`,
+    `没关系，这一步乐之老师带一半。${cleanExplain} 你先说一个词：${phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat}。`,
+    `卡住没关系。先听方法：${cleanExplain} 然后说一个你记住的词。`,
+    `我们先不答整题，只把这句放稳。请跟着说：${cleanRepeat}。`,
+    `这一步可以先跟读，不用自己编。乐之老师说：${cleanRepeat}。请你跟着读一遍。`,
+    `乐之老师把话变短：${cleanRepeat}。你接着说这个意思。`,
+    `先不用想完整句。${cleanExplain} 你接一个关键词：${phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat}。`,
   ];
   return pick(variants, `${label}-${repeat}-no-response`);
 }
@@ -885,7 +892,7 @@ function makeStep(label, teach, keywords = [], repair = "", options = {}) {
     teach,
     repair,
     noResponse: options.noResponse || `没关系。先听老师说：${repeatSentence || teach}`,
-    returnPrompt: options.returnPrompt || `我们先回到这一小步：${label}。你现在只回答这一小步。`,
+    returnPrompt: options.returnPrompt || `我们先回到这一小步：${label}。这一轮只答这个小问题。`,
     repeatSentence,
     keywords: unique([label, ...keywords].map(String)),
     acceptsFinal: Boolean(options.acceptsFinal),
