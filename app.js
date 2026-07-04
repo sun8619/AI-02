@@ -2465,13 +2465,24 @@ function formatChildStepPrompt(plan) {
   const prompt = String(plan?.prompt || "").trim();
   if (!prompt) return "先说你看到的一个线索。";
   if (plan?.isReason) {
-    const sentence = String(plan.repeatSentence || createReasonRepeatSentence(plan.label, prompt, plan.answerKeywords)).replace(/[。！？!?]+$/, "");
-    return `说一句理由：${sentence}。`;
+    return formatReasonChildPrompt(plan);
   }
   if (shouldModelBeforeAsking(plan)) return formatTeacherModelFirstPrompt(plan);
   if (/为什么|怎么想|怎么知道|怎么比较|怎么检查/.test(prompt)) return `${prompt} 先说一句就行。`;
   if (/先说|先答|先看|再答|最后|答案是多少|是多少|几/.test(prompt)) return prompt;
   return `${prompt} 先说一步就行。`;
+}
+
+function getReasonRepeatSentence(plan) {
+  return String(plan?.repeatSentence || createReasonRepeatSentence(plan?.label, plan?.prompt, plan?.answerKeywords))
+    .replace(/[。！？!?]+$/, "")
+    .trim();
+}
+
+function formatReasonChildPrompt(plan) {
+  const sentence = getReasonRepeatSentence(plan);
+  if (!sentence) return "请只说一句原因。";
+  return `你可以这样说：${sentence}。`;
 }
 
 function formatCompactStepPrompt(plan) {
@@ -2623,6 +2634,11 @@ function teacherAdvanceMessage(nextPlan, previousPlan = null) {
     return softenTeacherScaffoldText(message);
   }
   if (bridge) {
+    if (nextPlan?.isReason) {
+      const reasonPrompt = follow || formatReasonChildPrompt(nextPlan);
+      message = `${move}${bridge} ${reasonPrompt}`;
+      return softenTeacherScaffoldText(message);
+    }
     const nextPrompt = follow || formatCompactStepPrompt(nextPlan);
     message = `${move}${bridge} ${nextLead}：${nextPrompt}`;
     return softenTeacherScaffoldText(message);
@@ -2748,6 +2764,8 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
     if (answer) return `先接：${answer}。`;
     return "先说一个数或一个词。";
   }
+  const target = createAnswerShapeInstruction(plan);
+  if (target) return ensureChineseSentence(target);
   const lesson = typeof currentLesson === "function" ? currentLesson() : null;
   return pickNaturalVariant(
     [
@@ -2757,6 +2775,44 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
     ],
     `${lesson?.id || ""}|${plan?.label || ""}|${plan?.prompt || ""}|retry`,
   );
+}
+
+function createAnswerShapeInstruction(plan) {
+  if (!plan) return "";
+  const lesson = typeof currentLesson === "function" ? currentLesson() : null;
+  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const label = normalizeText(plan.label || "");
+  const prompt = normalizeText(plan.prompt || "");
+  const text = normalizeText(`${label} ${prompt}`);
+
+  if (plan.isReason || /为什么|原因|理由|怎么想|怎么知道|说清/.test(text)) return "这次只说一句原因";
+  if (family === "compare" || /比较|符号|大于|小于|等号|哪边大/.test(text)) {
+    if (/符号|大于|小于|等号/.test(text)) return "这次只说：大于号、小于号，还是等号";
+    return "这次只说：左边、右边，还是一样多";
+  }
+  if (family === "moneyApplication" || /找回|找零|付了|价钱|购物/.test(text)) {
+    if (/关系|找回/.test(text)) return "这次只说：付的钱减价钱";
+    if (/单位|换成什么|先换/.test(text)) return "这次只说：先换成角";
+    return "这次只说一个带单位的小答案";
+  }
+  if (family === "money" || /元|角|分/.test(text)) {
+    if (/单位|换成什么|先换/.test(text)) return "这次只说：先换成角";
+    return "这次只说一个带单位的小答案";
+  }
+  if (family === "division" || /平均分|每份|分成/.test(text)) {
+    if (/总数|一共/.test(text)) return "这次只说总数是多少";
+    if (/份数|分成/.test(text)) return "这次只说分成几份";
+    if (/每份/.test(text)) return "这次只说每份几个";
+  }
+  if (family === "time" || /时针|分针|几时|几分/.test(text)) {
+    if (/时针|短针/.test(text)) return "这次只说短针指向几";
+    if (/分针|长针/.test(text)) return "这次只说长针指向几";
+    return "这次只说一个时间";
+  }
+  if (family === "placeValue" || /十位|个位|数位/.test(text)) return "这次只说这个数字表示几个十或几个一";
+  if (family === "shape" || /图形|边|角|面|顶点/.test(text)) return "这次只说一个图形特征";
+  if (/几|多少|等于|算/.test(text)) return "这次只说一个数，能带单位就带单位";
+  return "";
 }
 
 function getGuidedRepairKey(plan, lesson = currentLesson()) {
@@ -2878,7 +2934,7 @@ function createForwardButUsefulRepair(plan, studentText) {
 }
 
 function teacherReasonMessage(reasonPlan) {
-  return softenTeacherScaffoldText(`答案对了。再补一句为什么：${formatCompactStepPrompt(reasonPlan)}`);
+  return softenTeacherScaffoldText(`答案对了。现在补一句原因，${formatReasonChildPrompt(reasonPlan)}`);
 }
 
 function parseMoneyQuestion(question) {
