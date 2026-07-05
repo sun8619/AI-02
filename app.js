@@ -1319,6 +1319,48 @@ function getLessonTeachingFamily(lesson) {
   );
 }
 
+function getPlanTeachingFamily(lesson, plan = null) {
+  const activeFamily = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const text = normalizeText([
+    lesson?.node,
+    lesson?.lesson,
+    lesson?.lessonName,
+    lesson?.activeQuestion?.prompt,
+    plan?.label,
+    plan?.prompt,
+    plan?.teacherHint,
+    plan?.repeatSentence,
+  ].filter(Boolean).join(" "));
+
+  if ((activeFamily === "angle" || activeFamily === "shape") && isGeometryAngleContext(text)) return activeFamily;
+  if (isCompositionTeachingText(text)) return "composition";
+  if (isMoneyApplicationText(text) && !isMoneyUnitConversionText(text)) return "moneyApplication";
+  if (hasMoneyTerm(text)) return activeFamily === "moneyApplication" ? "moneyApplication" : "money";
+  return activeFamily;
+}
+
+function isCompositionTeachingText(text = "") {
+  const value = normalizeText(text);
+  return /分与合|分成|组成|总数|另一部分|两部分|合起来检查|合起来还是总数/.test(value) && !hasMoneyTerm(value);
+}
+
+function hasMoneyTerm(text = "") {
+  const value = normalizeText(text);
+  if (!value) return false;
+  if (/人民币|钱|纸币|硬币|元角分|找回|找零|价钱|付钱|付了|购物|商品价格/.test(value)) return true;
+  if (/(\d+|一|二|两|三|四|五|六|七|八|九|十|百|几|多少)\s*元|元\s*(=|等于|换成|是)/.test(value)) return true;
+  if (isGeometryAngleContext(value)) return false;
+  if (/(\d+|一|二|两|三|四|五|六|七|八|九|十|百|几|多少)\s*角|角\s*(=|等于|换成|是)|换成角|先换成角|角钱/.test(value)) return true;
+  return /(换算|换成|等于|多少)\s*[0-9一二三四五六七八九十百]*分/.test(value) && /人民币|钱|元|角/.test(value);
+}
+
+function isGeometryAngleContext(text = "") {
+  const value = normalizeText(text);
+  if (!value) return false;
+  if (/人民币|元角分|角钱|找回|找零|价钱|付钱|付了|购物|商品价格/.test(value)) return false;
+  return /认识角|直角|锐角|钝角|角度|顶点|两条边|角的大小|角有|张口|边画得|图形/.test(value);
+}
+
 function getExternalTeachingStandards() {
   try {
     const standards = window.LezhiTeachingStrategies?.getTeachingStandards?.();
@@ -1534,6 +1576,7 @@ function inferQuestionTeachingFamily(point, question) {
   if (/观察物体|正面|侧面|上面|从.*看|看到的是/.test(text)) return "observation";
   if (/图形|长方体|正方体|圆柱|球|长方形|正方形|三角形|圆|对称|平移|旋转|轴对称/.test(text)) return "shape";
   if (/角的|直角|锐角|钝角|顶点|两条边|张开/.test(text)) return "angle";
+  if (/分成|组成|合起来检查/.test(text) && !hasMoneyTerm(text)) return "composition";
   if (isMoneyApplicationText(text) && !isMoneyUnitConversionText(questionText)) return "moneyApplication";
   if (/元|角|人民币|钱|纸币|硬币/.test(text)) return "money";
   if (/有余数|余数|……|\.\.\./.test(text)) {
@@ -1553,7 +1596,6 @@ function inferQuestionTeachingFamily(point, question) {
   if (/拿走|去掉|还剩|飞走|用去|少了/.test(text) || isConcreteSubtractionExpression(expression, text)) return "concreteSubtraction";
   if (/合起来|一共|又来|又有|加起来/.test(text) || isConcreteAdditionExpression(expression, text)) return "concreteAddition";
   if (/数一数|一共有几个|一共有多少个|总数/.test(questionText)) return "count";
-  if (/分成|组成|合起来检查/.test(text)) return "composition";
   if (/规律|接着填/.test(text)) return "pattern";
   if (/厘米|米|克|千克|角的|量|长度|质量/.test(text)) return "measure";
   if (/数位|读作|写作|个千|个百|个十|个位|十位|百位|千位/.test(text)) return "placeValue";
@@ -1611,14 +1653,15 @@ function isBreakTenSubtractionExpression(expression) {
 }
 
 function isMoneyApplicationText(text = "") {
-  return /元|角|分|人民币|钱/.test(text) && /购物|买|卖|价格|价钱|付了|付出|应找|找回|找零|花了|便宜|贵|还剩/.test(text);
+  const value = normalizeText(text);
+  return hasMoneyTerm(value) && /购物|买|卖|价格|价钱|付了|付出|应找|找回|找零|花了|便宜|贵|还剩/.test(value);
 }
 
 function isMoneyUnitConversionText(text = "") {
   const value = normalizeText(text);
   return (
     /换成|换算|等于多少(元|角|分)|=|＝/.test(value) &&
-    /元|角|分|人民币/.test(value) &&
+    hasMoneyTerm(value) &&
     !/付了|应找|找回|找零|买|购物|价格|价钱/.test(value)
   );
 }
@@ -2094,7 +2137,7 @@ function hasConcreteTeachingContent(value) {
 function createConceptScaffoldHint(lesson, step) {
   const question = lesson?.activeQuestion || null;
   const prompt = question?.prompt || lesson?.problem || "";
-  const family = inferActiveQuestionFamily(lesson, question);
+  const family = getPlanTeachingFamily(lesson, step);
   const expression = parseTeachingArithmeticExpression(question) || parseArithmeticExpression(prompt);
   const label = normalizeText(step?.label || "");
   const stepPrompt = normalizeText(step?.prompt || "");
@@ -2585,7 +2628,7 @@ function getReasonRepeatSentence(plan) {
 function formatReasonChildPrompt(plan) {
   const sentence = getReasonRepeatSentence(plan);
   if (!sentence) return "请只说一句原因。";
-  return `你可以这样说：${sentence}。`;
+  return `先试着说一句原因。卡住的话，就照着这句说一遍：“${sentence}。”`;
 }
 
 function formatCompactStepPrompt(plan) {
@@ -2608,7 +2651,7 @@ function formatTeacherModelFirstPrompt(plan) {
   const hint = stripTeacherFollowInstruction(ensureChineseSentence(plan.teacherHint));
   const follow = createContextualFollowSentence(plan);
   const lesson = safeCurrentLesson();
-  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const family = getPlanTeachingFamily(lesson, plan);
   const key = [
     lesson?.id || "",
     lesson?.activeQuestion?.id || lesson?.activeQuestion?.prompt || "",
@@ -2618,7 +2661,32 @@ function formatTeacherModelFirstPrompt(plan) {
   ].join("|");
   const lead = createTeacherLeadForModelStep(plan, family, key);
   const action = createTeacherActionForModelStep(plan, family, follow, key);
-  return softenTeacherScaffoldText(`${lead}${hint}${action}`);
+  return softenTeacherScaffoldText(joinTeacherScaffoldParts(lead, hint, action));
+}
+
+function joinTeacherScaffoldParts(...parts) {
+  const sentences = [];
+  for (const part of parts) {
+    const chunks = splitChineseSentences(part);
+    for (const chunk of chunks) {
+      const current = chunk.trim();
+      if (!current) continue;
+      const previous = sentences[sentences.length - 1] || "";
+      const prevKey = normalizeSentenceForDedupe(previous);
+      const currentKey = normalizeSentenceForDedupe(current);
+      if (prevKey && currentKey && (prevKey === currentKey || prevKey.includes(currentKey) || currentKey.includes(prevKey))) continue;
+      sentences.push(current);
+    }
+  }
+  return sentences.join("");
+}
+
+function splitChineseSentences(text = "") {
+  return String(text || "").match(/[^。！？!?]+[。！？!?]?/g) || [];
+}
+
+function normalizeSentenceForDedupe(text = "") {
+  return normalizeText(text).replace(/[。！？!?，,：:“”"「」]/g, "");
 }
 
 function createTeacherLeadForModelStep(plan, family, key) {
@@ -2631,6 +2699,7 @@ function createTeacherLeadForModelStep(plan, family, key) {
     breakTenSubtract: ["退位减先看个位够不够减。", "这题先别硬减，先想破十。", "不够减时，先把十几拆开。"],
     concreteAddition: ["加法故事先看两部分。", "一共多少，先把两边合起来。"],
     concreteSubtraction: ["减法故事先看原来和拿走。", "还剩多少，先把拿走的去掉。"],
+    composition: ["分与合先看总数。", "组成题先看整体和一部分。", "先把总数抓住，再找缺的那部分。"],
     multiplication: ["乘法先看几个几。", "口诀前面先看一组几个。"],
     division: ["平均分先看是不是一样多。", "除法先看总数和分法。"],
     time: ["钟表题先分清短针和长针。", "时间题先看一根针，再看另一根。"],
@@ -2671,6 +2740,11 @@ function createTeacherActionForModelStep(plan, family, follow, key) {
       `先说这个关系：${cleanFollow}。`,
       `先说第一步：${target || cleanFollow}。`,
       `别急着最后答案，先把这一步说清：${cleanFollow}。`,
+    ],
+    composition: [
+      `现在照着说一句：${cleanFollow}。`,
+      `这一步先说这一句：${cleanFollow}。`,
+      `如果会了就用自己的话说，卡住就照着说：${cleanFollow}。`,
     ],
     time: [`只看这一根针，回答：${cleanFollow}。`, `现在先说时间里的这一小步：${target || cleanFollow}。`],
     division: [`先说分法里的这一点：${cleanFollow}。`, `这一轮先回答：${target || cleanFollow}。`],
@@ -2714,6 +2788,8 @@ function createContextualFollowSentence(plan) {
   const raw = String(answer || "").trim();
   if (raw && /^[0-9一二两三四五六七八九十百千万]+$/.test(raw)) {
     if (label.includes("总数") || prompt.includes("一共有多少")) return `总数是${raw}`;
+    if (/另一部分|缺|还差|分成/.test(label) || /另一部分|还差|缺/.test(prompt)) return `另一部分是${raw}`;
+    if (/已知部分|知道哪一部分|一部分是/.test(label) || /已知部分|已经有一部分|一部分是/.test(prompt)) return `已知部分是${raw}`;
     if (label.includes("份数") || prompt.includes("分成几份")) return `分成${raw}份`;
     if (label.includes("每份") || prompt.includes("每份几个")) return `每份${raw}个`;
     if (label.includes("时针")) return `时针指向${raw}`;
@@ -2908,7 +2984,7 @@ function createFamilyProgressBridge(nextPlan, previousPlan = null, lesson = null
 
 function teacherRepairMessage(prefix, plan) {
   const lesson = safeCurrentLesson();
-  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const family = getPlanTeachingFamily(lesson, plan);
   const lastStudentText = normalizeText(safeStateField("lastStudentText", ""));
   const saysCannot = isCannotAnswerText(lastStudentText);
   const repairCount = getGuidedRepairAttemptCount(plan);
@@ -2944,11 +3020,23 @@ function teacherRepairMessage(prefix, plan) {
     ? stripTeacherFollowInstruction(ensureChineseSentence(plan?.teacherHint || ""))
     : createNonLeakingRepairHint(plan);
   if (hint) {
-    message = `${lead}${ensureChineseSentence(hint)}${createRetryInstructionForStep(plan, shouldModelAnswer)}`;
+    const retry = shouldAppendRetryInstruction(hint, shouldModelAnswer) ? createRetryInstructionForStep(plan, shouldModelAnswer) : "";
+    message = joinTeacherScaffoldParts(lead, ensureChineseSentence(hint), retry);
     return softenTeacherScaffoldText(message);
   }
-  message = `${lead}我们不重来，只把问题缩小：${formatChildStepPrompt(plan)}${createRetryInstructionForStep(plan, shouldModelAnswer)}`;
+  message = joinTeacherScaffoldParts(
+    lead,
+    `我们不重来，只把问题缩小：${formatChildStepPrompt(plan)}`,
+    createRetryInstructionForStep(plan, shouldModelAnswer),
+  );
   return softenTeacherScaffoldText(message);
+}
+
+function shouldAppendRetryInstruction(hint, shouldModelAnswer = false) {
+  if (shouldModelAnswer) return true;
+  const value = normalizeText(hint || "");
+  if (!value) return true;
+  return !/(请回答|这里要回答|这次只说|照着这句|跟着老师|先说这一句|只要说)/.test(value);
 }
 
 function ensureChineseSentence(text) {
@@ -2961,8 +3049,8 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
   const hasAnswerKeywords = Array.isArray(plan?.answerKeywords) && plan.answerKeywords.some((item) => String(item || "").trim());
   const answer = hasAnswerKeywords ? createContextualFollowSentence(plan) : "";
   if (shouldModelAnswer) {
-    if (answer) return `先接：${answer}。`;
-    return "先说一个数或一个词。";
+    if (answer) return `如果不知道怎么说，就照着这句说一遍：“${answer}。”`;
+    return "如果不知道怎么说，就先说一个数或一个词。";
   }
   const target = createAnswerShapeInstruction(plan);
   if (target) return ensureChineseSentence(target);
@@ -2980,7 +3068,7 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
 function createAnswerShapeInstruction(plan) {
   if (!plan) return "";
   const lesson = safeCurrentLesson();
-  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const family = getPlanTeachingFamily(lesson, plan);
   const label = normalizeText(plan.label || "");
   const prompt = normalizeText(plan.prompt || "");
   const text = normalizeText(`${label} ${prompt}`);
@@ -2995,7 +3083,13 @@ function createAnswerShapeInstruction(plan) {
     if (/单位|换成什么|先换/.test(text)) return "这次只说：先换成角";
     return "这次只说一个带单位的小答案";
   }
-  if (family === "money" || /元|角|分/.test(text)) {
+  if (family === "composition" || (isCompositionTeachingText(`${lesson?.node || ""}${text}`) && !hasMoneyTerm(text))) {
+    if (/总数|一共/.test(text)) return "这次只说总数是多少";
+    if (/另一部分|缺|还差|分成/.test(text)) return "这里要回答一个数：另一部分是几";
+    if (/为什么|检查|原因|说清/.test(text)) return "这次照着说一句原因";
+    return "这次只说一个数";
+  }
+  if (family === "money" || hasMoneyTerm(text)) {
     if (/单位|换成什么|先换/.test(text)) return "这次只说：先换成角";
     return `这次只说：${createMoneyAnswerInstruction(text, "几元或几角")}`;
   }
@@ -3042,7 +3136,7 @@ function clearGuidedRepairAttempts() {
 
 function createNonLeakingRepairHint(plan) {
   const lesson = currentLesson();
-  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const family = getPlanTeachingFamily(lesson, plan);
   const label = normalizeText(plan?.label || "");
   const prompt = normalizeText(plan?.prompt || "");
   const text = normalizeText(`${label} ${prompt}`);
@@ -3051,7 +3145,12 @@ function createNonLeakingRepairHint(plan) {
     if (/符号|大于|小于|等号/.test(text)) return "符号的开口要朝大的那边。先看哪边大，再选符号。";
     return "先别急着填符号，只看左边和右边，找出哪边大。";
   }
-  if (family === "money" || family === "moneyApplication" || /元|角|分|钱|找回|找零/.test(text)) {
+  if (family === "composition" || isCompositionTeachingText(`${lesson?.node || ""}${text}`)) {
+    if (/总数|一共/.test(text)) return "分与合先看总数。总数就是两部分合起来以后仍然是多少。";
+    if (/另一部分|还差|缺|分成/.test(text)) return "总数和一部分知道了，就看还缺哪一部分。请回答：另一部分是几。";
+    return "组成题可以用一句话检查：两部分合起来还是总数。";
+  }
+  if (family === "money" || family === "moneyApplication" || hasMoneyTerm(text) || /找回|找零/.test(text)) {
     if (/换|单位|元|角|分/.test(text)) return "元、角、分不能混着算，先换成同一种单位，再继续算。";
     return "购物题先看价钱和付的钱，再想是合起来、换单位，还是找回。";
   }
@@ -3088,7 +3187,7 @@ function stripAnswerLeakFromRepairHint(text) {
 function createForwardButUsefulRepair(plan, studentText) {
   if (!plan || !studentText || isCannotAnswerText(studentText)) return "";
   const lesson = currentLesson();
-  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const family = getPlanTeachingFamily(lesson, plan);
   const label = normalizeText(plan.label || "");
 
   if (family === "moneyApplication") {
@@ -3186,7 +3285,7 @@ function createForwardButUsefulRepair(plan, studentText) {
 
 function teacherReasonMessage(reasonPlan) {
   const lesson = safeCurrentLesson();
-  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  const family = getPlanTeachingFamily(lesson, reasonPlan);
   const key = `${lesson?.id || ""}|${lesson?.activeQuestion?.id || lesson?.activeQuestion?.prompt || ""}|${reasonPlan?.label || ""}|${safeStateField("lastStudentText", "")}`;
   const familyLeads = {
     compare: ["你已经比出来了。现在讲清：为什么这边大？", "符号快稳了，再说一句比较方法。"],
@@ -3196,6 +3295,7 @@ function teacherReasonMessage(reasonPlan) {
     breakTenSubtract: ["答案出来了。现在讲清为什么要破十。", "退位减会算了，再说清不够减怎么办。"],
     concreteAddition: ["一共多少会算了。现在讲清为什么用加法。", "把两部分合起来的意思说出来。"],
     concreteSubtraction: ["还剩多少会算了。现在讲清为什么用减法。", "把原来、拿走、还剩的故事说出来。"],
+    composition: ["这一步会分了。现在讲清：两部分怎么合回总数？", "分与合的答案稳了，再说一句为什么这样分。"],
     multiplication: ["口诀会用了。现在讲清这是几个几。", "乘法答案前面，要把几个几说出来。"],
     division: ["答案会分了。现在讲清为什么是平均分。", "每份多少会算了，再说一句“每份一样多”。"],
     time: ["时间会读了。现在讲清先看哪根针、再看哪根针。"],
@@ -3219,12 +3319,19 @@ function createNonLeakingReasonBridge(bridge, nextPlan, family, key = "") {
     compare: ["符号选出来了。现在别急着背答案，讲讲你怎么看出大小。", "会填符号了，接下来只说比较的方法。"],
     money: ["数算出来了。现在讲讲为什么要先看单位。", "答案先放稳，接下来只说元角分怎么想。"],
     moneyApplication: ["购物题的答案先放稳。现在讲讲为什么这样找回。", "会算了，接下来只说付钱、价钱和找回的关系。"],
+    composition: ["答案先放稳。现在只说总数和两部分的关系。", "分与合会做了，接下来讲一句为什么这样分。"],
     makeTenAdd: ["答案先放稳。现在只说凑十的小方法。"],
     breakTenSubtract: ["答案先放稳。现在只说为什么要破十。"],
     multiplication: ["结果先放稳。现在只说这是几个几。"],
     division: ["结果先放稳。现在只说为什么要平均分。"],
   };
   return ensureChineseSentence(pickNaturalVariant(alternatives[family] || ["答案先放稳。现在只说你怎么想。"], key));
+}
+
+function createExplicitRepeatInstruction(sentence) {
+  const clean = String(sentence || "").replace(/[。！？!?]+$/, "").trim();
+  if (!clean) return "请照着老师这句说一遍。";
+  return `如果不知道怎么说，就照着这句说一遍：“${clean}。”`;
 }
 
 function createReasonOpenQuestion(reasonPlan, family, key = "") {
@@ -3238,9 +3345,9 @@ function createReasonOpenQuestion(reasonPlan, family, key = "") {
       "你先说：左边和右边，谁多谁少？",
     ],
     money: [
-      "请说一句小方法：为什么不能把元和角直接混着算？",
-      "不用说很长，先说要把它们换成什么单位。",
-      "你先说：元和角哪里不一样？",
+      "请说一句小方法：元和角单位不一样，要先换成同一种单位。",
+      "不用说很长，卡住就照着说：先换成角，再计算。",
+      "你先说：元和角不能直接混着算。",
     ],
     moneyApplication: [
       "请说一句小方法：找回的钱是剩下的钱，还是花掉的钱？",
@@ -3266,6 +3373,11 @@ function createReasonOpenQuestion(reasonPlan, family, key = "") {
       "请说一句小方法：为什么这里要拿走？",
       "不用说很长，先说原来有多少、拿走多少、还剩多少。",
       "你先说：故事里是在变多，还是变少？",
+    ],
+    composition: [
+      "请说一句小方法：两部分合起来还是总数。",
+      "不用说很长，卡住就照着说：先看总数，再找缺的部分。",
+      "你先说：两部分合起来还是总数。",
     ],
     multiplication: [
       "请说一句小方法：你先看每组几个，还是先看一共有几组？",
@@ -3313,8 +3425,12 @@ function createReasonOpenQuestion(reasonPlan, family, key = "") {
     "不用说很长，先说你怎么想的。",
     "你先补一句原因：为什么这样做？",
   ];
+  if (reasonPlan?.repeatSentence && (family === "composition" || /说清|为什么|检查|原因/.test(text))) {
+    return createExplicitRepeatInstruction(reasonPlan.repeatSentence);
+  }
+  if (/分与合|分成|组成|总数|另一部分|两部分|合起来/.test(text) && !hasMoneyTerm(text)) options = optionsByFamily.composition;
   if (/符号|比较|大于|小于|等号|哪边/.test(text)) options = optionsByFamily.compare;
-  if (/元|角|分|钱|单位/.test(text)) options = optionsByFamily.money;
+  if (hasMoneyTerm(text) || (/单位/.test(text) && family === "money")) options = optionsByFamily.money;
   if (/找回|找零|购物|价钱|付的钱/.test(text)) options = optionsByFamily.moneyApplication;
   if (/凑十/.test(text)) options = optionsByFamily.makeTenAdd;
   if (/破十|退位|不够减/.test(text)) options = optionsByFamily.breakTenSubtract;
@@ -8660,8 +8776,9 @@ function startKnowledgeTeachbackCheck(lesson, inputType) {
 }
 
 function createTeachbackCheckPrompt(lesson) {
-  const family = getLessonTeachingFamily(lesson);
+  const family = getPlanTeachingFamily(lesson, lesson?.currentPlan || lesson?.guidedPlan?.[state.guidedStepIndex] || null);
   const topic = lesson?.node || lesson?.lesson || "这类题";
+  const starter = createTeachbackStarterSentence(family);
   const prompts = {
     money: `说一句就行：为什么要先换单位？`,
     moneyApplication: `说一句就行：购物找零题先看什么？`,
@@ -8669,6 +8786,7 @@ function createTeachbackCheckPrompt(lesson) {
     breakTenSubtract: `说一句就行：个位不够减怎么办？`,
     concreteAddition: `说一句就行：为什么把两部分合起来？`,
     concreteSubtraction: `说一句就行：为什么从原来里面拿走？`,
+    composition: `说一句就行：分与合先看什么，再看什么？`,
     multiplication: `说一句就行：怎么知道是几个几？`,
     division: `说一句就行：为什么叫平均分？`,
     compare: `说一句就行：先看什么，再填什么？`,
@@ -8681,7 +8799,7 @@ function createTeachbackCheckPrompt(lesson) {
     data: `说一句就行：读表时先找什么？`,
     logic: `说一句就行：推理题为什么不能靠猜？`,
   };
-  return `${prompts[family] || `说一句就行：${topic}先看什么？`} 可以这样开头：${createTeachbackStarterSentence(family)}。`;
+  return `${prompts[family] || `说一句就行：${topic}先看什么？`} 你可以自己讲；卡住就照着这句说一遍：“${starter}。”`;
 }
 
 function createTeachbackStarterSentence(family) {
@@ -8692,6 +8810,7 @@ function createTeachbackStarterSentence(family) {
     breakTenSubtract: "我先看个位够不够减",
     concreteAddition: "我先找两部分，再合起来",
     concreteSubtraction: "我先看原来有多少，再看拿走多少",
+    composition: "我先看总数，再看已经知道的一部分，最后想还差几",
     multiplication: "我先看每组几个，再看有几组",
     division: "我先看是不是每份一样多",
     compare: "我先看左边，再看右边",
@@ -8738,7 +8857,7 @@ function isLikelyOffTopicAnswer(normalizedText, lesson, plan) {
   if (/冰淇淋|吃|玩|游戏|动画片|睡觉|不想学|不要学|累了|无聊/.test(normalizedText)) return true;
   const question = lesson.activeQuestion || null;
   const text = normalizeText(`${question?.prompt || ""} ${lesson.node || ""} ${lesson.lesson || ""} ${plan.label || ""} ${plan.prompt || ""}`);
-  const hasMoneyContext = /元|角|分|钱|人民币/.test(text);
+  const hasMoneyContext = hasMoneyTerm(text);
   if (hasMoneyContext) {
     const hasMoneyAnswer = /元|角|分|钱|人民币|\d|一|二|三|四|五|六|七|八|九|十|百/.test(normalizedText);
     return !hasMoneyAnswer;
