@@ -1702,6 +1702,15 @@ function createNaturalInitialMessage(point, prompt, starter, family) {
   const title = point?.title || point?.node || "这个知识点";
   const firstStep = formatChildStepPrompt(starter);
   const key = `${title}|${prompt}|${family}|${starter?.label || ""}`;
+  const lead = pickNaturalVariant(createFocusedOpeningLeads(family, title), `${key}|focused-opening`);
+  return createFocusedGuidedMessage({
+    lead,
+    prompt,
+    starter,
+    family,
+    key,
+    mode: "initial",
+  });
   const openings = {
     makeTenAdd: [
       `这题先不急着报答案，我们用“凑十”来想。看这题：${prompt} ${firstStep}`,
@@ -1810,6 +1819,103 @@ function createNaturalInitialMessage(point, prompt, starter, family) {
     `先看一个小地方就行。题目是：${prompt} ${firstStep}`,
   ];
   return pickNaturalVariant(openings[family] || fallback, key);
+}
+
+function createFocusedOpeningLeads(family, title = "这个知识点") {
+  const byFamily = {
+    makeTenAdd: ["这题我们用凑十法，不急着报答案。", "加法先找能不能凑成10。", "老师带你用凑十来想。"],
+    breakTenSubtract: ["这题用破十法会更稳。", "退位减先看个位够不够。", "十几减几先不硬减。"],
+    concreteSubtraction: ["这是一个拿走后还剩的故事。", "减法题先看原来和拿走。", "先把故事里的动作看清楚。"],
+    concreteAddition: ["这是一个合起来的故事。", "加法题先看两部分。", "我们先找哪两部分要合起来。"],
+    mixedCalculation: ["这题要先看运算顺序。", "混合运算别一口气算完。", "先判断第一步该算哪里。"],
+    calculation: ["这题先选方法，再算。", "计算题不用抢答案。", "我们把算式拆成小动作。"],
+    application: ["应用题先读懂问什么。", "生活题先别乱加数字。", "先把故事关系看清楚。"],
+    compare: ["比较题先不急着填符号。", "先看两边谁多谁少。", "比大小先把左右看清。"],
+    count: ["数数先防止漏掉或重复。", "这题先按顺序点着数。", "先看清要数谁。"],
+    composition: ["分与合先看总数。", "这题先想两部分怎么合起来。", "先把总数和一部分看清。"],
+    ordinal: ["位置题先定方向。", "第几个说的是位置，不是总数。", "先看从哪边开始数。"],
+    pattern: ["找规律先看变化。", "规律题不要只盯最后一个空。", "先找相邻两个怎么变。"],
+    multiplication: ["乘法先看几个几。", "口诀先放一放，先看每组。", "先找每组几个和有几组。"],
+    division: ["除法先看是不是平均分。", "平均分先看每份一样多吗。", "先把总数和分法看清。"],
+    placeValue: ["数位题先看数字站在哪一位。", "十位个位先分清。", "先看这个数由几个十和几个一组成。"],
+    time: ["钟面题先看短针，再看长针。", "时间题先分清两根针。", "先看一根针，再看另一根。"],
+    measure: ["单位题先看量的是什么。", "测量题先看单位和起点。", "先别只看数字，先看单位。"],
+    shape: ["图形题先看特征。", "先找边、角、面这些线索。", "不只看像不像，先看特点。"],
+    data: ["统计题先读表。", "先找表格里的对应位置。", "先看分类标准。"],
+    logic: ["推理题先抓确定线索。", "先别猜，先排除不可能的。", "像小侦探一样先看条件。"],
+  };
+  return byFamily[family] || [`今天先学「${title}」。`, "我们从一个小问题开始。", "先看一个小地方就行。"];
+}
+
+function createVariantOpeningLeads(family) {
+  const byFamily = {
+    makeTenAdd: ["换个数，还是用凑十。", "题目变了，凑十方法不变。", "再用凑十试一题。"],
+    breakTenSubtract: ["换一道退位减，还是先破十。", "数字变了，破十方法不变。", "再看一题，先判断够不够减。"],
+    money: ["换个钱数，还是先看单位。", "人民币题换一下，单位关系不变。", "再用元角分关系试一次。"],
+    moneyApplication: ["换个购物小场景，方法不变。", "再做一题找零，还是先看付钱和价钱。", "这次换个价钱，继续看单位。"],
+    compare: ["换一组数，还是先看两边。", "再比一次，先不急着写符号。", "这题换了，比较方法不变。"],
+    multiplication: ["换一个几个几，方法不变。", "再看一题，先找每组和组数。", "口诀前先看意思。"],
+    division: ["换一道平均分，还是先看分得公平吗。", "再分一次，先看总数和分法。", "题目换了，平均分意思不变。"],
+    time: ["换一个钟面，还是先短针再长针。", "再读一次时间，先看短针。", "钟面变了，看针的方法不变。"],
+    data: ["换一张表，还是先找对应位置。", "再读一次统计图表。", "表格变了，读法不变。"],
+  };
+  return byFamily[family] || ["换个小变化，方法不变。", "再试一题，先看一个小问题。", "题目变了，我们还是一步一步来。"];
+}
+
+function createFocusedGuidedMessage({ lead, prompt, starter, family, key, mode = "initial" }) {
+  const intro = ensureChineseSentence(lead || "");
+  const context = createQuestionContextSentence(prompt, starter, family, mode);
+  const step = createFocusedStepSentence(starter, family, key);
+  return softenTeacherScaffoldText(`${intro}${context}${step}`.trim());
+}
+
+function createQuestionContextSentence(prompt, starter, family, mode = "initial") {
+  const clean = cleanPromptForChildContext(prompt);
+  if (!clean) return "";
+  const stepText = normalizeText(`${starter?.label || ""} ${starter?.prompt || ""}`);
+  if (family === "compare" && /符号|大于|小于|等号|哪边|左边|右边|两边/.test(stepText)) {
+    const expression = extractCompareExpression(clean);
+    if (expression) return `题目里有 ${expression}。先不用填符号。`;
+  }
+  if (mode === "variant") return `这次题目是：${clean}。不用马上做完整题。`;
+  return `看这题：${clean}。不用马上做完整题。`;
+}
+
+function createFocusedStepSentence(starter, family, key = "") {
+  const firstStep = formatChildStepPrompt(starter);
+  if (!firstStep) return "现在只说一个小答案。";
+  if (shouldModelBeforeAsking(starter)) return firstStep;
+  const compact = firstStep
+    .replace(/^看这题[:：]\s*/, "")
+    .replace(/^题目是[:：]\s*/, "")
+    .replace(/^先看[:：]\s*/, "先看")
+    .replace(/先说一步就行[。.]?$/g, "")
+    .replace(/先说一句就行[。.]?$/g, "")
+    .trim();
+  const openers = {
+    compare: ["现在只回答这一小问：", "先回答这一点：", "这一轮只看这一步："],
+    money: ["现在只说这一小步：", "先回答钱数里的这一点：", "这一轮只看单位这一步："],
+    moneyApplication: ["现在只看购物题里的这一小步：", "先回答这一点：", "这一轮不算完整题，只看："],
+    application: ["现在只找题目里的一个线索：", "先回答这一小问：", "这一轮只看："],
+  };
+  const prefix = pickNaturalVariant(openers[family] || ["现在只回答这一小问：", "先看这一小步：", "这一轮只说一个小答案："], `${key}|focused-step`);
+  return ensureChineseSentence(`${prefix}${compact}`);
+}
+
+function cleanPromptForChildContext(prompt) {
+  return String(prompt || "")
+    .replace(/\s+/g, " ")
+    .replace(/[？?。！!]+$/g, "")
+    .replace(/在口里/g, "在□里")
+    .replace(/口/g, "□")
+    .trim();
+}
+
+function extractCompareExpression(text) {
+  const normalized = String(text || "").replace(/\s+/g, "");
+  const match = normalized.match(/([0-9一二两三四五六七八九十百]+)[□<>=＞＜]([0-9一二两三四五六七八九十百]+)/);
+  if (!match) return "";
+  return `${match[1]} □ ${match[2]}`;
 }
 
 function childFacingPrompt(prompt) {
@@ -2283,11 +2389,8 @@ function createMoneyGuidedSteps(lesson) {
     const yuanAsJiao = info.yuan * 10;
     const total = yuanAsJiao + info.jiao;
     const steps = [
-      guidedStep("知道 1 元=10 角", "先看1元能换成几个1角？", answerKeywordsForNumber(10, "角"), {
-        teacherHint: "1元可以换成10个1角，所以1元等于10角。先说：10角。",
-      }),
       guidedStep(`把 ${info.yuan} 元换成角`, `这题里有${info.yuan}元，${info.yuan}元是几角？`, answerKeywordsForNumber(yuanAsJiao, "角"), {
-        teacherHint: `1元是10角，${info.yuan}元就是${info.yuan}个10角，也就是${yuanAsJiao}角。`,
+        teacherHint: `1元可以换成10个1角，所以1元等于10角。${info.yuan}元就是${info.yuan}个10角，也就是${yuanAsJiao}角。`,
       }),
     ];
     if (info.jiao > 0) {
@@ -5383,6 +5486,15 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
   const family = lesson.activeQuestionFamily || inferQuestionTeachingFamily(lesson, question);
   const key = `${lesson.id}|${question?.id || prompt}|${starter?.label || ""}|${reason}|${state.passedQuestionIds?.length || 0}`;
   const move = createStrategyDialogueMove(family, "variant", key);
+  const lead = pickNaturalVariant([move, ...createVariantOpeningLeads(family)].filter(Boolean), `${key}|focused-variant`);
+  return createFocusedGuidedMessage({
+    lead,
+    prompt,
+    starter,
+    family,
+    key,
+    mode: "variant",
+  });
   if ((starter?.index || 0) > 0) {
     const lighterVariants = [
       `这次老师少提示一点。看题：${prompt}。先试这一小步：${firstStep}`,
