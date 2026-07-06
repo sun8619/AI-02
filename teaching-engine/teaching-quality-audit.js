@@ -187,6 +187,12 @@ function scoreNaturalness(point, atoms) {
     /听完后，请用自己的话说/g,
     /你现在只说/g,
     /你现在先说/g,
+    /先说一个词/g,
+    /先抓住关键词/g,
+    /先说一个关键词/g,
+    /你不用自己编/g,
+    /第一步该看什么/g,
+    /说一个你记住的词/g,
   ];
   const leakPatterns = [
     /老师先说结果/g,
