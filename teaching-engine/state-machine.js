@@ -364,7 +364,7 @@ function evaluateFeynman({ point, session, text, inputType }) {
     },
     phase: "repair",
     aiContext: "孩子会做但讲不完整，进入半句脚手架。",
-    aiMessage: makeFeynmanScaffold(requiredSignals),
+    aiMessage: makeFeynmanScaffold(requiredSignals, point),
     currentStep: "再讲一次：补一句为什么",
     feynmanStatus: "会做但讲不清",
     evidenceSignal: "费曼复述未完整",
@@ -441,7 +441,7 @@ function fallbackToPrerequisite({ point, session, atom, fallback, inputType, rea
     session: nextSession,
     phase: "repair",
     aiContext: "孩子卡在强前置知识，先补一个前置小台阶，补完回主线。",
-    aiMessage: makeTeachMessage(fallback),
+    aiMessage: makeTeachMessage(fallback, point),
     currentStep: `先补：${fallback.atom_name}`,
     evidenceSignal: "回溯前置知识",
     evidenceText: `从 ${atom?.atom_name || session.current_atom_id} 回溯到 ${fallback.atom_name}。`,
@@ -571,7 +571,7 @@ function makeNextAtomMessage({ point, previousAtom, nextAtom, session }) {
     "下一口更小，我们看",
     "换到旁边的小点：",
   ], `${point?.id}|${previousAtom?.id}|${nextAtom?.id}|${session?.completed_atom_ids?.length}`);
-  return opener.endsWith("：") ? `${opener}${nextLabel}。${makeTeachMessage(nextAtom)}` : `${opener}${nextLabel}：${makeTeachMessage(nextAtom)}`;
+  return opener.endsWith("：") ? `${opener}${nextLabel}。${makeTeachMessage(nextAtom, point)}` : `${opener}${nextLabel}：${makeTeachMessage(nextAtom, point)}`;
 }
 
 function makeEnterAssessmentMessage(firstQuestion, point) {
@@ -1023,7 +1023,7 @@ function makeClarifyAssessmentMessage(template, atom, point, session = null) {
 function makeAssessmentRepairMessage(template, atom, point, diagnosis = {}, session = null) {
   const atomName = atom?.atom_name || "";
   const prompt = template?.prompt || point?.entry_question || "";
-  if (diagnosis.error_tag === ErrorTag.NO_RESPONSE) return makeNoResponseMessage(atom, point);
+  if (diagnosis.error_tag === ErrorTag.NO_RESPONSE) return makeNoResponseMessage(atom, point, session);
   if (diagnosis.error_tag === ErrorTag.OFF_TOPIC) return makeReturnToQuestionMessage(atom, point, session);
   if (diagnosis.error_tag === ErrorTag.AMBIGUOUS_RESPONSE) return makeClarifyAssessmentMessage(template, atom, point, session);
   if (atomName.includes("1元等于10角")) {
@@ -1038,7 +1038,7 @@ function makeAssessmentRepairMessage(template, atom, point, diagnosis = {}, sess
   if (atomName.includes("看清付了多少钱")) return "我们先只看付出去的钱。题里说付了多少钱？";
   if (atomName.includes("找回就是剩下的钱")) return "找回的钱是剩下的钱。你先说：找回是剩下，还是再付？";
   if (atomName.includes("用减法算找回")) return "我们只补计算：付了5元，花4元，5减4等于几？";
-  return makeNoResponseMessage(atom, point);
+  return makeNoResponseMessage(atom, point, session);
 }
 
 function buildResult({
@@ -1097,7 +1097,105 @@ function buildParentSignals(point, session) {
   };
 }
 
-function makeTeachMessage(atom) {
+function makeFallbackStepPrompt(atom, point = null, mode = "teach", session = null) {
+  const atomName = atom?.atom_name || point?.child_title || point?.point_name || "这一小步";
+  const target = inferChildTarget(atom, point, mode);
+  const key = `${point?.id || ""}|${atom?.id || atomName}|fallback|${mode}`;
+  const turnSalt = conversationSalt(session);
+  const prefixOptions = {
+    teach: [
+      `这一小步先别展开，老师把它说清楚：${atomName}。`,
+      `我们只学眼前这一点：${atomName}。`,
+      `先把这一口放稳：${atomName}。`,
+    ],
+    repair: [
+      "刚才没有接到方法上，老师把问题缩小。",
+      "不重讲整题，只补眼前这一小步。",
+      "这一步再放慢一点。",
+    ],
+    clarify: [
+      "老师还不能判断你的答案，我们再说清一次。",
+      "刚才那句有点不完整，再确认一下。",
+      "老师需要听到更明确的一句。",
+    ],
+    noResponse: [
+      "没关系，老师先给一句可以跟着说的话。",
+      "卡住很正常，我们把话变短。",
+      "不会完整讲也没关系，先跟一句。",
+    ],
+  };
+  const prefix = pickText(prefixOptions[mode] || prefixOptions.teach, `${key}|${turnSalt}`);
+
+  if (mode === "noResponse") {
+    return `${prefix} 请跟着说：“${target}”。说完老师再带你往下走。`;
+  }
+  if (mode === "clarify") {
+    return `${prefix} ${makeChildTargetPrompt(target, key, "", point, "clarify", turnSalt)}`;
+  }
+  if (mode === "repair") {
+    return `${prefix} ${makeChildTargetPrompt(target, key, "", point, "return", turnSalt)}`;
+  }
+  return `${prefix} ${makeChildTargetPrompt(target, key, "", point, "target", turnSalt)}`;
+}
+
+function inferChildTarget(atom, point = null, mode = "teach") {
+  const family = point?.teaching_family || "generic";
+  const atomName = atom?.atom_name || "";
+  if (/为什么|原因|说清/.test(atomName)) return getReasoningSentence(family, point);
+
+  const candidates = [
+    atom?.repeatSentence,
+    extractQuotedSentence(atom?.no_response_prompt),
+    extractQuotedSentence(atom?.repair_prompt),
+    extractQuotedSentence(atom?.return_prompt),
+    atom?.return_prompt,
+    atom?.can_do_statement,
+    atom?.assessment_targets?.find(isUsefulTargetText),
+    atom?.check_keywords?.find(isUsefulTargetText),
+    atomName,
+    point?.entry_question,
+  ];
+
+  const raw = candidates.find(isUsefulTargetText) || atomName || point?.point_name || "我先看这一小步";
+  const cleaned = cleanTargetText(raw);
+  if (mode === "teach" && !/[？?]$/.test(cleaned) && cleaned.length <= 12) return `我先看${cleaned}`;
+  return cleaned;
+}
+
+function extractQuotedSentence(text) {
+  const source = String(text || "");
+  const quoted = source.match(/[“「](.+?)[”」]/);
+  if (quoted?.[1]) return quoted[1];
+  const afterColon = source.match(/[：:](.+)$/);
+  return afterColon?.[1] || "";
+}
+
+function cleanTargetText(text) {
+  return String(text || "")
+    .replace(/^孩子能/, "")
+    .replace(/^孩子可以/, "")
+    .replace(/^孩子/, "")
+    .replace(/^能/, "")
+    .replace(/^可以/, "")
+    .replace(/^我们先回到这一小步[:：]/, "")
+    .replace(/这一轮只答这个小问题。?/g, "")
+    .replace(/你现在只回答这一小步。?/g, "")
+    .replace(/乐之老师/g, "老师")
+    .replace(/\s+/g, "")
+    .replace(/[。！？!?]+$/g, "")
+    .trim()
+    .slice(0, 42) || "我先看这一小步";
+}
+
+function isUsefulTargetText(text) {
+  const compacted = normalizeText(text);
+  if (!compacted) return false;
+  if (["先", "再", "一步", "答案", "结果", "方法", "因为", "所以", "对", "错"].includes(compacted)) return false;
+  if (/^第?\d+$/.test(compacted)) return false;
+  return compacted.length >= 2 || /\d/.test(compacted);
+}
+
+function makeTeachMessage(atom, point = null) {
   if (!atom) return "我们先看一个很小的问题。";
   const atomName = atom.atom_name || "";
   if (atom.teach_prompt) return atom.teach_prompt;
@@ -1119,14 +1217,14 @@ function makeTeachMessage(atom) {
   if (atomName.includes("把另一个数拆成")) return "为了给9凑成10，4可以拆成1和几？";
   if (atomName.includes("10再加剩下的数")) return "9拿到1变成10，还剩3。10加3等于几？";
   if (atomName.includes("说清为什么这样算")) return "你试着说一句：为什么9加几可以先凑10？";
-  return `我们只学一步：${atomName}。你先说第一步该看什么？`;
+  return makeFallbackStepPrompt(atom, point, "teach");
 }
 
 function makeRepairMessage(atom, errorTag, point, session = null) {
   const atomName = atom?.atom_name || "";
   if (errorTag === ErrorTag.OFF_TOPIC) return makeReturnToQuestionMessage(atom, point, session);
-  if (errorTag === ErrorTag.NO_RESPONSE) return makeNoResponseMessage(atom, point);
-  if (errorTag === ErrorTag.AMBIGUOUS_RESPONSE) return `我没听清。我们只回答这一小步：${atomName || point?.point_name || "你再说一次答案"}`;
+  if (errorTag === ErrorTag.NO_RESPONSE) return makeNoResponseMessage(atom, point, session);
+  if (errorTag === ErrorTag.AMBIGUOUS_RESPONSE) return makeFallbackStepPrompt(atom, point, "clarify", session);
   if (atom?.repair_prompt) return atom.repair_prompt;
   if (errorTag === ErrorTag.LANGUAGE_MISREAD) return "我把题目换成更口语的话。你先说：题里让我们找什么？";
   if ((errorTag === ErrorTag.CONCEPT_GAP || errorTag === ErrorTag.CALCULATION_SLIP) && atomName.includes("1元等于10角")) return "差一点。1元不是1角，1元可以换成10个1角。你再说一遍：1元等于几角？";
@@ -1142,10 +1240,10 @@ function makeRepairMessage(atom, errorTag, point, session = null) {
   if ((errorTag === ErrorTag.CONCEPT_GAP || errorTag === ErrorTag.EXPRESSION_WEAK) && atomName.includes("用乘法表示几个几")) return "先说意思：3个4就是3组，每组4个。可以写成几乘几？";
   if (errorTag === ErrorTag.CALCULATION_SLIP) return "这像是小计算滑了一下。我们只检查这一步，不重讲整题。";
   if (errorTag === ErrorTag.EXPRESSION_WEAK) return "你说出了结果，还要补一句原因。你可以接着说：因为...";
-  return `这个小台阶再切小一点：${atom?.atom_name || "先看第一步"}。你先说一个词也可以。`;
+  return makeFallbackStepPrompt(atom, point, "repair", session);
 }
 
-function makeNoResponseMessage(atom, point) {
+function makeNoResponseMessage(atom, point, session = null) {
   const atomName = atom?.atom_name || "";
   if (atomName.includes("1元等于10角")) return "没关系。我们只回答一个数：1元等于几角？";
   if (atomName.includes("1角等于10分")) return "没关系。只回答一个数：1角等于几分？";
@@ -1163,7 +1261,7 @@ function makeNoResponseMessage(atom, point) {
   if (atomName.includes("把另一个数拆成")) return "没关系。只拆4：4可以拆成1和几？";
   if (atomName.includes("10再加剩下的数")) return "没关系。只算10加3等于几？";
   if (atom?.no_response_prompt) return atom.no_response_prompt;
-  return `没关系。我们只看这一小步：${atomName || point?.point_name || "先看第一步"}。你可以说“不知道”，老师再拆小一点。`;
+  return makeFallbackStepPrompt(atom, point, "noResponse", session);
 }
 
 function makeReturnToQuestionMessage(atom, point, session = null) {
@@ -1201,10 +1299,13 @@ function makeReturnToQuestionMessage(atom, point, session = null) {
   return makeChildTargetPrompt(atomName || point?.point_name || "这一小步", key, lead, point, "return", turnSalt);
 }
 
-function makeFeynmanScaffold(requiredSignals) {
-  const first = requiredSignals[0] || "先看第一步";
-  const second = requiredSignals[1] || "再说为什么";
-  return `差一点就讲清楚了。请把方法补成一句话：我先${first}，因为${second}。`;
+function makeFeynmanScaffold(requiredSignals, point = null) {
+  const familySentence = getReasoningSentence(point?.teaching_family || "generic", point);
+  const signals = (requiredSignals || []).filter((signal) => normalizeText(signal).length >= 2).slice(0, 2);
+  if (signals.length) {
+    return `差一点就讲清楚了。请照这个顺序再讲一遍：先说“${signals[0]}”，再说“${signals[1] || "为什么这样做"}”。也可以换成自己的话。`;
+  }
+  return `差一点就讲清楚了。你可以先跟着说：“${familySentence}”然后再换成自己的话说一遍。`;
 }
 
 function errorTagToChildSignal(errorTag) {
