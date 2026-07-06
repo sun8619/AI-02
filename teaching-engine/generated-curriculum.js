@@ -24,22 +24,22 @@ const modelPromptOpeners = [
 const childTryClosers = [
   "你再用自己的话接一句。",
   "你可以先说一个看见的数。",
-  "说不完整也没关系，先抓住关键词。",
-  "这一步不用讲整题，先说现在在看什么。",
+  "说不完整也没关系，先跟着说这半句。",
+  "这一轮只回答图里正在看哪一部分。",
 ];
 
 const askRepairs = [
   "先把整题放一边，只看眼前这一步。",
   "把眼睛放回题目里，先说你看到的一个数或一个词。",
   "先别猜答案，先说当前这一步在问什么。",
-  "老师把问题缩小一点，你先说一个关键词。",
+  "老师把问题缩小一点，你跟着说眼前这一句。",
 ];
 
 const noResponseHints = [
   "没关系，我们先把问题变小。",
   "先不急着答完整。",
   "老师先把图和题目再连起来。",
-  "这一步卡住很正常，先说一个词也可以。",
+  "这一步卡住很正常，先跟老师说一句短话。",
 ];
 
 const questionBankLessonAliases = {
@@ -267,7 +267,7 @@ function createFamilySteps(family, point, question) {
 
   const selected = createTeacherLikeFamilySteps(family, { point, question, prompt, answer, explanation, sourceSteps, common, familyText }) || familySteps[family] || [
     common.read,
-    makeStep(sourceSteps[0] || "只做当前小台阶", `我们只做一步：${sourceSteps[0] || "先看题目" }。你先说一个词也可以。`, ["先", "再", "一步"]),
+    makeStep(sourceSteps[0] || "只做当前小台阶", `我们只做一步：${sourceSteps[0] || "先看题目" }。如果不会，先跟着老师说这一小句。`, ["先", "再", "一步"]),
     common.answer,
     common.reason,
   ];
@@ -830,12 +830,12 @@ function createModelNoResponseLine(label, explain, repeat) {
   const cleanExplain = cleanPromptSentence(explain);
   const cleanRepeat = cleanPromptSentence(repeat);
   const variants = [
-    `没关系，这一步乐之老师带一半。${cleanExplain} 你先说一个词：${phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat}。`,
-    `卡住没关系。先听方法：${cleanExplain} 然后说一个你记住的词。`,
+    `没关系，这一步乐之老师带一半。${cleanExplain} 请跟着说：“${cleanRepeat}”。`,
+    `卡住没关系。先听方法：${cleanExplain} 然后只回答眼前这一句：“${cleanRepeat}”。`,
     `我们先不答整题，只把这句放稳。请跟着说：${cleanRepeat}。`,
-    `这一步可以先跟读，不用自己编。乐之老师说：${cleanRepeat}。请你跟着读一遍。`,
+    `这一步可以先跟读。乐之老师说：“${cleanRepeat}”。请你跟着读一遍。`,
     `乐之老师把话变短：${cleanRepeat}。你接着说这个意思。`,
-    `先不用想完整句。${cleanExplain} 你接一个关键词：${phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat}。`,
+    `先不用想完整句。${cleanExplain} 你只要跟着说：“${cleanRepeat}”。`,
   ];
   return pick(variants, `${label}-${repeat}-no-response`);
 }
