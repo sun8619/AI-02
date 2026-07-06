@@ -2801,6 +2801,34 @@ function createContextualFollowSentence(plan) {
   return simplifyStepLabelForRepeat(plan?.label || plan?.prompt || "这一步");
 }
 
+function createConcreteFallbackSentence(plan) {
+  const lesson = safeCurrentLesson();
+  const family = getPlanTeachingFamily(lesson, plan);
+  const text = normalizeText(`${plan?.label || ""} ${plan?.prompt || ""} ${(plan?.answerKeywords || []).join(" ")}`);
+  if (plan?.isReason || /为什么|原因|理由|说清|讲清/.test(text)) return createReasonRepeatSentence(plan?.label, plan?.prompt, plan?.answerKeywords);
+  if (family === "money" || family === "moneyApplication" || hasMoneyTerm(text)) {
+    if (/换成角|先换|单位/.test(text)) return "先把元换成角";
+    if (/找回|找零/.test(text)) return "用付的钱减价钱";
+    return "先看元，再看角";
+  }
+  if (family === "compare" || /比较|大于|小于|等号|符号/.test(text)) return "先看左边，再看右边";
+  if (family === "composition" || /分成|组成|另一部分|缺|还差/.test(text)) return "先看总数，再看已知的一部分";
+  if (family === "count" || /数数|总数|一共有/.test(text)) return "一个一个按顺序数";
+  if (family === "concreteAddition" || /一共|合起来|加法/.test(text)) return "两部分合起来用加法";
+  if (family === "concreteSubtraction" || /还剩|拿走|少了|减法/.test(text)) return "从原来的里面拿走，用减法";
+  if (family === "makeTenAdd" || /凑十/.test(text)) return "先凑成十，再加剩下的数";
+  if (family === "breakTenSubtract" || /破十|退位|十几减/.test(text)) return "先把十几拆成十和几";
+  if (family === "multiplication" || /乘法|几个几/.test(text)) return "先找每组几个，再看有几组";
+  if (family === "division" || /除法|平均分|每份/.test(text)) return "平均分就是每份一样多";
+  if (family === "placeValue" || /数位|十位|个位/.test(text)) return "先看这个数字在哪一位";
+  if (family === "time" || /时针|分针|时间|几时/.test(text)) return "先看短针，再看长针";
+  if (family === "measure" || /长度|厘米|米|刻度|单位/.test(text)) return "先看用什么单位";
+  if (family === "shape" || /图形|边|角|特征/.test(text)) return "先看图形的特征";
+  if (family === "data" || /表格|统计|数量/.test(text)) return "先找到对应的那一行";
+  if (family === "logic" || /推理|排除|可能/.test(text)) return "先排除不可能的";
+  return "我先看题目问什么";
+}
+
 function stripTeacherFollowInstruction(text) {
   return String(text || "")
     .replace(/你可以先说「[^」]+」。?/g, "")
@@ -2864,14 +2892,14 @@ function softenTeacherScaffoldText(text) {
     .replace(/只说这个符号就行/g, "先说这个符号就行")
     .replace(/只回答一步/g, "先回答一步")
     .replace(/你只要说/g, "你可以先说")
-    .replace(/你跟着说一遍[:：]?/g, "你可以先参考这句：")
-    .replace(/你跟着说[:：]?/g, "你先说：")
+    .replace(/你跟着说一遍[:：]?/g, "请跟着老师说一遍：")
+    .replace(/你跟着说[:：]?/g, "请跟着老师说：")
     .replace(/老师先说答案[:：]?/g, "老师先示范：")
     .replace(/老师先告诉你[:：]?/g, "老师先把关键点说清楚：")
     .replace(/老师先说[:：]?/g, "老师先示范：")
     .replace(/老师把答案范围缩小[:：]?/g, "老师把这一步讲清楚：")
-    .replace(/跟老师说一句/g, "用自己的话说一句")
-    .replace(/跟着说一个小答案/g, "先说一个小答案")
+    .replace(/跟老师说一句/g, "跟着老师说一句")
+    .replace(/跟着说一个小答案/g, "跟着老师说这个小答案")
     .replace(/\s+把刚才的方法/g, " 把刚才的方法")
     .replace(/^(对，[^。！？!?]+。)对，/g, "$1")
     .replace(/^(好，[^。！？!?]+。)好，/g, "$1");
@@ -3010,7 +3038,7 @@ function teacherRepairMessage(prefix, plan) {
   if (plan?.isReason) {
     const sentence = String(plan.repeatSentence || createReasonRepeatSentence(plan.label, plan.prompt, plan.answerKeywords)).replace(/[。！？!?]+$/, "");
     if (shouldModelAnswer) {
-      message = `${lead}原因不用想很长：${sentence}。你不用自己编，先照着这句说一遍。`;
+      message = `${lead}原因不用想很长。请跟着老师说：“${sentence}。”说完后，我们再换一道小题试试。`;
     } else {
       message = `${lead}${createReasonOpenQuestion(plan, family, `${lesson?.id || ""}|${plan?.label || ""}|repair`)}`;
     }
@@ -3050,14 +3078,14 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
   const answer = hasAnswerKeywords ? createContextualFollowSentence(plan) : "";
   if (shouldModelAnswer) {
     if (answer) return `如果不知道怎么说，就照着这句说一遍：“${answer}。”`;
-    return "如果不知道怎么说，就先说一个数或一个词。";
+    return `如果不知道怎么说，就跟着老师说：“${createConcreteFallbackSentence(plan)}。”`;
   }
   const target = createAnswerShapeInstruction(plan);
   if (target) return ensureChineseSentence(target);
   const lesson = safeCurrentLesson();
   return pickNaturalVariant(
     [
-      "你可以先说一个词。",
+      `请跟着老师说：“${createConcreteFallbackSentence(plan)}。”`,
       "先说这一小问就行。",
       "看着图，说你看到的一个数或一个词。",
     ],
