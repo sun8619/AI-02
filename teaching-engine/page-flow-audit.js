@@ -32,6 +32,7 @@ const summary = {
   averageNaturalnessScore: Math.round(average(reports.map((item) => item.naturalnessScore))),
   averageVisualSyncScore: Math.round(average(reports.map((item) => item.visualSyncScore))),
   averageAnswerLeakScore: Math.round(average(reports.map((item) => item.answerLeakScore))),
+  averageKnowledgeBoundaryScore: Math.round(average(reports.map((item) => item.knowledgeBoundaryScore))),
   criticalFindings: collectCriticalFindings(reports),
     naturalnessFindings: reports
     .filter((item) => item.naturalnessScore < 90)
@@ -136,13 +137,15 @@ function auditPageFlow(point) {
   const naturalness = scoreNaturalness(events);
   const visualSync = scoreVisualSync(events, point);
   const answerLeak = scoreAnswerLeak(events);
-  gaps.push(...clearPrompt.gaps, ...naturalness.gaps, ...visualSync.gaps, ...answerLeak.gaps);
+  const boundary = scoreKnowledgeBoundary(events, point);
+  gaps.push(...clearPrompt.gaps, ...naturalness.gaps, ...visualSync.gaps, ...answerLeak.gaps, ...boundary.gaps);
 
   const score = Math.round(
-    clearPrompt.score * 0.34 +
-      naturalness.score * 0.28 +
-      visualSync.score * 0.22 +
-      answerLeak.score * 0.16,
+    clearPrompt.score * 0.31 +
+      naturalness.score * 0.26 +
+      visualSync.score * 0.2 +
+      answerLeak.score * 0.13 +
+      boundary.score * 0.1,
   );
 
   const uniqueGaps = unique(gaps);
@@ -159,6 +162,7 @@ function auditPageFlow(point) {
     naturalnessScore: naturalness.score,
     visualSyncScore: visualSync.score,
     answerLeakScore: answerLeak.score,
+    knowledgeBoundaryScore: boundary.score,
     gaps: uniqueGaps,
     blockingGaps,
     naturalnessDetails: naturalness.details,
@@ -244,6 +248,12 @@ function scoreNaturalness(events) {
     /听完后，请用自己的话说/g,
     /你现在只说/g,
     /你现在先说/g,
+    /先说一个词/g,
+    /先抓住关键词/g,
+    /先说一个关键词/g,
+    /你不用自己编/g,
+    /第一步该看什么/g,
+    /说一个你记住的词/g,
   ];
   const templateHits = countPatternHits(combined, banned);
   const longMessages = messages.filter((message) => compact(message).length > 190);
@@ -310,6 +320,31 @@ function scoreAnswerLeak(events) {
   };
 }
 
+function scoreKnowledgeBoundary(events, point) {
+  const family = point.teaching_family || "";
+  const combinedEvents = events
+    .map((event) => `${event.message} ${event.currentStep} ${event.assessmentPrompt}`)
+    .join("\n")
+    .replace(/小角度|角度|直角|锐角|钝角/g, "");
+  const leaks = [];
+  if (family === "composition") {
+    const matches = combinedEvents.match(/人民币|元|角|找回|找零|价钱|付的钱|购物/g) || [];
+    if (matches.length) leaks.push(`分与合路径混入人民币词：${unique(matches).slice(0, 4).join("、")}`);
+  }
+  if (family === "money" || family === "moneyApplication") {
+    const matches = combinedEvents.match(/时针|分针|钟面|直角|锐角|钝角|统计表|第几个/g) || [];
+    if (matches.length) leaks.push(`人民币路径混入其他知识点词：${unique(matches).slice(0, 4).join("、")}`);
+  }
+  if (family === "time" || family === "timeDuration") {
+    const matches = combinedEvents.match(/元|角|人民币|找回|找零|购物/g) || [];
+    if (matches.length) leaks.push(`时间路径混入人民币词：${unique(matches).slice(0, 4).join("、")}`);
+  }
+  return {
+    score: leaks.length ? 55 : 100,
+    gaps: leaks,
+  };
+}
+
 function hasClearAsk(message) {
   const text = String(message || "");
   return (
@@ -320,7 +355,15 @@ function hasClearAsk(message) {
 
 function hasVagueOnlyAsk(message) {
   const text = String(message || "");
-  return /你先说第一步该看什么[？?]?$/.test(text) || /先说一个词也可以/.test(text);
+  return (
+    /你先说第一步该看什么[？?]?$/.test(text) ||
+    /先说一个词也可以/.test(text) ||
+    /先说一个词/.test(text) ||
+    /先抓住关键词/.test(text) ||
+    /先说一个关键词/.test(text) ||
+    /你不用自己编/.test(text) ||
+    /说一个你记住的词/.test(text)
+  );
 }
 
 function expectedAnswerTokens(expected = {}) {
@@ -456,6 +499,7 @@ function printHumanSummary(data) {
   console.log(`- 自然度：${data.averageNaturalnessScore}`);
   console.log(`- 图示同步：${data.averageVisualSyncScore}`);
   console.log(`- 防泄题：${data.averageAnswerLeakScore}`);
+  console.log(`- 知识边界：${data.averageKnowledgeBoundaryScore}`);
   if (data.criticalFindings.length) {
     console.log("- 重点问题：");
     for (const item of data.criticalFindings) {
