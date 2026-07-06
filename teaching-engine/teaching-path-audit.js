@@ -250,6 +250,12 @@ function scoreMessages(messages) {
     /老师把方法句放在这里/g,
     /你先跟老师说一句/g,
     /老师先说结果/g,
+    /先说一个词/g,
+    /先抓住关键词/g,
+    /先说一个关键词/g,
+    /你不用自己编/g,
+    /第一步该看什么/g,
+    /说一个你记住的词/g,
   ];
   if (countPatternHits(combined, blocked)) failures.push("路径中出现机械模板或直接给答案话术");
   const tooLong = messages.filter((message) => compact(message).length > 150).length;
