@@ -23,8 +23,8 @@ const modelPromptOpeners = [
 
 const childTryClosers = [
   "你再用自己的话接一句。",
-  "你可以先说一个看见的数。",
-  "说不完整也没关系，先跟着说这半句。",
+  "请先说图里正在看的那个数。",
+  "说不完整也没关系，先跟着老师说这一句。",
   "这一轮只回答图里正在看哪一部分。",
 ];
 
@@ -32,14 +32,14 @@ const askRepairs = [
   "先把整题放一边，只看眼前这一步。",
   "把眼睛放回题目里，先说你看到的一个数或一个词。",
   "先别猜答案，先说当前这一步在问什么。",
-  "老师把问题缩小一点，你跟着说眼前这一句。",
+  "老师把问题缩小一点，请只回答眼前这一问。",
 ];
 
 const noResponseHints = [
   "没关系，我们先把问题变小。",
   "先不急着答完整。",
   "老师先把图和题目再连起来。",
-  "这一步卡住很正常，先跟老师说一句短话。",
+  "这一步卡住很正常，老师先示范一句。",
 ];
 
 const questionBankLessonAliases = {
@@ -405,7 +405,7 @@ function createTeacherLikeFamilySteps(family, context) {
     ],
     observation: [
       teacherModelStep("先站位置", "观察物体先想自己站在哪里：正面、侧面还是上面。", "先看从哪里观察", ["正面", "侧面", "上面", "观察"]),
-      teacherModelStep("抓关键特征", "再看能看到哪些关键特征，比如门、窗、面或边。", "再看关键特征", ["特征", "面", "边", "看到"]),
+      teacherModelStep("看关键特征", "再看能看到哪些关键特征，比如门、窗、面或边。", "再看关键特征", ["特征", "面", "边", "看到"]),
       finalStep("选看到的图", "根据位置和特征，应该选哪一幅图？", ["正面", "侧面", "上面", "图"]),
       reasonStep("说清观察理由", "因为站的位置不同，看到的面和特征也不同。", ["位置", "看到", "特征"]),
     ],
@@ -488,9 +488,9 @@ function createTeacherLikeFamilySteps(family, context) {
 function ensureChildAnswerTarget(teach) {
   const text = String(teach || "").trim();
   if (!text) return "这一小步要你回答一个数、一个单位，或一个关键词。";
-  if (/如果问/.test(text)) return `${text} 这一步先回答这一点。`;
+  if (/如果问/.test(text)) return `${text} 现在只回答这个小问题。`;
   if (/[？?]|你|请|回答|填|比一比|数一数|看一看|想一想|说出|说一说|先说|只说|现在说|是多少|多少|几|该/.test(text)) return text;
-  return `${text} 这一小步要你接着回答。`;
+  return `${text} 请接着说出这一小步的答案。`;
 }
 
 function createCalculationTeacherSteps(context, finalStep, reasonStep) {
@@ -683,7 +683,7 @@ function createDataTeacherSteps(context, finalStep, reasonStep) {
   const allText = normalizeText(`${question.prompt || ""} ${question.explanation || ""} ${familyText || ""}`);
   const steps = [
     teacherModelStep("先看分类标准", "统计题先看按什么分类，比如水果、颜色或项目。", "先看按什么分类", ["分类", "标准", "项目"]),
-    teacherAskStep("逐行读数量", "一行一行看，每一类有多少？先说一个也可以。", ["一行", "数量", "票数", "记录"]),
+    teacherAskStep("逐行读数量", "一行一行看，每一类有多少？请先说表里的一个数量。", ["一行", "数量", "票数", "记录"]),
   ];
   if (/一共|合计|总数/.test(allText)) {
     steps.push(teacherAskStep("先求总数", "如果问一共，就把每一类数量合起来。现在一共是多少？", ["一共", "合计", "总数"]));
@@ -782,7 +782,7 @@ function teacherModelStep(label, explain, repeatSentence, keywords = [], options
   const teachingLine = createModelTeachingLine(label, explain, repeat, `${label}-${repeat}-${explain}`);
   return makeStep(
     label,
-    teachingLine || `${opener}：${explain} 现在试着抓住：${repeat}。`,
+    teachingLine || `${opener}：${explain} 请跟着说：${repeat}。`,
     unique([...keywords, ...phraseKeywords(repeat)]),
     options.repair || createModelRepairLine(label, explain, repeat),
     {
@@ -798,17 +798,17 @@ function createModelTeachingLine(label, explain, repeat, key) {
   const cleanRepeat = cleanPromptSentence(repeat);
   const variants = [
     `先看一个小方法：${cleanExplain} 接下来你说：${cleanRepeat}。`,
-    `${cleanExplain} 这一句很关键，你试着说：${cleanRepeat}。`,
-    `${cleanExplain} 这一轮回答：${cleanRepeat}。`,
-    `看图时先抓这一点：${cleanExplain} 你来说：${cleanRepeat}。`,
+    `${cleanExplain} 这一句很关键，请说：${cleanRepeat}。`,
+    `${cleanExplain} 现在只回答这一句：${cleanRepeat}。`,
+    `看图时先看这一点：${cleanExplain} 请跟着说：${cleanRepeat}。`,
     `${cleanExplain} 如果还不熟，先跟着读：${cleanRepeat}。`,
-    `乐之老师给一个小提示：${cleanExplain} 你接：${cleanRepeat}。`,
+    `乐之老师给一个小提示：${cleanExplain} 请接着说：${cleanRepeat}。`,
     `先把眼睛放到这一步：${cleanExplain} 请回答：${cleanRepeat}。`,
-    `这一小步不难，我们先抓方法：${cleanExplain} 你说成：${cleanRepeat}。`,
+    `这一小步不难，先看方法：${cleanExplain} 请说成：${cleanRepeat}。`,
     `先别急着算完整题。${cleanExplain} 你先答：${cleanRepeat}。`,
     `把这一步看清：${cleanExplain} 然后说：${cleanRepeat}。`,
-    `我们换成更短的话：${cleanExplain} 你试试：${cleanRepeat}。`,
-    `先听一半，再由你接上。${cleanExplain} 你接：${cleanRepeat}。`,
+    `我们换成更短的话：${cleanExplain} 请说：${cleanRepeat}。`,
+    `先听一半，再由你接上。${cleanExplain} 请接着说：${cleanRepeat}。`,
   ];
   return pick(variants, key);
 }
@@ -818,7 +818,7 @@ function createModelRepairLine(label, explain, repeat) {
   const cleanRepeat = cleanPromptSentence(repeat);
   const keywords = phraseKeywords(cleanRepeat).slice(0, 2).join("、") || cleanRepeat;
   const variants = [
-    `${cleanExplain} 不用一次说完整，先抓住：${keywords}。`,
+    `${cleanExplain} 不用一次说完整，请先说：${keywords}。`,
     `刚才差一点连到方法上。再看这句：${cleanRepeat}。`,
     `乐之老师把问题缩小：${cleanExplain} 你说「${keywords}」也可以。`,
     `先别急着报整题答案，回到这一步：${cleanRepeat}。`,
@@ -834,8 +834,8 @@ function createModelNoResponseLine(label, explain, repeat) {
     `卡住没关系。先听方法：${cleanExplain} 然后只回答眼前这一句：“${cleanRepeat}”。`,
     `我们先不答整题，只把这句放稳。请跟着说：${cleanRepeat}。`,
     `这一步可以先跟读。乐之老师说：“${cleanRepeat}”。请你跟着读一遍。`,
-    `乐之老师把话变短：${cleanRepeat}。你接着说这个意思。`,
-    `先不用想完整句。${cleanExplain} 你只要跟着说：“${cleanRepeat}”。`,
+    `乐之老师把话变短：${cleanRepeat}。请跟着说：${cleanRepeat}。`,
+    `先不用想完整句。${cleanExplain} 请跟着老师说：“${cleanRepeat}”。`,
   ];
   return pick(variants, `${label}-${repeat}-no-response`);
 }
@@ -869,7 +869,7 @@ function makeAskNoResponsePrompt(label, teach) {
   const head = pick(noResponseHints, `${prompt}-${label}`);
   if (/多少|几/.test(prompt)) return `${head} 先把题里的两个数找出来，再说你想先算哪一个。`;
   if (/为什么|原因/.test(prompt)) return `${head} 先说“因为”，后面接一个你看到的理由。`;
-  return `${head} 先看图中对应的位置，能说一个词就可以。`;
+  return `${head} 先看图中对应的位置，请先说一个数、单位或图里的词。`;
 }
 
 function phraseKeywords(phrase) {
@@ -892,7 +892,7 @@ function makeStep(label, teach, keywords = [], repair = "", options = {}) {
     teach,
     repair,
     noResponse: options.noResponse || `没关系。先听老师说：${repeatSentence || teach}`,
-    returnPrompt: options.returnPrompt || `我们先回到这一小步：${label}。这一轮只答这个小问题。`,
+    returnPrompt: options.returnPrompt || `我们先回到这一小步：${label}。请先回答这一问。`,
     repeatSentence,
     keywords: unique([label, ...keywords].map(String)),
     acceptsFinal: Boolean(options.acceptsFinal),
