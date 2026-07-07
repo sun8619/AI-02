@@ -251,6 +251,13 @@ function scoreNaturalness(events) {
     /先说一个词/g,
     /先抓住关键词/g,
     /先说一个关键词/g,
+    /先抓住这句/g,
+    /看图时先抓/g,
+    /这一轮回答/g,
+    /这一步先回答这一点/g,
+    /这一小步要你接着回答/g,
+    /你只要跟着说/g,
+    /先说一个也可以/g,
     /你不用自己编/g,
     /第一步该看什么/g,
     /说一个你记住的词/g,
@@ -361,6 +368,13 @@ function hasVagueOnlyAsk(message) {
     /先说一个词/.test(text) ||
     /先抓住关键词/.test(text) ||
     /先说一个关键词/.test(text) ||
+    /先抓住这句/.test(text) ||
+    /看图时先抓/.test(text) ||
+    /这一轮回答/.test(text) ||
+    /这一步先回答这一点/.test(text) ||
+    /这一小步要你接着回答/.test(text) ||
+    /你只要跟着说/.test(text) ||
+    /先说一个也可以/.test(text) ||
     /你不用自己编/.test(text) ||
     /说一个你记住的词/.test(text)
   );
