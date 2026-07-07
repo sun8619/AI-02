@@ -22,7 +22,7 @@ const modelPromptOpeners = [
 ];
 
 const childTryClosers = [
-  "你再用自己的话接一句。",
+  "请用自己的话说一句。",
   "请先说图里正在看的那个数。",
   "说不完整也没关系，先跟着老师说这一句。",
   "这一轮只回答图里正在看哪一部分。",
@@ -490,7 +490,7 @@ function ensureChildAnswerTarget(teach) {
   if (!text) return "这一小步要你回答一个数、一个单位，或一个关键词。";
   if (/如果问/.test(text)) return `${text} 现在只回答这个小问题。`;
   if (/[？?]|你|请|回答|填|比一比|数一数|看一看|想一想|说出|说一说|先说|只说|现在说|是多少|多少|几|该/.test(text)) return text;
-  return `${text} 请接着说出这一小步的答案。`;
+  return `${text} 请回答眼前这一问。`;
 }
 
 function createCalculationTeacherSteps(context, finalStep, reasonStep) {
@@ -797,18 +797,18 @@ function createModelTeachingLine(label, explain, repeat, key) {
   const cleanExplain = cleanPromptSentence(explain);
   const cleanRepeat = cleanPromptSentence(repeat);
   const variants = [
-    `先看一个小方法：${cleanExplain} 接下来你说：${cleanRepeat}。`,
+    `先看一个小方法：${cleanExplain} 接下来请你说：${cleanRepeat}。`,
     `${cleanExplain} 这一句很关键，请说：${cleanRepeat}。`,
     `${cleanExplain} 现在只回答这一句：${cleanRepeat}。`,
     `看图时先看这一点：${cleanExplain} 请跟着说：${cleanRepeat}。`,
     `${cleanExplain} 如果还不熟，先跟着读：${cleanRepeat}。`,
-    `乐之老师给一个小提示：${cleanExplain} 请接着说：${cleanRepeat}。`,
+    `乐之老师给一个小提示：${cleanExplain} 请跟着说：${cleanRepeat}。`,
     `先把眼睛放到这一步：${cleanExplain} 请回答：${cleanRepeat}。`,
     `这一小步不难，先看方法：${cleanExplain} 请说成：${cleanRepeat}。`,
     `先别急着算完整题。${cleanExplain} 你先答：${cleanRepeat}。`,
     `把这一步看清：${cleanExplain} 然后说：${cleanRepeat}。`,
     `我们换成更短的话：${cleanExplain} 请说：${cleanRepeat}。`,
-    `先听一半，再由你接上。${cleanExplain} 请接着说：${cleanRepeat}。`,
+    `先听老师说一半。${cleanExplain} 请跟着说：${cleanRepeat}。`,
   ];
   return pick(variants, key);
 }
