@@ -1853,7 +1853,7 @@ function createNaturalInitialMessage(point, prompt, starter, family) {
     logic: [
       `推理题不能靠猜，先看已知条件。${prompt} ${firstStep}`,
       `这题像侦探游戏，先排除不可能的。${prompt} ${firstStep}`,
-      `我们先抓住已经确定的线索。${prompt} ${firstStep}`,
+      `我们先看已经确定的线索。${prompt} ${firstStep}`,
     ],
   };
   const fallback = [
@@ -1885,7 +1885,7 @@ function createFocusedOpeningLeads(family, title = "这个知识点") {
     measure: ["单位题先看量的是什么。", "测量题先看单位和起点。", "先别只看数字，先看单位。"],
     shape: ["图形题先看特征。", "先找边、角、面这些线索。", "不只看像不像，先看特点。"],
     data: ["统计题先读表。", "先找表格里的对应位置。", "先看分类标准。"],
-    logic: ["推理题先抓确定线索。", "先别猜，先排除不可能的。", "像小侦探一样先看条件。"],
+    logic: ["推理题先看确定线索。", "先别猜，先排除不可能的。", "像小侦探一样先看条件。"],
   };
   return byFamily[family] || [`今天先学「${title}」。`, "我们从一个小问题开始。", "先看一个小地方就行。"];
 }
@@ -2212,7 +2212,7 @@ function createConceptScaffoldHint(lesson, step) {
   if (family === "money") return `人民币换算先看单位。元、角、分不是同一种单位，要先换成同一种单位再算。${sayAnswer}`;
   if (family === "compare") return `比较大小先看两边，不急着写符号。谁大就朝谁开口，一样大就用等号。${sayAnswer}`;
   if (family === "count") return `数数要“一物一数”：一个物体配一个数，数过可以做记号，最后一个数就是总数。${sayAnswer}`;
-  if (family === "composition") return `分与合先抓住总数，总数不变；已经知道一部分，就想还差几能合回总数。${sayAnswer}`;
+  if (family === "composition") return `分与合先看总数，总数不变；已经知道一部分，就想还差几能合回总数。${sayAnswer}`;
   if (family === "ordinal") return `第几个先定方向：从左还是从右。第几个说的是位置，不是一共有几个。${sayAnswer}`;
   if (family === "pattern") return `找规律先看相邻两个怎么变，不要只盯最后一个空。变化一样，后面就按同样方法接。${sayAnswer}`;
   if (family === "multiplication") {
@@ -2225,7 +2225,7 @@ function createConceptScaffoldHint(lesson, step) {
     return `乘法先说“几个几”：每组同样多，才可以用乘法或口诀。${sayAnswer}`;
   }
   if (family === "division") return `除法先看是不是平均分：每份一样多，才叫平均分。先分公平，再说每份几个或分成几份。${sayAnswer}`;
-  if (family === "time") return `钟面先看短针定几时，再看长针定几分。先抓住短针，再看长针走了几大格。${sayAnswer}`;
+  if (family === "time") return `钟面先看短针定几时，再看长针定几分。先看短针，再看长针走了几大格。${sayAnswer}`;
   if (family === "measure") return `单位题先看量的是什么：长度看厘米或米，重量看克或千克；测量时要对准0刻度，估计时想生活里的物体。${sayAnswer}`;
   if (family === "placeValue") return `数位题先看数字站在哪里：十位表示几个十，个位表示几个一；有0时也不能把位置丢掉。${sayAnswer}`;
   if (family === "shape") return `图形题先看特征：边、角、面、能不能滚，再说名字。${sayAnswer}`;
@@ -2699,14 +2699,14 @@ function createTeacherLeadForModelStep(plan, family, key) {
     breakTenSubtract: ["退位减先看个位够不够减。", "这题先别硬减，先想破十。", "不够减时，先把十几拆开。"],
     concreteAddition: ["加法故事先看两部分。", "一共多少，先把两边合起来。"],
     concreteSubtraction: ["减法故事先看原来和拿走。", "还剩多少，先把拿走的去掉。"],
-    composition: ["分与合先看总数。", "组成题先看整体和一部分。", "先把总数抓住，再找缺的那部分。"],
+    composition: ["分与合先看总数。", "组成题先看整体和一部分。", "先把总数看清，再找缺的那部分。"],
     multiplication: ["乘法先看几个几。", "口诀前面先看一组几个。"],
     division: ["平均分先看是不是一样多。", "除法先看总数和分法。"],
     time: ["钟表题先分清短针和长针。", "时间题先看一根针，再看另一根。"],
     placeValue: ["数位题先看数字站在哪一位。", "十位个位先分清。"],
     shape: ["图形题先看特征。", "先找边、角、面这些线索。"],
     data: ["统计题先看表格里的对应位置。", "读表先找行和列。"],
-    logic: ["推理题先抓一条确定线索。", "先排除不可能的情况。"],
+    logic: ["推理题先看一条确定线索。", "先排除不可能的情况。"],
   };
   const general = /看|找|数|读|分清|比较/.test(text)
     ? ["先只看图里的一个线索。", "把题目缩小，只看眼前这一点。"]
@@ -2857,7 +2857,7 @@ function simplifyStepLabelForRepeat(label) {
 function childGuideBridge(plan, previousPlan = null) {
   const index = Number(plan?.index ?? previousPlan?.index ?? 0) || 0;
   const options = [
-    "对，你抓到关键了。",
+    "对，你看到了关键。",
     "可以，这个小点站住了。",
     "嗯，方向对了。",
     "对，就是这个意思。",
@@ -3286,7 +3286,7 @@ function createForwardButUsefulRepair(plan, studentText) {
 
   if (family === "shape") {
     if (/长方形|正方形|三角形|圆|角|边|面/.test(studentText) && !/特征|为什么|原因/.test(label)) {
-      return "你已经说到图形了。现在先抓一个特征：它有几条边，或者有没有角？";
+      return "你已经说到图形了。现在先看一个特征：它有几条边，或者有没有角？";
     }
   }
 
@@ -3430,7 +3430,7 @@ function createReasonOpenQuestion(reasonPlan, family, key = "") {
     shape: [
       "请说一句小方法：你是看哪个特征判断的？",
       "不用说很长，先说它有几条边，或者有没有角。",
-      "你先说一个图形特征就行。",
+      "请先说一个图形特征，比如几条边或有没有角。",
     ],
     data: [
       "请说一句小方法：你从表里的哪里读到数量？",
@@ -4159,7 +4159,7 @@ function createObservationGuidedSteps(lesson, question) {
       teacherHint: "观察物体先别猜图形，先想自己站在哪里看。",
     }),
     guidedStep("找关键特征", `题里说能看到${clue}。这个特征通常在哪一面？`, [clue, "门", "正面", "侧面", "上面"], {
-      teacherHint: `抓住题里的特征：${clue}。先说你看到了什么。`,
+      teacherHint: `看题里的特征：${clue}。先说你看到了什么。`,
       bridgeMessage: `特征找到了，再选观察方向。`,
     }),
     guidedStep("选择方向", "从正面、侧面、上面里选一个观察方向。", answerKeywords.concat([direction]), {
@@ -4348,7 +4348,7 @@ function createApplicationGuidedSteps(lesson, question) {
     }),
     guidedStep("找有用条件", "题里给了哪几个有用的数？先把这些数找出来。", usefulNumberKeywords.concat(["两个数", "条件", "有用的数"]), {
       teacherHint: usefulNumbers.length
-        ? `题里先抓数字：${usefulNumbers.join("、")}。先把有用的数说出来，再想怎么算。`
+        ? `题里先看数字：${usefulNumbers.join("、")}。先把有用的数说出来，再想怎么算。`
         : "先别算，先把题里有用的数字找出来。",
     }),
     guidedStep("想故事动作", methodPrompt, uniqueKeywords(operationKeywords.concat(relation.keywords || [], relation.reasonKeywords || [], [relationAction.say, relationAction.accept], expression ? [formatExpression(expression)] : [])), {
@@ -4719,7 +4719,7 @@ function createDivisionGuidedSteps(lesson, question) {
       uniqueKeywords(totalKeywords.concat(["总数", "一共"])),
       {
       teacherHint: hasStoryNumbers
-        ? `这题先抓总数：一共有${total}个。先说：总数是${total}。`
+        ? `这题先看总数：一共有${total}个。先说：总数是${total}。`
         : "先找总数，也就是一共有多少。",
       },
     ),
@@ -4825,11 +4825,11 @@ function createLogicGuidedSteps(lesson, question) {
   const answerKeywords = expandedQuestionAnswerKeywords(question, lesson);
   return [
     guidedStep("记住条件", "先说题目告诉了我们哪一个条件。", ["已知", "条件", "告诉", "不是", "是"], {
-      teacherHint: "推理题先别猜答案，先抓住题目给出的条件，比如“不是谁”“比谁多”“在谁旁边”。",
+      teacherHint: "推理题先别猜答案，先看题目给出的条件，比如“不是谁”“比谁多”“在谁旁边”。",
     }),
     guidedStep("排除不可能", "把不可能的先排除掉。", ["排除", "不可能", "不是", "划掉"], {
       teacherHint: "不可能的先划掉，剩下的选择就会变少，这叫排除法。",
-      bridgeMessage: "条件抓住了，再用它排除。",
+      bridgeMessage: "条件看清了，再用它排除。",
     }),
     guidedStep("说剩下答案", "剩下谁或哪一种可能？", answerKeywords, {
       teacherHint: "排除完以后，不要重新猜，只看还剩下哪个可能。",
@@ -8494,7 +8494,7 @@ function applyGatewayTutor(payload, inputType) {
   if (unclearChildText && ["teachback", "summary"].includes(nextPhase)) {
     nextPhase = "guiding";
     payload.aiContext = "孩子输入不完整，前端已阻止误判通过。";
-    payload.aiMessage = `老师没抓到答案。回到这题：${lesson.activeQuestion?.prompt || lesson.problem}`;
+    payload.aiMessage = `老师没听清答案。回到这题：${lesson.activeQuestion?.prompt || lesson.problem}`;
     payload.teachingState = "GUIDED_STEP";
     payload.currentStep = `小台阶 1：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0] || "先读题"}`;
     payload.evidenceSignal = "输入不完整";
@@ -8589,7 +8589,7 @@ function evaluateAttempt(text, inputType) {
     state.mastery = Math.max(48, state.mastery - 1);
     state.currentStep = `小台阶 1：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0] || "先读题"}`;
     state.aiContext = "孩子输入不完整，先拉回当前题。";
-    state.aiMessage = `老师没抓到答案。回到这题：${activeQuestion?.prompt || lesson.problem}`;
+    state.aiMessage = `老师没听清答案。回到这题：${activeQuestion?.prompt || lesson.problem}`;
     state.showVisual = true;
     resetGeneratedVisualForTurn();
     addEvidence("输入不完整", "孩子没有给出可判断的回答，AI 没有默认判对。", inputType === "voice" ? "语音回答" : "键盘回答");
@@ -8641,7 +8641,7 @@ function evaluateAttempt(text, inputType) {
   state.phase = "repair";
   state.mastery = Math.max(52, state.mastery - 2);
   state.aiContext = "孩子回答和当前题不匹配，先给一个更小提示。";
-  state.aiMessage = `先停一下。回到题目：${activeQuestion?.prompt || lesson.problem}。先说一个线索：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0]}。`;
+  state.aiMessage = `先停一下。回到「${lesson.node || lesson.title}」这道题：${activeQuestion?.prompt || lesson.problem}。请只回答这个小问题：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0]}。`;
   state.currentStep = "小台阶 1：先找题目条件";
   state.showVisual = true;
   state.strategyIndex = 1;
