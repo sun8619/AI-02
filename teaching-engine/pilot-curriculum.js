@@ -479,7 +479,7 @@ function createPilotTeachPrompt(explain, repeat) {
     `这一步先听老师讲清楚，不急着算完整题。${cleanExplain} 请用自己的话说：${cleanRepeat}。`,
     `${cleanExplain} 现在只回答这一句：${cleanRepeat}。`,
     `先看图和题怎么连起来：${cleanExplain} 你试着说：${cleanRepeat}。`,
-    `乐之老师给你半句提示：${cleanExplain} 你接着说：${cleanRepeat}。`,
+    `乐之老师给你半句提示：${cleanExplain} 请跟着说：${cleanRepeat}。`,
     `把眼睛放到这一小步：${cleanExplain} 请跟着说：${cleanRepeat}。`,
     `这句话用得上：${cleanExplain} 请回答：${cleanRepeat}。`,
     `如果一下子想不出，先听老师示范：${cleanExplain} 请跟着说：${cleanRepeat}。`,
