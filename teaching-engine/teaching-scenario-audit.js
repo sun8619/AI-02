@@ -177,7 +177,19 @@ function scoreActionableSteps(atoms, gaps) {
 function scoreSafeRepairs(allText, atoms, gaps, critical) {
   let score = 1;
   const leakPatterns = [/这题最后是(?!多少)/g, /老师先说结果/g, /这题答案是(?!多少)/g, /最后答案是(?!多少)/g, /所以答案是(?!多少)/g];
-  const templatePatterns = [/现在只练一句/g, /你说半句也可以/g, /老师把方法句放在这里/g, /你先跟老师说一句/g];
+  const templatePatterns = [
+    /现在只练一句/g,
+    /你说半句也可以/g,
+    /老师把方法句放在这里/g,
+    /你先跟老师说一句/g,
+    /先抓住这句/g,
+    /看图时先抓/g,
+    /这一轮回答/g,
+    /这一步先回答这一点/g,
+    /这一小步要你接着回答/g,
+    /你只要跟着说/g,
+    /先说一个也可以/g,
+  ];
   const leakHits = countPatternHits(allText, leakPatterns);
   const templateHits = countPatternHits(allText, templatePatterns);
   const weakRepairs = atoms.filter((atom) => !hasUsefulRepair(atom)).length;
