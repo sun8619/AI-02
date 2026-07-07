@@ -476,15 +476,15 @@ function createPilotTeachPrompt(explain, repeat) {
   const cleanRepeat = cleanPilotSentence(repeat);
   const variants = [
     `先看一个小方法：${cleanExplain} 接下来请你说：${cleanRepeat}。`,
-    `这一步先听懂，不急着算完整题。${cleanExplain} 你可以换自己的话说：${cleanRepeat}。`,
-    `${cleanExplain} 这一轮回答：${cleanRepeat}。`,
+    `这一步先听老师讲清楚，不急着算完整题。${cleanExplain} 请用自己的话说：${cleanRepeat}。`,
+    `${cleanExplain} 现在只回答这一句：${cleanRepeat}。`,
     `先看图和题怎么连起来：${cleanExplain} 你试着说：${cleanRepeat}。`,
     `乐之老师给你半句提示：${cleanExplain} 你接着说：${cleanRepeat}。`,
-    `把眼睛放到这一点：${cleanExplain} 你来说：${cleanRepeat}。`,
+    `把眼睛放到这一小步：${cleanExplain} 请跟着说：${cleanRepeat}。`,
     `这句话用得上：${cleanExplain} 请回答：${cleanRepeat}。`,
-    `如果一下子想不出，就先抓住这句：${cleanExplain} 你接：${cleanRepeat}。`,
+    `如果一下子想不出，先听老师示范：${cleanExplain} 请跟着说：${cleanRepeat}。`,
     `我们先练眼前这一步。${cleanExplain} 请说：${cleanRepeat}。`,
-    `先把方法说短一点：${cleanExplain} 你试试：${cleanRepeat}。`,
+    `先把方法说短一点：${cleanExplain} 请跟着说：${cleanRepeat}。`,
   ];
   return pickPilotLine(variants, `${cleanExplain}-${cleanRepeat}-teach`);
 }
@@ -496,9 +496,9 @@ function createPilotRepairPrompt(explain, repeat) {
   const variants = [
     `刚才差一点。我们退回这一步：${cleanExplain} 先说「${cue}」就行。`,
     `不重做整题，只补这个小地方：${cleanRepeat}。`,
-    `乐之老师把问题缩小：${cleanExplain} 你抓住「${cue}」就可以。`,
+    `乐之老师把问题缩小：${cleanExplain} 请先说「${cue}」。`,
     `先别猜最后答案，回到方法：${cleanRepeat}。`,
-    `这一步还没稳。再看一次：${cleanExplain} 然后你说一个关键词。`,
+    `这一步还没稳。再看一次：${cleanExplain} 然后请说出眼前这个小答案。`,
   ];
   return pickPilotLine(variants, `${cleanExplain}-${cleanRepeat}-repair`);
 }
@@ -507,9 +507,9 @@ function createPilotNoResponsePrompt(explain, repeat) {
   const cleanExplain = cleanPilotSentence(explain);
   const cleanRepeat = cleanPilotSentence(repeat);
   const variants = [
-    `说不出来也正常，老师先带一遍：${cleanExplain} 你听完说一个词就可以。`,
-    `这一步先不用自己想长句。老师说：${cleanRepeat}。请说这个意思。`,
-    `我们先把方法放稳：${cleanExplain} 你只要记住「${cleanRepeat}」。`,
+    `说不出来也正常，老师先带一遍：${cleanExplain} 请跟着说：${cleanRepeat}。`,
+    `这一步先不用自己想长句。老师说：${cleanRepeat}。请跟着说：${cleanRepeat}。`,
+    `我们先把方法放稳：${cleanExplain} 请跟着说：${cleanRepeat}。`,
     `没关系，先看老师怎么说：${cleanRepeat}。下一轮再让你自己讲。`,
     `先不答整题，只练这个意思：${cleanRepeat}。`,
   ];
