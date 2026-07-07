@@ -33,7 +33,7 @@
         ],
         cannotAnswer: [
           "卡住很正常，老师先把这一步变短。",
-          "这一步有点绕，先听老师讲一个小抓手。",
+          "这一步有点绕，先听老师讲一个小方法。",
           "先听老师示范一句，再跟着说出来。",
           "卡住没关系，老师把句子变短一点。",
           "先听老师示范，你只说最后这个小答案。",
@@ -438,7 +438,7 @@
       if (includes(text, "位置")) return `第几个说的是一个位置，不是总共有几个。${answer}`;
     }
     if (family === "composition") {
-      if (includes(text, "总数")) return `分与合先抓总数，总数不能变。${answer}`;
+      if (includes(text, "总数")) return `分与合先看总数，总数不能变。${answer}`;
       if (includes(text, "还差")) return `已经知道一部分，就想还差几能合回总数。${answer}`;
     }
     if (family === "time") return `钟面先看短针定几时，再看长针定几分。${answer || item.stuckHint}`;
