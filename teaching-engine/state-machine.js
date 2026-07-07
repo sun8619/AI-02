@@ -564,7 +564,7 @@ function makeNextAtomMessage({ point, previousAtom, nextAtom, session }) {
     "嗯，方向对了，继续接",
     "好，这个地方站住了，再看",
     "小台阶过了，我们看旁边的",
-    "你已经抓住这个点了，接着看",
+    "你已经说到这一点了，接着看",
     "这一句稳了，下面看",
     "老师看到你会了，再看",
     "先把这个收好，接着看",
@@ -836,7 +836,7 @@ function childTargetPromptOptions(target, family, mode) {
     noResponse: [
       `老师先把问题变小，你说：${target}`,
       `不会完整说也没关系，请先说：${target}`,
-      `你只要先说一个短答案：${target}`,
+      `请先说这个短答案：${target}`,
     ],
   };
   const familySpecific = familyOptions[family] || [];
@@ -1004,7 +1004,7 @@ function makeClarifyAssessmentMessage(template, atom, point, session = null) {
   const prompt = normalizeText(template?.prompt || "");
   const atomName = atom?.atom_name || "";
   const lead = pickText(
-    ["老师没抓到答案。", "这句有点轻，我们再确认一下。", "答案还不清楚。", "刚才那句还不能判断。"],
+    ["老师没听清答案。", "这句有点轻，我们再确认一下。", "答案还不清楚。", "刚才那句还不能判断。"],
     `${point?.id || ""}|${template?.id || ""}|clarify`,
   );
   if (template?.id === "g1b-money-r1" || atomName.includes("说清为什么先换单位")) {
@@ -1179,6 +1179,7 @@ function cleanTargetText(text) {
     .replace(/^可以/, "")
     .replace(/^我们先回到这一小步[:：]/, "")
     .replace(/这一轮只答这个小问题。?/g, "")
+    .replace(/请先回答这一问。?/g, "")
     .replace(/你现在只回答这一小步。?/g, "")
     .replace(/乐之老师/g, "老师")
     .replace(/\s+/g, "")
@@ -1486,6 +1487,7 @@ function looksLikeNoResponse(normalized) {
 
 function looksInvalidForLearning(normalized) {
   if (!normalized) return true;
+  if (/^[<>＝=大小于等号]+$/.test(normalized)) return false;
   if (normalized.length <= 1 && !/\d/.test(normalized) && !/[一二三四五六七八九十]/.test(normalized)) return true;
   if (!/[\u4e00-\u9fa5a-z0-9]/i.test(normalized)) return true;
   if (/^(.)\1{2,}$/.test(normalized)) return true;
