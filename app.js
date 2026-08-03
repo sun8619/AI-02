@@ -5834,8 +5834,12 @@ function renderKidTopbar(lesson) {
     <header class="kid-topbar" aria-label="乐之老师">
       <button class="kid-brand" data-action="child-home" aria-label="返回学习页">
         ${renderKidTeacherAvatar("mini")}
-        <strong>乐之老师</strong>
+        <span>
+          <strong>乐之老师</strong>
+          <small>陪你想明白，再试一小步</small>
+        </span>
       </button>
+      ${renderKidProgressDots(lesson)}
       <div class="kid-top-actions">
         <button class="kid-lesson-switch" data-action="toggle-lesson-picker" aria-expanded="${state.showLessonPicker ? "true" : "false"}">
           ${icon("book")}
@@ -5851,13 +5855,25 @@ function renderKidTopbar(lesson) {
 }
 
 function renderKidProgressDots(lesson) {
-  const ladder = getLessonLadderSteps(lesson);
-  const total = Math.max(3, Math.min(5, ladder.length || 3));
-  const current = state.phase === "summary" ? total - 1 : Math.max(0, Math.min(total - 1, Math.floor((state.completedSteps / Math.max(1, ladder.length)) * total)));
+  const practiceStates = ["PRACTICE_SET", "ERROR_ANALYSIS", "REMEDIATION_TEACH", "REMEDIATION_RECHECK"];
+  const teachbackStates = ["FEYNMAN_EXPLAIN", "FEYNMAN_EVAL", "MASTERED", "EXIT_WITH_NEXT"];
+  const current = state.phase === "summary" || state.phase === "teachback" || teachbackStates.includes(state.teachingState)
+    ? 2
+    : practiceStates.includes(state.teachingState)
+      ? 1
+      : 0;
+  const steps = ["先看懂", "再试试", "讲出来"];
   return `
-    <div class="kid-progress" aria-label="学习进度">
-      ${Array.from({ length: total })
-        .map((_, index) => `<span class="kid-progress-dot ${index < current ? "is-done" : ""} ${index === current ? "is-current" : ""}"></span>`)
+    <div class="kid-progress" aria-label="本轮学习进度">
+      ${steps
+        .map(
+          (label, index) => `
+            <span class="kid-progress-step ${index < current ? "is-done" : ""} ${index === current ? "is-current" : ""}">
+              <i>${index < current ? "✓" : index + 1}</i>
+              <em>${label}</em>
+            </span>
+          `,
+        )
         .join("")}
     </div>
   `;
@@ -5875,6 +5891,7 @@ function renderKidQuestionBubble(lesson) {
 
   return `
     <section class="kid-speech-bubble" aria-label="老师提问">
+      <span class="kid-speaker-label">乐之老师现在问</span>
       <p>${escapeText(message)}</p>
       ${state.lastStudentText ? `<div class="kid-last-answer"><span>刚才你说</span><strong>${escapeText(state.lastStudentText)}</strong></div>` : ""}
     </section>
@@ -5886,14 +5903,16 @@ function renderKidVoicePanel() {
   const inputLocked = state.recording || locked;
   return `
     <section class="kid-input-panel" aria-label="回答区">
-      <button class="kid-primary-voice ${state.recording ? "is-recording" : ""} ${locked ? "is-processing" : ""}" data-action="voice" ${locked ? "disabled" : ""}>
-        ${icon("mic")}
-        <span>${state.recording ? "说完了" : locked ? "老师在想" : "按一下开始说"}</span>
-      </button>
-      <button class="kid-type-trigger" data-action="toggle-keyboard" ${inputLocked ? "disabled" : ""}>
-        ${icon("keyboard")}
-        <span>也可以打字</span>
-      </button>
+      <div class="kid-answer-actions">
+        <button class="kid-primary-voice ${state.recording ? "is-recording" : ""} ${locked ? "is-processing" : ""}" data-action="voice" ${locked ? "disabled" : ""}>
+          ${icon("mic")}
+          <span>${state.recording ? "第二步 · 说完点这里" : locked ? "老师正在回答" : "第一步 · 点这里说答案"}</span>
+        </button>
+        <button class="kid-type-trigger" data-action="toggle-keyboard" ${inputLocked ? "disabled" : ""}>
+          ${icon("keyboard")}
+          <span>不方便说？打字回答</span>
+        </button>
+      </div>
       ${state.showKeyboard ? `<div class="kid-keyboard-wrap">${renderKeyboardComposer()}</div>` : ""}
       <p>${escapeText(renderDockNote())}</p>
     </section>
@@ -5906,11 +5925,11 @@ function renderKidHelpButtons() {
     <div class="kid-help-row" aria-label="求助按钮">
       <button class="kid-help-button" data-action="${explainAction}">
         <span aria-hidden="true">🤔</span>
-        <strong>${state.phase === "teachback" ? "我讲不出" : "我不懂"}</strong>
+        <strong>${state.phase === "teachback" ? "我讲不出来" : "我不会答"}</strong>
       </button>
       <button class="kid-help-button" data-action="show-visual">
         ${icon("image")}
-        <strong>看图</strong>
+        <strong>看提示图</strong>
       </button>
       <button class="kid-help-button kid-help-secondary" data-action="change-lesson">
         ${icon("book")}
@@ -5931,14 +5950,14 @@ function renderKidBoardVisual(lesson) {
   return `
     <div class="kid-board-card kid-board-card-generic">
       <div class="kid-board-head">
-        <span>${icon("image")}看图想一想</span>
-        <strong>程序辅助理解</strong>
+        <span>${icon("image")}跟着图想一想</span>
+        <strong>当前小问</strong>
       </div>
       <h2>${escapeText(visualLesson.visualTitle || "把题目拆成小台阶")}</h2>
       <div class="kid-board-fallback">${renderLessonSvg(visualLesson, getVisualRevealMode(visualLesson))}</div>
       <div class="kid-think-box">
         <span>${icon("light")}</span>
-        <strong>${escapeText(getKidBoardPrompt(visualLesson))}</strong>
+        <strong>现在请回答：${escapeText(getKidBoardPrompt(visualLesson))}</strong>
       </div>
     </div>
   `;
@@ -5957,6 +5976,11 @@ function renderKidMoneyBoard(lesson) {
   const extraLabel = showExtraJiao ? ` + ${extraJiao}角` : "";
   return `
     <div class="kid-board-card kid-money-board">
+      <div class="kid-board-head">
+        <span>${icon("image")}跟着图想一想</span>
+        <strong>当前小问</strong>
+      </div>
+      <h2>${escapeText(lesson.visualTitle || "先把元换成角")}</h2>
       <div class="kid-money-layout">
         <div class="kid-money-box kid-money-yuan-box">
           <div class="kid-money-notes">
@@ -5979,7 +6003,7 @@ function renderKidMoneyBoard(lesson) {
       </div>
       <div class="kid-think-box">
         <span>${icon("light")}</span>
-        <strong>想一想：${escapeText(prompt)}</strong>
+        <strong>现在请回答：${escapeText(prompt)}</strong>
         <i aria-hidden="true"></i>
       </div>
     </div>
@@ -6001,8 +6025,8 @@ function renderKidShoppingBoard(lesson) {
   return `
     <div class="kid-board-card kid-shopping-board">
       <div class="kid-board-head">
-        <span>${icon("image")}看图想一想</span>
-        <strong>${escapeText(teachingFamilyChildLabel(getLessonTeachingFamily(lesson)) || "购物找零")}</strong>
+        <span>${icon("image")}跟着图想一想</span>
+        <strong>当前小问</strong>
       </div>
       <h2>${escapeText(getShoppingBoardTitle(phase))}</h2>
       <div class="kid-shopping-layout ${phase}">
@@ -7626,6 +7650,11 @@ async function handleAction(event) {
   if (action === "toggle-keyboard") {
     state.showKeyboard = !state.showKeyboard;
     render();
+    if (state.showKeyboard) {
+      requestAnimationFrame(() => {
+        document.querySelector('.kid-keyboard-wrap input[name="answer"], .keyboard-composer input[name="answer"]')?.focus();
+      });
+    }
     return;
   }
 
