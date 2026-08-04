@@ -5932,10 +5932,11 @@ function renderVoiceConfirmation() {
   const heard = confirmation.heardText || confirmation.submitText || "";
   const submit = confirmation.submitText || heard;
   const corrected = normalizeText(heard) !== normalizeText(submit);
+  const unitJoined = confirmation.reason === "number-unit-joined";
   return `
     <section class="voice-confirmation" role="status" aria-live="polite">
       <div class="voice-confirmation-copy">
-        <span>${corrected ? "这句话容易听混" : "老师再确认一下"}</span>
+        <span>${unitJoined ? "数字和单位可能听粘了" : corrected ? "这句话容易听混" : "老师再确认一下"}</span>
         <strong>${corrected ? `你说的是“${escapeText(submit)}”吗？` : `我听到“${escapeText(heard)}”，对吗？`}</strong>
       </div>
       <div class="voice-confirmation-actions">
@@ -7906,7 +7907,8 @@ function createVoiceRecognitionContext() {
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .slice(0, 48);
-  const prompt = formatChildStepPrompt(plan) || question?.prompt || lesson?.problem || "";
+  const fallbackPrompt = formatChildStepPrompt(plan) || question?.prompt || lesson?.problem || "";
+  const prompt = resolveCurrentVoicePrompt(fallbackPrompt);
   const expectedType = inferVoiceAnswerType(prompt, plan, expectedAnswers);
   return {
     lessonId: lesson?.id || "",
@@ -7916,23 +7918,45 @@ function createVoiceRecognitionContext() {
     prompt,
     expectedType,
     expectedAnswers,
-    hotwords: buildVoiceHotwords(lesson, plan, expectedAnswers),
+    hotwords: buildVoiceHotwords(lesson, plan, expectedAnswers, prompt),
   };
 }
 
 function inferVoiceAnswerType(prompt, plan, expectedAnswers) {
-  const text = normalizeText(`${prompt || ""}${plan?.label || ""}`);
+  const focus = extractVoicePromptFocus(prompt);
+  const text = normalizeText(focus || prompt || "");
   const answerText = normalizeText((expectedAnswers || []).join(" "));
-  if (state.phase === "teachback" || plan?.isReason || /为什么|原因|说一说方法|讲给老师|怎么想/.test(text)) return "explanation";
+  if (state.phase === "teachback" || /为什么|原因|说一说方法|讲给老师|怎么想|怎么知道|说说理由/.test(text)) return "explanation";
   if (/大于号|小于号|等号|比较符号/.test(text + answerText) || /[<>=＝]/.test(answerText)) return "comparison";
   if (/对不对|是不是|能不能|是否|正确吗/.test(text)) return "yes-no";
-  if (/还是|选择|哪一个|哪个|哪边|填什么|是什么/.test(text)) return "choice";
   if (/多少|几个|第几|几元|几角|几分|几时|几点|几厘米|几米|算出|得数|结果/.test(text)) return "number";
+  if (/还是|选择|哪一个|哪个|哪边|填什么|是什么/.test(text)) return "choice";
+  if (plan?.isReason) return "explanation";
   if ((expectedAnswers || []).some((item) => /[0-9零一二两三四五六七八九十百千万]/.test(String(item)))) return "number";
   return "open";
 }
 
-function buildVoiceHotwords(lesson, plan, expectedAnswers) {
+function resolveCurrentVoicePrompt(fallbackPrompt) {
+  const visibleMessage = String(state.aiMessage || "").replace(/\s+/g, " ").trim();
+  const visibleFocus = extractVoicePromptFocus(visibleMessage);
+  if (visibleFocus && /[？?]|只说|回答|跟着说|先说|请说|填/.test(visibleFocus)) return visibleFocus;
+  return fallbackPrompt;
+}
+
+function extractVoicePromptFocus(prompt) {
+  const value = String(prompt || "").replace(/\s+/g, " ").trim();
+  if (!value) return "";
+  const parts = value
+    .split(/[。！？!?；;\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const cue = [...parts].reverse().find((item) =>
+    /只说|回答|跟着说|先说|请说|填|多少|几个|第几|几元|几角|几分|几点|哪边|哪个|哪一个|对不对|是不是|为什么|原因/.test(item),
+  );
+  return cue || parts.at(-1) || value;
+}
+
+function buildVoiceHotwords(lesson, plan, expectedAnswers, prompt = "") {
   const family = getPlanTeachingFamily(lesson, plan);
   const familyWords = {
     money: ["人民币", "元角换算", "元角分", "找回多少钱"],
@@ -7953,6 +7977,7 @@ function buildVoiceHotwords(lesson, plan, expectedAnswers) {
   return uniqueKeywords([
     lesson?.node,
     plan?.label,
+    ...buildPromptHotwords(prompt),
     ...(familyWords[family] || []),
     ...answerTerms,
     "换知识点",
@@ -7963,6 +7988,18 @@ function buildVoiceHotwords(lesson, plan, expectedAnswers) {
     .map((item) => String(item || "").replace(/[，。！？、；：,.!?;:\s]/g, "").trim())
     .filter((item) => item.length >= 2 && item.length <= 9)
     .slice(0, 30);
+}
+
+function buildPromptHotwords(prompt) {
+  const text = normalizeText(prompt);
+  const result = [];
+  if (/几角|多少角/.test(text)) result.push("多少角", "元角换算");
+  if (/几分|多少分/.test(text)) result.push("多少分", "角分换算");
+  if (/几元|多少元/.test(text)) result.push("多少元", "人民币");
+  if (/厘米/.test(text)) result.push("多少厘米", "长度单位");
+  if (/千克|多少克|几克/.test(text)) result.push("质量单位", "多少千克");
+  if (/几点|几时|多少分钟/.test(text)) result.push("钟面时间", "多少分钟");
+  return result;
 }
 
 function processVoiceTranscript(transcript, metadata = {}) {
@@ -8034,11 +8071,21 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
   const plausible = isPlausibleVoiceAnswer(submitText, context);
   const shortAnswer = normalizeText(submitText).length <= 3;
   const matchesExpected = matchesExpectedVoiceAnswer(submitText, context);
+  const childIntent = isVoiceControlPhrase(submitText) || /不知道|不会|不懂|没听懂|再讲/.test(normalizeText(submitText));
   const lowConfidence = quality.confidence !== null && quality.confidence < VOICE_LOW_CONFIDENCE;
   const marginalAudio =
     (quality.durationMs > 0 && quality.durationMs < VOICE_MIN_DURATION_MS) ||
     (quality.rms > 0 && quality.rms < VOICE_MIN_RMS) ||
     (quality.totalFrames > 0 && quality.voicedRatio < VOICE_MIN_VOICED_RATIO);
+
+  if (childIntent) {
+    return { status: "accept", heardText, submitText, reason: "child-intent" };
+  }
+
+  const numericUnitAmbiguity = findNumericUnitVoiceAmbiguity(heardText, submitText, context, matchesExpected);
+  if (numericUnitAmbiguity) {
+    return { status: "confirm", heardText, submitText, reason: numericUnitAmbiguity };
+  }
 
   if (!plausible && shortAnswer) {
     return {
@@ -8051,7 +8098,6 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
   }
 
   if (
-    shortAnswer &&
     plausible &&
     !matchesExpected &&
     ["number", "comparison", "yes-no", "choice"].includes(context.expectedType)
@@ -8101,11 +8147,52 @@ function matchesExpectedVoiceAnswer(text, context) {
   if (!expected.length) return false;
   const normalized = normalizeText(text);
   if (!normalized) return false;
+  if (context?.expectedType === "number") {
+    const heardNumbers = extractVoiceNumberValues(normalized);
+    const expectedNumbers = expected.flatMap((item) => extractVoiceNumberValues(item));
+    if (heardNumbers.length && expectedNumbers.length) {
+      return heardNumbers.some((value) => expectedNumbers.includes(value));
+    }
+  }
   return expected.some((item) => {
     const answer = normalizeText(item);
     if (!answer) return false;
+    if (hasSpokenNumber(normalized) || hasSpokenNumber(answer)) return normalized === answer;
     return normalized === answer || (answer.length >= 2 && (normalized.includes(answer) || answer.includes(normalized)));
   });
+}
+
+function extractVoiceNumberValues(value) {
+  const tokens = String(value || "").match(/\d+|[零一二两三四五六七八九十百千万]+/g) || [];
+  return tokens.map(parseVoiceNumberToken).filter(Number.isFinite);
+}
+
+function parseVoiceNumberToken(token) {
+  const value = String(token || "");
+  if (/^\d+$/.test(value)) return Number(value);
+  const digits = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  const units = { 十: 10, 百: 100, 千: 1000, 万: 10000 };
+  if (!/[十百千万]/.test(value)) {
+    const joined = [...value].map((char) => digits[char]).join("");
+    return joined && /^\d+$/.test(joined) ? Number(joined) : Number.NaN;
+  }
+  let total = 0;
+  let current = 0;
+  for (const char of value) {
+    if (Object.hasOwn(digits, char)) {
+      current = digits[char];
+      continue;
+    }
+    const unit = units[char];
+    if (!unit) return Number.NaN;
+    if (unit === 10000) {
+      total = (total + current) * unit;
+    } else {
+      total += (current || 1) * unit;
+    }
+    current = 0;
+  }
+  return total + current;
 }
 
 function isVoiceControlPhrase(text) {
@@ -8123,6 +8210,34 @@ function normalizeSafeVoiceUnits(text, context) {
     value = value.replace(/圆/g, "元").replace(/脚/g, "角");
   }
   return value;
+}
+
+function findNumericUnitVoiceAmbiguity(heardText, submitText, context, matchesExpected) {
+  if (context?.expectedType !== "number" || matchesExpected) return "";
+  const focus = normalizeText(extractVoicePromptFocus(context.prompt));
+  const requiredUnit = ["千克", "厘米", "分钟", "角", "元", "分", "米", "克", "时", "个"].find((unit) => focus.includes(unit));
+  if (!requiredUnit) return "";
+  const heard = normalizeComparableVoicePhrase(heardText);
+  const submitted = normalizeComparableVoicePhrase(submitText);
+  if (heard.includes(requiredUnit) || submitted.includes(requiredUnit)) return "";
+
+  const expectedWithUnit = (context.expectedAnswers || [])
+    .map((item) => normalizeComparableVoicePhrase(item))
+    .filter((item) => item && (item.includes(requiredUnit) || hasSpokenNumber(item)))
+    .map((item) => (item.includes(requiredUnit) ? item : `${item}${requiredUnit}`));
+
+  if (
+    requiredUnit === "角" &&
+    heard.endsWith("九") &&
+    expectedWithUnit.some((item) => item.endsWith("角") && item.slice(0, -1) === heard.slice(0, -1))
+  ) {
+    return "number-unit-joined";
+  }
+  return "structured-answer-mismatch";
+}
+
+function normalizeComparableVoicePhrase(value) {
+  return normalizeText(value).replace(/\d+/g, (digits) => chineseNumber(Number(digits)));
 }
 
 function findContextualVoiceCorrection(heardText, context) {
