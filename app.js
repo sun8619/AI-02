@@ -18,6 +18,10 @@ const USE_BROWSER_SPEECH_RECOGNITION = false;
 const USE_REALTIME_ASR = true;
 const MAX_RECORDING_MS = 9000;
 const REALTIME_ASR_CHUNK_BYTES = 6400;
+const VOICE_MIN_DURATION_MS = 420;
+const VOICE_MIN_RMS = 0.0045;
+const VOICE_MIN_VOICED_RATIO = 0.045;
+const VOICE_LOW_CONFIDENCE = 0.58;
 const ALLOW_BROWSER_TTS_FALLBACK = false;
 let ttsProblemNotified = false;
 
@@ -5471,6 +5475,8 @@ let state = {
   phase: "guiding",
   recording: false,
   voiceStatus: "idle",
+  voiceConfirmation: null,
+  lastVoiceDiagnostic: null,
   isProcessing: false,
   showLessonPicker: false,
   showKeyboard: false,
@@ -5913,8 +5919,29 @@ function renderKidVoicePanel() {
           <span>打字回答</span>
         </button>
       </div>
+      ${renderVoiceConfirmation()}
       ${state.showKeyboard ? `<div class="kid-keyboard-wrap">${renderKeyboardComposer()}</div>` : ""}
       <p>${escapeText(renderDockNote())}</p>
+    </section>
+  `;
+}
+
+function renderVoiceConfirmation() {
+  const confirmation = state.voiceConfirmation;
+  if (!confirmation) return "";
+  const heard = confirmation.heardText || confirmation.submitText || "";
+  const submit = confirmation.submitText || heard;
+  const corrected = normalizeText(heard) !== normalizeText(submit);
+  return `
+    <section class="voice-confirmation" role="status" aria-live="polite">
+      <div class="voice-confirmation-copy">
+        <span>${corrected ? "这句话容易听混" : "老师再确认一下"}</span>
+        <strong>${corrected ? `你说的是“${escapeText(submit)}”吗？` : `我听到“${escapeText(heard)}”，对吗？`}</strong>
+      </div>
+      <div class="voice-confirmation-actions">
+        <button type="button" data-action="confirm-voice">${icon("check")}对，就是这个</button>
+        <button type="button" data-action="retry-voice">${icon("repeat")}不对，我重说</button>
+      </div>
     </section>
   `;
 }
@@ -6368,6 +6395,7 @@ function renderVoiceDock() {
   const inputLocked = state.recording || locked;
   return `
     <section class="voice-dock" aria-label="语音输入区">
+      ${renderVoiceConfirmation()}
       ${state.showKeyboard ? renderKeyboardComposer() : ""}
       <div class="dock-actions">
         <button class="dock-mini" data-action="camera" ${inputLocked ? "disabled" : ""}>${icon("camera")}拍照</button>
@@ -6439,6 +6467,7 @@ function renderChildStepTitle(step) {
 
 function renderDockNote() {
   if (state.isProcessing || state.voiceStatus === "processing") return "老师听到了，马上接着讲。";
+  if (state.voiceConfirmation) return "先看看老师有没有听对。听错了就点“我重说”。";
   if (state.phase === "teachback") return "像小老师一样讲给老师听，说不完整也没关系。";
   if (state.phase === "repair") return "可以看着图说，不用一次讲完整。";
   if (state.phase === "summary") return "这一题已经完成，可以换知识点或去家长页看记录。";
@@ -7658,6 +7687,23 @@ async function handleAction(event) {
     return;
   }
 
+  if (action === "confirm-voice") {
+    const confirmation = state.voiceConfirmation;
+    state.voiceConfirmation = null;
+    render();
+    if (confirmation?.submitText) handleChildInput(confirmation.submitText, "voice");
+    return;
+  }
+
+  if (action === "retry-voice") {
+    state.voiceConfirmation = null;
+    state.transcript = "";
+    state.lastStudentText = "";
+    render();
+    toastMessage("好，我们重新说一次。这次靠近一点，慢一点说。");
+    return;
+  }
+
   if (action === "camera") {
     toastMessage("拍照入口已预留。接入真实拍照后，AI 会先识别题目再拆知识点。");
     return;
@@ -7735,6 +7781,7 @@ function changeLesson(reason, targetIndex = null) {
   state.phase = "guiding";
   state.recording = false;
   state.voiceStatus = "idle";
+  state.voiceConfirmation = null;
   state.isProcessing = false;
   state.showLessonPicker = false;
   state.showKeyboard = false;
@@ -7841,11 +7888,295 @@ function extractImageUrl(payload) {
   );
 }
 
+function createVoiceRecognitionContext() {
+  const lesson = currentLesson();
+  const question = lesson?.activeQuestion || null;
+  let plan = null;
+  try {
+    plan = createGuidedStepPlan(lesson, state.completedSteps);
+  } catch {
+    plan = null;
+  }
+  const expectedAnswers = uniqueKeywords([
+    ...(plan?.answerKeywords || []),
+    ...(question?.answerKeywords || []),
+    ...(lesson?.answer?.answerKeywords || []),
+    question?.answer,
+  ])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, 48);
+  const prompt = formatChildStepPrompt(plan) || question?.prompt || lesson?.problem || "";
+  const expectedType = inferVoiceAnswerType(prompt, plan, expectedAnswers);
+  return {
+    lessonId: lesson?.id || "",
+    questionId: question?.id || "",
+    lessonName: lesson?.node || lesson?.lesson || "",
+    stepLabel: plan?.label || state.currentAtomName || "",
+    prompt,
+    expectedType,
+    expectedAnswers,
+    hotwords: buildVoiceHotwords(lesson, plan, expectedAnswers),
+  };
+}
+
+function inferVoiceAnswerType(prompt, plan, expectedAnswers) {
+  const text = normalizeText(`${prompt || ""}${plan?.label || ""}`);
+  const answerText = normalizeText((expectedAnswers || []).join(" "));
+  if (state.phase === "teachback" || plan?.isReason || /为什么|原因|说一说方法|讲给老师|怎么想/.test(text)) return "explanation";
+  if (/大于号|小于号|等号|比较符号/.test(text + answerText) || /[<>=＝]/.test(answerText)) return "comparison";
+  if (/对不对|是不是|能不能|是否|正确吗/.test(text)) return "yes-no";
+  if (/还是|选择|哪一个|哪个|哪边|填什么|是什么/.test(text)) return "choice";
+  if (/多少|几个|第几|几元|几角|几分|几时|几点|几厘米|几米|算出|得数|结果/.test(text)) return "number";
+  if ((expectedAnswers || []).some((item) => /[0-9零一二两三四五六七八九十百千万]/.test(String(item)))) return "number";
+  return "open";
+}
+
+function buildVoiceHotwords(lesson, plan, expectedAnswers) {
+  const family = getPlanTeachingFamily(lesson, plan);
+  const familyWords = {
+    money: ["人民币", "元角换算", "元角分", "找回多少钱"],
+    moneyApplication: ["人民币", "元角换算", "找回多少钱", "商品价格"],
+    compare: ["大于号", "小于号", "等于号", "比较大小"],
+    makeTenAdd: ["凑十法", "拆成十", "还差几个"],
+    breakTenSubtract: ["破十法", "十几减几", "还剩几个"],
+    composition: ["数的组成", "分与合", "总数", "一部分"],
+    multiplication: ["几个几", "乘法口诀", "每组几个"],
+    division: ["平均分", "每份几个", "分成几份"],
+    time: ["钟面", "时针", "分针", "几时几分"],
+    measure: ["厘米", "千克", "测量单位"],
+  };
+  const answerTerms = (expectedAnswers || []).filter((item) => {
+    const value = String(item || "").trim();
+    return value.length >= 2 && value.length <= 9 && !/[0-9零一二两三四五六七八九十百千万]/.test(value);
+  });
+  return uniqueKeywords([
+    lesson?.node,
+    plan?.label,
+    ...(familyWords[family] || []),
+    ...answerTerms,
+    "换知识点",
+    "我不懂",
+    "再说一遍",
+    "看提示图",
+  ])
+    .map((item) => String(item || "").replace(/[，。！？、；：,.!?;:\s]/g, "").trim())
+    .filter((item) => item.length >= 2 && item.length <= 9)
+    .slice(0, 30);
+}
+
+function processVoiceTranscript(transcript, metadata = {}) {
+  state.voiceStatus = "idle";
+  state.transcript = "";
+  state.lastStudentText = "";
+  const assessment = assessVoiceTranscript(transcript, metadata, createVoiceRecognitionContext());
+  state.lastVoiceDiagnostic = {
+    status: assessment.status,
+    reason: assessment.reason || "",
+    confidence: Number.isFinite(Number(metadata.confidence)) ? Number(metadata.confidence) : null,
+    durationMs: Number(metadata.durationMs) || 0,
+  };
+
+  if (assessment.status === "retry") {
+    state.voiceConfirmation = null;
+    render();
+    toastMessage(assessment.message || "这句没有听清楚，请靠近一点再说一次。");
+    return;
+  }
+
+  if (assessment.status === "confirm") {
+    state.voiceConfirmation = {
+      heardText: assessment.heardText,
+      submitText: assessment.submitText,
+      reason: assessment.reason,
+    };
+    render();
+    return;
+  }
+
+  state.voiceConfirmation = null;
+  render();
+  handleChildInput(assessment.submitText, "voice");
+}
+
+function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceRecognitionContext()) {
+  const heardText = String(transcript || "").replace(/^[，。！？、；：,.!?;:\s]+|[，。！？、；：,.!?;:\s]+$/g, "").trim();
+  if (!heardText || isOnlyVoiceFiller(heardText)) {
+    return { status: "retry", heardText: "", submitText: "", reason: "empty", message: "这次没有听到完整回答，请再说一次。" };
+  }
+
+  const quality = normalizeVoiceMetadata(metadata);
+  const severeQualityProblem =
+    (quality.durationMs > 0 && quality.durationMs < 220) ||
+    (quality.rms > 0 && quality.rms < VOICE_MIN_RMS * 0.5) ||
+    (quality.totalFrames > 0 && quality.voicedRatio < VOICE_MIN_VOICED_RATIO * 0.35);
+  if (severeQualityProblem) {
+    return {
+      status: "retry",
+      heardText,
+      submitText: "",
+      reason: "audio-too-weak",
+      message: "声音有点短或太轻了。靠近一点，完整说一遍答案。",
+    };
+  }
+
+  const correction = findContextualVoiceCorrection(heardText, context);
+  if (correction?.needsConfirmation) {
+    return {
+      status: "confirm",
+      heardText,
+      submitText: correction.text,
+      reason: correction.reason || "contextual-homophone",
+    };
+  }
+
+  const submitText = correction?.text || normalizeSafeVoiceUnits(heardText, context);
+  const plausible = isPlausibleVoiceAnswer(submitText, context);
+  const shortAnswer = normalizeText(submitText).length <= 3;
+  const matchesExpected = matchesExpectedVoiceAnswer(submitText, context);
+  const lowConfidence = quality.confidence !== null && quality.confidence < VOICE_LOW_CONFIDENCE;
+  const marginalAudio =
+    (quality.durationMs > 0 && quality.durationMs < VOICE_MIN_DURATION_MS) ||
+    (quality.rms > 0 && quality.rms < VOICE_MIN_RMS) ||
+    (quality.totalFrames > 0 && quality.voicedRatio < VOICE_MIN_VOICED_RATIO);
+
+  if (!plausible && shortAnswer) {
+    return {
+      status: "retry",
+      heardText,
+      submitText: "",
+      reason: "not-an-answer",
+      message: `这句不像是在回答“${shortVoicePrompt(context.prompt)}”。请只说答案，再试一次。`,
+    };
+  }
+
+  if (
+    shortAnswer &&
+    plausible &&
+    !matchesExpected &&
+    ["number", "comparison", "yes-no", "choice"].includes(context.expectedType)
+  ) {
+    return { status: "confirm", heardText, submitText, reason: "short-answer-mismatch" };
+  }
+
+  if (lowConfidence || (shortAnswer && marginalAudio)) {
+    return { status: "confirm", heardText, submitText, reason: lowConfidence ? "low-confidence" : "short-audio" };
+  }
+
+  return { status: "accept", heardText, submitText, reason: plausible ? "plausible" : "clear-off-topic" };
+}
+
+function normalizeVoiceMetadata(metadata) {
+  let confidence = Number(metadata?.confidence);
+  if (!Number.isFinite(confidence) || confidence <= 0) confidence = null;
+  else if (confidence > 1) confidence /= 100;
+  return {
+    confidence,
+    durationMs: Math.max(0, Number(metadata?.durationMs) || 0),
+    rms: Math.max(0, Number(metadata?.rms) || 0),
+    voicedRatio: Math.max(0, Math.min(1, Number(metadata?.voicedRatio) || 0)),
+    totalFrames: Math.max(0, Number(metadata?.totalFrames) || 0),
+  };
+}
+
+function isOnlyVoiceFiller(text) {
+  return /^(嗯+|啊+|呃+|额+|哦+|唔+|喂+|这个|那个|嗯嗯)$/i.test(normalizeText(text));
+}
+
+function isPlausibleVoiceAnswer(text, context) {
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+  if (isVoiceControlPhrase(normalized) || /不知道|不会|不懂|没听懂|再讲/.test(normalized)) return true;
+  if (context.expectedType === "number") return hasSpokenNumber(normalized) || /大于|小于|等于|一样/.test(normalized);
+  if (context.expectedType === "comparison") return /大于|小于|等于|一样|[<>=＝]/.test(normalized);
+  if (context.expectedType === "yes-no") return /对|不对|是|不是|能|不能|可以|不可以/.test(normalized);
+  if (context.expectedType === "explanation") return normalized.length >= 3;
+  if (matchesGuidedKeywords(normalized, context.expectedAnswers || [])) return true;
+  if (context.expectedType === "choice") return normalized.length >= 1 && normalized.length <= 14;
+  return normalized.length >= 2;
+}
+
+function matchesExpectedVoiceAnswer(text, context) {
+  const expected = context?.expectedAnswers || [];
+  if (!expected.length) return false;
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+  return expected.some((item) => {
+    const answer = normalizeText(item);
+    if (!answer) return false;
+    return normalized === answer || (answer.length >= 2 && (normalized.includes(answer) || answer.includes(normalized)));
+  });
+}
+
+function isVoiceControlPhrase(text) {
+  return /换知识点|下一题|换一题|看图|提示|再说一遍|重新讲|我来讲/.test(normalizeText(text));
+}
+
+function hasSpokenNumber(text) {
+  return /\d|[零一二两三四五六七八九十百千万]/.test(String(text || ""));
+}
+
+function normalizeSafeVoiceUnits(text, context) {
+  let value = String(text || "").trim();
+  const lessonText = normalizeText(`${context.lessonName || ""}${context.stepLabel || ""}${context.prompt || ""}`);
+  if (/人民币|元|角|分|找回|换算/.test(lessonText)) {
+    value = value.replace(/圆/g, "元").replace(/脚/g, "角");
+  }
+  return value;
+}
+
+function findContextualVoiceCorrection(heardText, context) {
+  const expected = (context.expectedAnswers || []).map((item) => String(item || "").trim()).filter(Boolean);
+  const normalizedExpected = expected.map((item) => normalizeText(item));
+  const unitCorrected = normalizeSafeVoiceUnits(heardText, context);
+  if (unitCorrected !== heardText) {
+    return { text: unitCorrected, needsConfirmation: true, reason: "unit-homophone" };
+  }
+
+  const heard = normalizeText(heardText);
+  const compareCorrections = {
+    大鱼: "大于",
+    大鱼号: "大于号",
+    小鱼: "小于",
+    小鱼号: "小于号",
+    等一号: "等于号",
+  };
+  if (compareCorrections[heard]) {
+    const suggestion = compareCorrections[heard];
+    if (normalizedExpected.some((item) => item.includes(suggestion) || suggestion.includes(item))) {
+      return { text: suggestion, needsConfirmation: true, reason: "comparison-homophone" };
+    }
+  }
+
+  const numberHomophones = {
+    是: ["十", "四"],
+    时: ["十"],
+    实: ["十"],
+    石: ["十"],
+    寺: ["四"],
+    吧: ["八"],
+    久: ["九"],
+  };
+  const targets = numberHomophones[heard] || [];
+  const matchingTargets = targets.filter((target) => normalizedExpected.some((item) => item === target || item.startsWith(target)));
+  if (matchingTargets.length === 1) {
+    return { text: matchingTargets[0], needsConfirmation: true, reason: "number-homophone" };
+  }
+  return { text: unitCorrected, needsConfirmation: false };
+}
+
+function shortVoicePrompt(prompt) {
+  const value = String(prompt || "这道题").replace(/[。！？!?]+/g, "").trim();
+  return value.length > 18 ? `${value.slice(0, 18)}…` : value;
+}
+
 async function handleVoiceButton() {
   if (state.recording) {
     stopVoiceInput();
     return;
   }
+
+  state.voiceConfirmation = null;
 
   if (USE_REALTIME_ASR && canUseRealtimeAsr()) {
     try {
@@ -7954,16 +8285,21 @@ async function startRealtimeVoiceInput() {
     finalTranscript: "",
     stopped: false,
     finished: false,
+    startedAt: performance.now(),
+    recognitionContext: createVoiceRecognitionContext(),
+    audioStats: { totalFrames: 0, voicedFrames: 0, sumSquares: 0, sampleCount: 0, peak: 0 },
   };
 
   processor.onaudioprocess = (event) => {
     if (!realtimeVoiceSession || realtimeVoiceSession.stopped) return;
-    const pcm = downsampleFloatToPcm16(event.inputBuffer.getChannelData(0), audioContext.sampleRate, 16000);
+    const samples = event.inputBuffer.getChannelData(0);
+    updateRealtimeAudioStats(realtimeVoiceSession, samples);
+    const pcm = downsampleFloatToPcm16(samples, audioContext.sampleRate, 16000);
     if (pcm.byteLength) queueRealtimePcm(pcm);
   };
 
   socket.addEventListener("open", () => {
-    socket.send(JSON.stringify({ type: "start" }));
+    socket.send(JSON.stringify({ type: "start", context: realtimeVoiceSession?.recognitionContext || {} }));
     flushRealtimePcmQueue();
   });
 
@@ -7996,6 +8332,36 @@ function queueRealtimePcm(chunk) {
   flushRealtimePcmQueue();
 }
 
+function updateRealtimeAudioStats(session, samples) {
+  if (!session?.audioStats || !samples?.length) return;
+  let sumSquares = 0;
+  let peak = 0;
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = Number(samples[index]) || 0;
+    sumSquares += sample * sample;
+    peak = Math.max(peak, Math.abs(sample));
+  }
+  const rms = Math.sqrt(sumSquares / samples.length);
+  session.audioStats.totalFrames += 1;
+  session.audioStats.voicedFrames += rms >= 0.012 ? 1 : 0;
+  session.audioStats.sumSquares += sumSquares;
+  session.audioStats.sampleCount += samples.length;
+  session.audioStats.peak = Math.max(session.audioStats.peak, peak);
+}
+
+function getRealtimeAudioQuality(session) {
+  const stats = session?.audioStats || {};
+  const totalFrames = Number(stats.totalFrames) || 0;
+  const sampleCount = Number(stats.sampleCount) || 0;
+  return {
+    durationMs: Math.max(0, Math.round((session?.stoppedAt || performance.now()) - (session?.startedAt || performance.now()))),
+    rms: sampleCount ? Math.sqrt((Number(stats.sumSquares) || 0) / sampleCount) : 0,
+    peak: Number(stats.peak) || 0,
+    voicedRatio: totalFrames ? (Number(stats.voicedFrames) || 0) / totalFrames : 0,
+    totalFrames,
+  };
+}
+
 function flushRealtimePcmQueue() {
   const session = realtimeVoiceSession;
   if (!session || session.socket.readyState !== WebSocket.OPEN) return;
@@ -8017,6 +8383,8 @@ function stopRealtimeVoiceInput() {
   const session = realtimeVoiceSession;
   if (!session) return;
   session.stopped = true;
+  session.stoppedAt = performance.now();
+  session.audioQuality = getRealtimeAudioQuality(session);
   state.recording = false;
   state.voiceStatus = "processing";
   render();
@@ -8024,7 +8392,7 @@ function stopRealtimeVoiceInput() {
   const finalChunk = session.pendingBytes.byteLength ? session.pendingBytes : new Uint8Array(0);
   if (finalChunk.byteLength) session.sentBytes.push(finalChunk);
   if (session.socket.readyState === WebSocket.OPEN) {
-    session.socket.send(JSON.stringify({ type: "stop", audioBase64: bytesToBase64(finalChunk) }));
+    session.socket.send(JSON.stringify({ type: "stop", audioBase64: bytesToBase64(finalChunk), quality: session.audioQuality }));
   } else {
     fallbackRealtimeVoiceToBatch("实时语音还没准备好。");
   }
@@ -8041,14 +8409,18 @@ function handleRealtimeVoiceMessage(raw) {
   }
   if (payload.type === "final") {
     const transcript = String(payload.transcript || session.finalTranscript || "").trim();
+    const metadata = {
+      ...(session.audioQuality || getRealtimeAudioQuality(session)),
+      confidence: payload.confidence,
+      utteranceCount: payload.utteranceCount,
+    };
     session.finished = true;
     cleanupRealtimeAudio(true);
     state.voiceStatus = "idle";
     state.transcript = "";
     if (!transcript) state.lastStudentText = "";
     render();
-    if (transcript) handleChildInput(transcript, "voice");
-    else toastMessage("没有听清楚，可以再点一下重说。");
+    processVoiceTranscript(transcript, metadata);
     return;
   }
   if (payload.type === "error") {
@@ -8059,6 +8431,7 @@ function handleRealtimeVoiceMessage(raw) {
 async function fallbackRealtimeVoiceToBatch(message) {
   const session = realtimeVoiceSession;
   if (!session) return;
+  const audioQuality = session.audioQuality || getRealtimeAudioQuality(session);
   const chunks = session.sentBytes.slice();
   if (session.pendingBytes?.byteLength) chunks.push(session.pendingBytes);
   cleanupRealtimeAudio(true);
@@ -8074,7 +8447,7 @@ async function fallbackRealtimeVoiceToBatch(message) {
     return;
   }
   const wavBlob = new Blob([encodePcmWav(concatUint8Arrays(...chunks), 16000)], { type: "audio/wav" });
-  await transcribeRecording(wavBlob, "");
+  await transcribeRecording(wavBlob, "", audioQuality);
 }
 
 function cleanupRealtimeAudio(closeSocket) {
@@ -8101,10 +8474,11 @@ function startBrowserSpeechRecognition() {
   if (!SpeechRecognition) throw new Error("SpeechRecognition unavailable");
   const recognition = new SpeechRecognition();
   let finalText = "";
+  let bestConfidence = null;
   recognition.lang = "zh-CN";
   recognition.continuous = false;
   recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
+  recognition.maxAlternatives = 3;
   recognitionSession = recognition;
   state.recording = true;
   state.voiceStatus = "recording";
@@ -8114,6 +8488,8 @@ function startBrowserSpeechRecognition() {
     let interim = "";
     for (let i = event.resultIndex; i < event.results.length; i += 1) {
       const text = event.results[i][0]?.transcript || "";
+      const confidence = Number(event.results[i][0]?.confidence);
+      if (Number.isFinite(confidence) && confidence > 0) bestConfidence = Math.max(bestConfidence || 0, confidence);
       if (event.results[i].isFinal) finalText += text;
       else interim += text;
     }
@@ -8137,17 +8513,21 @@ function startBrowserSpeechRecognition() {
     state.transcript = "";
     if (!text) state.lastStudentText = "";
     render();
-    if (text) handleChildInput(text, "voice");
-    else {
-      toastMessage("没有听清楚，可以再点一下重说。");
-    }
+    processVoiceTranscript(text, { confidence: bestConfidence });
   };
 
   recognition.start();
 }
 
 async function startRecording() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1,
+    },
+  });
   const chunks = [];
   const options = getMediaRecorderOptions();
   const recorder = new MediaRecorder(stream, options);
@@ -8155,7 +8535,7 @@ async function startRecording() {
   const timeoutId = window.setTimeout(() => {
     if (recordingSession) stopRecording();
   }, MAX_RECORDING_MS);
-  recordingSession = { recorder, stream, chunks, timeoutId, fallbackRecognition, fallbackTranscript: "" };
+  recordingSession = { recorder, stream, chunks, timeoutId, fallbackRecognition, fallbackTranscript: "", startedAt: performance.now() };
   recorder.addEventListener("dataavailable", (event) => {
     if (event.data?.size) chunks.push(event.data);
   });
@@ -8167,9 +8547,10 @@ async function startRecording() {
     stream.getTracks().forEach((track) => track.stop());
     const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
     const fallbackTranscript = recordingSession?.fallbackTranscript || "";
+    const durationMs = Math.max(0, Math.round(performance.now() - (recordingSession?.startedAt || performance.now())));
     stopPassiveBrowserRecognition(recordingSession?.fallbackRecognition);
     recordingSession = null;
-    await transcribeRecording(blob, fallbackTranscript);
+    await transcribeRecording(blob, fallbackTranscript, { durationMs });
   });
   state.recording = true;
   state.voiceStatus = "recording";
@@ -8229,7 +8610,7 @@ function stopPassiveBrowserRecognition(recognition) {
   }
 }
 
-async function transcribeRecording(blob, fallbackTranscript = "") {
+async function transcribeRecording(blob, fallbackTranscript = "", audioQuality = {}) {
   try {
     const { audioData, mimeType } = await buildSpeechPayload(blob);
     const response = await fetch("/api/speech/transcriptions", {
@@ -8238,6 +8619,7 @@ async function transcribeRecording(blob, fallbackTranscript = "") {
       body: JSON.stringify({
         audioData,
         mimeType,
+        context: createVoiceRecognitionContext(),
       }),
     });
     const payload = await response.json().catch(() => ({}));
@@ -8245,8 +8627,12 @@ async function transcribeRecording(blob, fallbackTranscript = "") {
       throw new Error(payload.detail || payload.message || "语音识别暂不可用");
     }
     state.voiceStatus = "idle";
-    render();
-    handleChildInput(payload.transcript, "voice");
+    processVoiceTranscript(payload.transcript, {
+      ...audioQuality,
+      confidence: payload.confidence,
+      durationMs: Number(audioQuality.durationMs) || Number(payload.duration) || 0,
+      utteranceCount: payload.utteranceCount,
+    });
   } catch (error) {
     console.warn("Speech recognition did not return a usable transcript.", error);
     state.voiceStatus = "idle";
@@ -8409,6 +8795,7 @@ function handleChildInput(text, inputType) {
     return;
   }
 
+  state.voiceConfirmation = null;
   state.transcript = "";
 
   if (state.phase === "summary" && isNextLessonRequest(text)) {

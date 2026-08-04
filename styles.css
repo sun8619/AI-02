@@ -4625,6 +4625,95 @@ body:has(.app-shell.is-child) {
   line-height: 1.3;
 }
 
+.app-shell.is-child .voice-confirmation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #f3c96f;
+  border-radius: 8px;
+  background: #fff9e8;
+  box-shadow: 0 5px 14px rgba(140, 101, 21, 0.1);
+}
+
+.app-shell.is-child .voice-confirmation-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.app-shell.is-child .voice-confirmation-copy span {
+  color: #8f6717;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.app-shell.is-child .voice-confirmation-copy strong {
+  overflow: hidden;
+  color: #253746;
+  font-size: 13px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell.is-child .voice-confirmation-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.app-shell.is-child .voice-confirmation-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid #d7b04d;
+  border-radius: 7px;
+  color: #684b0e;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.app-shell.is-child .voice-confirmation-actions button:first-child {
+  border-color: #12956a;
+  color: #fff;
+  background: #19a876;
+}
+
+.app-shell.is-child .voice-confirmation-actions svg {
+  width: 15px;
+  height: 15px;
+}
+
+@media (max-width: 699px) {
+  .app-shell.is-child .voice-confirmation {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .app-shell.is-child .voice-confirmation-copy strong {
+    font-size: 12px;
+  }
+
+  .app-shell.is-child .voice-confirmation-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-shell.is-child .voice-confirmation-actions button {
+    min-height: 34px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+}
+
 .app-shell.is-child .kid-keyboard-wrap .keyboard-composer {
   gap: 7px;
 }

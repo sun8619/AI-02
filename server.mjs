@@ -123,7 +123,7 @@ function handleRealtimeVoiceConnection(client) {
     try {
       if (message.type === "start") {
         if (asrSession) asrSession.close();
-        asrSession = new StreamingAsrSession(client);
+        asrSession = new StreamingAsrSession(client, normalizeAsrContext(message.context));
         await asrSession.start();
         return;
       }
@@ -158,7 +158,7 @@ function handleRealtimeVoiceConnection(client) {
 }
 
 class StreamingAsrSession {
-  constructor(client) {
+  constructor(client, context = {}) {
     this.client = client;
     this.upstream = null;
     this.ready = false;
@@ -167,6 +167,9 @@ class StreamingAsrSession {
     this.finalSent = false;
     this.pendingAudio = [];
     this.finalTimer = null;
+    this.context = context;
+    this.confidence = null;
+    this.utteranceCount = 0;
   }
 
   async start() {
@@ -184,7 +187,7 @@ class StreamingAsrSession {
     this.upstream.binaryType = "nodebuffer";
     this.upstream.on("open", () => {
       this.ready = true;
-      this.upstream.send(buildAsrFullRequestPacket(createStreamingAsrPayload()));
+      this.upstream.send(buildAsrFullRequestPacket(createStreamingAsrPayload(this.context)));
       sendRealtime(this.client, { type: "ready", mode: "volc-stream-asr", connectId });
       while (this.pendingAudio.length) {
         this.upstream.send(this.pendingAudio.shift());
@@ -247,6 +250,9 @@ class StreamingAsrSession {
     }
 
     const transcript = extractAsrTranscript(packet.payload);
+    const confidence = extractAsrConfidence(packet.payload);
+    if (confidence !== null) this.confidence = confidence;
+    this.utteranceCount = Math.max(this.utteranceCount, extractAsrUtteranceCount(packet.payload));
     if (transcript) {
       this.lastTranscript = transcript;
       sendRealtime(this.client, { type: "partial", transcript });
@@ -262,7 +268,12 @@ class StreamingAsrSession {
     if (this.finalSent) return;
     this.finalSent = true;
     if (this.finalTimer) clearTimeout(this.finalTimer);
-    sendRealtime(this.client, { type: "final", transcript: String(transcript || "").trim() });
+    sendRealtime(this.client, {
+      type: "final",
+      transcript: String(transcript || "").trim(),
+      confidence: this.confidence,
+      utteranceCount: this.utteranceCount,
+    });
   }
 
   close() {
@@ -475,6 +486,7 @@ async function handleSpeechTranscription(request, response) {
   const audioData = String(input.audioData || "").trim();
   const audioUrl = String(input.audioUrl || "").trim();
   const mimeType = String(input.mimeType || "").trim();
+  const context = normalizeAsrContext(input.context);
   const apiKey = getSpeechApiKey("ASR");
 
   if (!apiKey) {
@@ -502,6 +514,7 @@ async function handleSpeechTranscription(request, response) {
       audioUrl,
       mimeType,
       resourceId,
+      context,
     });
     return;
   }
@@ -510,11 +523,12 @@ async function handleSpeechTranscription(request, response) {
   const payload = {
     user: { uid: process.env.ARK_ASR_UID || legacy.appId || "qibu-child" },
     audio: audioUrl ? { url: audioUrl } : { data: stripDataUrl(audioData) },
-    request: {
+    request: applyAsrContext({
       model_name: process.env.ARK_ASR_MODEL || "bigmodel",
       enable_itn: true,
       enable_punc: true,
-    },
+      show_utterances: true,
+    }, context),
   };
 
   const upstream = await fetch(process.env.ARK_ASR_URL || "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash", {
@@ -539,10 +553,12 @@ async function handleSpeechTranscription(request, response) {
     transcript: upstreamPayload?.result?.text || "",
     utterances: upstreamPayload?.result?.utterances || [],
     duration: upstreamPayload?.audio_info?.duration || 0,
+    confidence: extractAsrConfidence(upstreamPayload),
+    utteranceCount: extractAsrUtteranceCount(upstreamPayload),
   });
 }
 
-async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey, audioData, audioUrl, mimeType, resourceId }) {
+async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey, audioData, audioUrl, mimeType, resourceId, context }) {
   const taskId = crypto.randomUUID();
   const externalAudioUrl = audioUrl || createTransientAudioUrl(request, audioData, mimeType);
   const payload = {
@@ -555,7 +571,7 @@ async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey,
       bits: 16,
       channel: 1,
     },
-    request: {
+    request: applyAsrContext({
       model_name: process.env.ARK_ASR_MODEL || "bigmodel",
       enable_itn: true,
       enable_punc: true,
@@ -565,7 +581,7 @@ async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey,
       show_utterances: true,
       vad_segment: false,
       sensitive_words_filter: "",
-    },
+    }, context),
   };
 
   const submitUrl = process.env.ARK_ASR_SUBMIT_URL || process.env.ARK_ASR_URL || "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit";
@@ -613,6 +629,8 @@ async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey,
         transcript: lastPayload?.result?.text || "",
         utterances: lastPayload?.result?.utterances || [],
         duration: lastPayload?.audio_info?.duration || lastPayload?.result?.additions?.duration || 0,
+        confidence: extractAsrConfidence(lastPayload),
+        utteranceCount: extractAsrUtteranceCount(lastPayload),
       });
       return;
     }
@@ -825,7 +843,7 @@ function getStreamingAsrResourceId() {
   return "volc.seedasr.sauc.duration";
 }
 
-function createStreamingAsrPayload() {
+function createStreamingAsrPayload(context = {}) {
   return {
     user: { uid: process.env.ARK_ASR_UID || "qibu-child" },
     audio: {
@@ -835,7 +853,7 @@ function createStreamingAsrPayload() {
       bits: 16,
       channel: 1,
     },
-    request: {
+    request: applyAsrContext({
       model_name: process.env.ARK_ASR_MODEL || "bigmodel",
       enable_itn: true,
       enable_punc: true,
@@ -843,8 +861,49 @@ function createStreamingAsrPayload() {
       show_utterances: true,
       enable_nonstream: process.env.ARK_ASR_STREAM_ENABLE_NONSTREAM !== "false",
       end_window_size: Number(process.env.ARK_ASR_STREAM_END_WINDOW_MS || 800),
-    },
+    }, normalizeAsrContext(context)),
   };
+}
+
+function normalizeAsrContext(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const cleanText = (item, maxLength) => String(item || "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, maxLength);
+  const hotwords = Array.from(
+    new Set(
+      (Array.isArray(input.hotwords) ? input.hotwords : [])
+        .map((item) => cleanText(item, 9).replace(/[，。！？、；：,.!?;:\s]/g, ""))
+        .filter((item) => item.length >= 2 && item.length <= 9),
+    ),
+  ).slice(0, 30);
+  return {
+    lessonId: cleanText(input.lessonId, 80),
+    questionId: cleanText(input.questionId, 80),
+    lessonName: cleanText(input.lessonName, 48),
+    stepLabel: cleanText(input.stepLabel, 48),
+    prompt: cleanText(input.prompt, 180),
+    expectedType: cleanText(input.expectedType, 24),
+    hotwords,
+  };
+}
+
+function applyAsrContext(requestOptions, context = {}) {
+  const request = { ...requestOptions };
+  const safeContext = normalizeAsrContext(context);
+  if (safeContext.hotwords.length) {
+    request.context = JSON.stringify({
+      hotwords: safeContext.hotwords.map((word) => ({ word })),
+    });
+  }
+
+  const boostingTableId = String(process.env.ARK_ASR_BOOSTING_TABLE_ID || "").trim();
+  const boostingTableName = String(process.env.ARK_ASR_BOOSTING_TABLE_NAME || "").trim();
+  if (boostingTableId || boostingTableName) {
+    request.corpus = {
+      ...(boostingTableId ? { boosting_table_id: boostingTableId } : {}),
+      ...(boostingTableName ? { boosting_table_name: boostingTableName } : {}),
+    };
+  }
+  return request;
 }
 
 function buildAsrFullRequestPacket(payload) {
@@ -905,6 +964,31 @@ function extractAsrTranscript(payload) {
   if (text) return String(text).trim();
   const utterances = Array.isArray(result?.utterances) ? result.utterances : [];
   return utterances.map((item) => item?.text || "").join("").trim();
+}
+
+function extractAsrConfidence(payload) {
+  const result = payload?.result || payload || {};
+  const candidates = [];
+  const collect = (value) => {
+    let confidence = Number(value);
+    if (!Number.isFinite(confidence) || confidence <= 0) return;
+    if (confidence > 1 && confidence <= 100) confidence /= 100;
+    if (confidence > 0 && confidence <= 1) candidates.push(confidence);
+  };
+
+  collect(result.confidence);
+  const utterances = Array.isArray(result.utterances) ? result.utterances : [];
+  utterances.forEach((utterance) => {
+    collect(utterance?.confidence);
+    (Array.isArray(utterance?.words) ? utterance.words : []).forEach((word) => collect(word?.confidence));
+  });
+  if (!candidates.length) return null;
+  return Number((candidates.reduce((sum, value) => sum + value, 0) / candidates.length).toFixed(4));
+}
+
+function extractAsrUtteranceCount(payload) {
+  const result = payload?.result || payload || {};
+  return Array.isArray(result.utterances) ? result.utterances.filter((item) => String(item?.text || "").trim()).length : 0;
 }
 
 function uint32be(value) {
