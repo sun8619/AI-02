@@ -7898,8 +7898,11 @@ function createVoiceRecognitionContext() {
   } catch {
     plan = null;
   }
-  const expectedAnswers = uniqueKeywords([
-    ...(plan?.answerKeywords || []),
+  const stepExpectedAnswers = uniqueKeywords(plan?.answerKeywords || [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, 48);
+  const questionExpectedAnswers = uniqueKeywords([
     ...(question?.answerKeywords || []),
     ...(lesson?.answer?.answerKeywords || []),
     question?.answer,
@@ -7909,6 +7912,10 @@ function createVoiceRecognitionContext() {
     .slice(0, 48);
   const fallbackPrompt = formatChildStepPrompt(plan) || question?.prompt || lesson?.problem || "";
   const prompt = resolveCurrentVoicePrompt(fallbackPrompt);
+  // Voice validation must follow the question the child can currently see.
+  // Mixing the final exercise answer into an earlier micro-step makes valid
+  // replies such as "右边" look like invalid comparison-symbol answers.
+  const expectedAnswers = stepExpectedAnswers.length ? stepExpectedAnswers : questionExpectedAnswers;
   const expectedType = inferVoiceAnswerType(prompt, plan, expectedAnswers);
   return {
     lessonId: lesson?.id || "",
@@ -7927,11 +7934,13 @@ function inferVoiceAnswerType(prompt, plan, expectedAnswers) {
   const text = normalizeText(focus || prompt || "");
   const answerText = normalizeText((expectedAnswers || []).join(" "));
   if (state.phase === "teachback" || /为什么|原因|说一说方法|讲给老师|怎么想|怎么知道|说说理由/.test(text)) return "explanation";
-  if (/大于号|小于号|等号|比较符号/.test(text + answerText) || /[<>=＝]/.test(answerText)) return "comparison";
+  if (/大于号|小于号|等号|比较符号|填[^。！？?]*(?:符号|[<>＝=])/.test(text)) return "comparison";
+  if (/哪边|哪一边|谁多|谁少|谁大|谁小|哪组多|哪组少/.test(text)) return "choice";
   if (/对不对|是不是|能不能|是否|正确吗/.test(text)) return "yes-no";
   if (/多少|几个|第几|几元|几角|几分|几时|几点|几厘米|几米|算出|得数|结果/.test(text)) return "number";
   if (/还是|选择|哪一个|哪个|哪边|填什么|是什么/.test(text)) return "choice";
   if (plan?.isReason) return "explanation";
+  if (/大于号|小于号|等号|比较符号/.test(answerText) || /[<>=＝]/.test(answerText)) return "comparison";
   if ((expectedAnswers || []).some((item) => /[0-9零一二两三四五六七八九十百千万]/.test(String(item)))) return "number";
   return "open";
 }
