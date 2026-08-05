@@ -8989,3 +8989,368 @@ body:has(.app-shell.is-child) {
     font-size: 12px;
   }
 }
+
+/* Child learning studio v20 -----------------------------------------------
+   A stable hierarchy for young learners: content is blue, actions are green,
+   and hints are amber. Landscape uses one tutor rail beside one activity. */
+.app-shell.is-child {
+  --kid-ink: #26384a;
+  --kid-muted: #66798a;
+  --kid-green: #1fa879;
+  --kid-green-dark: #147457;
+  --kid-green-soft: #eaf7f2;
+  --kid-blue: #4b82b8;
+  --kid-blue-dark: #2a5f93;
+  --kid-blue-soft: #edf4fa;
+  --kid-yellow: #dda32e;
+  --kid-yellow-soft: #fff7e7;
+  --kid-coral: #dc6f61;
+  --kid-canvas: #f4f7f9;
+  --kid-surface: #ffffff;
+  --kid-line: #d8e2e8;
+  --kid-shadow: 0 10px 28px rgba(38, 56, 74, 0.07);
+}
+
+.app-shell.is-child .kid-topbar {
+  color: var(--kid-ink);
+  box-shadow: 0 2px 10px rgba(38, 56, 74, 0.04);
+}
+
+.app-shell.is-child .kid-brand strong {
+  color: var(--kid-ink);
+  letter-spacing: 0;
+}
+
+.app-shell.is-child .kid-progress-step.is-current i,
+.app-shell.is-child .kid-progress-step.is-done i {
+  border-color: var(--kid-green);
+  background: var(--kid-green);
+}
+
+.app-shell.is-child .kid-progress-step.is-current em,
+.app-shell.is-child .kid-progress-step.is-done em {
+  color: var(--kid-green-dark);
+}
+
+.app-shell.is-child .kid-day-pill {
+  color: #356956;
+  background: #eef8f4;
+}
+
+.app-shell.is-child .kid-board {
+  background:
+    linear-gradient(rgba(75, 130, 184, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(75, 130, 184, 0.022) 1px, transparent 1px),
+    var(--kid-canvas);
+  background-size: 40px 40px;
+}
+
+.app-shell.is-child .kid-board-ribbon {
+  border-left-color: var(--kid-blue);
+  color: var(--kid-blue-dark);
+  background: #f8fbfd;
+  box-shadow: none;
+}
+
+.app-shell.is-child .kid-board-card {
+  border: 1px solid var(--kid-line);
+  border-top: 1px solid var(--kid-line);
+  box-shadow: var(--kid-shadow);
+}
+
+.app-shell.is-child .kid-board-head strong {
+  color: var(--kid-blue-dark);
+  background: var(--kid-blue-soft);
+}
+
+.app-shell.is-child .kid-think-box {
+  border-color: #e8c36e;
+  border-left-color: var(--kid-yellow);
+  color: #765617;
+  background: var(--kid-yellow-soft);
+}
+
+.app-shell.is-child .kid-think-box strong {
+  color: #765617;
+}
+
+.app-shell.is-child .kid-speech-bubble {
+  border-left-color: var(--kid-blue);
+  background: #fff;
+}
+
+.app-shell.is-child .kid-speaker-label {
+  color: var(--kid-blue-dark);
+  background: var(--kid-blue-soft);
+}
+
+.app-shell.is-child .kid-primary-voice {
+  border-color: var(--kid-green-dark);
+  background: var(--kid-green);
+  box-shadow: 0 6px 14px rgba(31, 168, 121, 0.16);
+}
+
+.app-shell.is-child .kid-primary-voice:hover {
+  background: #198f68;
+}
+
+/* Keyboard replaces the answer buttons instead of floating over the lesson. */
+.app-shell.is-child .kid-input-panel:has(.kid-keyboard-wrap) .kid-answer-actions {
+  display: none;
+}
+
+.app-shell.is-child .kid-keyboard-wrap {
+  position: static;
+  inset: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Desktop and landscape tablet: one calm tutor rail beside one activity. */
+@media (min-width: 700px) and (orientation: landscape) {
+  .app-shell.is-child .kid-workspace {
+    display: grid;
+    grid-template-columns: clamp(340px, 28vw, 480px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "coach board";
+  }
+
+  .app-shell.is-child .kid-coach {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "teacher"
+      "speech"
+      "input"
+      "help";
+    align-content: center;
+    align-items: center;
+    justify-items: stretch;
+    gap: 12px;
+    padding: 20px clamp(20px, 2.1vw, 34px);
+    border: 0;
+    border-right: 1px solid var(--kid-line);
+    background: #f1f6f8;
+    box-shadow: none;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    grid-area: teacher;
+    justify-self: center;
+    width: clamp(128px, 11vw, 176px);
+    height: clamp(166px, 14vw, 220px);
+    border: 1px solid #dce7ed;
+    background: #eaf2f6;
+  }
+
+  .app-shell.is-child .kid-speech-bubble {
+    grid-area: speech;
+    align-self: stretch;
+    width: 100%;
+    max-height: min(25vh, 210px);
+    padding: 14px 16px;
+    overflow: auto;
+    border: 1px solid var(--kid-line);
+    border-left: 4px solid var(--kid-blue);
+    border-radius: 6px;
+  }
+
+  .app-shell.is-child .kid-speaker-label {
+    margin-bottom: 7px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble p {
+    font-size: clamp(14px, 1.15vw, 17px);
+    line-height: 1.5;
+    font-weight: 700;
+  }
+
+  .app-shell.is-child .kid-last-answer strong {
+    font-size: 12px;
+  }
+
+  .app-shell.is-child .kid-input-panel {
+    grid-area: input;
+    width: 100%;
+  }
+
+  .app-shell.is-child .kid-answer-actions {
+    grid-template-columns: minmax(0, 1.5fr) minmax(108px, 0.72fr);
+    gap: 8px;
+  }
+
+  .app-shell.is-child .kid-primary-voice,
+  .app-shell.is-child .kid-type-trigger {
+    min-height: 50px;
+  }
+
+  .app-shell.is-child .kid-primary-voice span {
+    font-size: 15px;
+  }
+
+  .app-shell.is-child .kid-type-trigger span {
+    font-size: 12px;
+  }
+
+  .app-shell.is-child .kid-input-panel > p {
+    font-size: 9px;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  .app-shell.is-child .kid-help-row {
+    grid-area: help;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+
+  .app-shell.is-child .kid-help-button {
+    min-height: 42px;
+  }
+
+  .app-shell.is-child .kid-help-button strong {
+    font-size: 11px;
+  }
+
+  .app-shell.is-child .kid-board {
+    gap: 10px;
+    padding: 16px clamp(18px, 2.4vw, 34px) 18px;
+  }
+
+  .app-shell.is-child .kid-board-ribbon {
+    min-height: 34px;
+    max-width: min(100%, 470px);
+    font-size: 13px;
+  }
+
+  .app-shell.is-child .kid-board .lesson-picker {
+    top: 58px;
+    right: clamp(18px, 2.4vw, 34px);
+    left: clamp(18px, 2.4vw, 34px);
+  }
+
+  .app-shell.is-child .kid-board-card {
+    width: min(100%, 1120px);
+    gap: 8px;
+    padding: 16px clamp(18px, 2.2vw, 30px);
+  }
+
+  .app-shell.is-child .kid-board-head span {
+    font-size: 12px;
+  }
+
+  .app-shell.is-child .kid-board-fallback {
+    width: min(100%, 760px);
+  }
+
+  .app-shell.is-child .kid-board-card-generic .lesson-svg,
+  .app-shell.is-child .kid-board-card-generic .fraction-svg,
+  .app-shell.is-child .kid-board-card-generic .primary-thinking-svg {
+    width: min(100%, 700px);
+    max-height: min(48vh, 420px);
+  }
+
+  .app-shell.is-child .kid-think-box {
+    width: min(100%, 760px);
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+
+  .app-shell.is-child .kid-think-box strong {
+    font-size: 14px;
+  }
+}
+
+/* Short landscape screens keep the split layout but trim every tier evenly. */
+@media (min-width: 700px) and (orientation: landscape) and (max-height: 760px) {
+  .app-shell.is-child .child-stage.kid-classroom {
+    grid-template-rows: 56px minmax(0, 1fr);
+  }
+
+  .app-shell.is-child .kid-topbar {
+    height: 56px;
+    min-height: 56px;
+    max-height: 56px;
+  }
+
+  .app-shell.is-child .kid-workspace {
+    grid-template-columns: clamp(320px, 29vw, 400px) minmax(0, 1fr);
+  }
+
+  .app-shell.is-child .kid-coach {
+    gap: 8px;
+    padding: 12px 18px;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: 105px;
+    height: 132px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble {
+    max-height: 164px;
+    padding: 10px 12px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble p {
+    font-size: 13px;
+    line-height: 1.42;
+  }
+
+  .app-shell.is-child .kid-primary-voice,
+  .app-shell.is-child .kid-type-trigger {
+    min-height: 44px;
+  }
+
+  .app-shell.is-child .kid-help-button {
+    min-height: 38px;
+  }
+
+  .app-shell.is-child .kid-board {
+    gap: 7px;
+    padding: 10px 14px 12px;
+  }
+
+  .app-shell.is-child .kid-board-card {
+    padding: 10px 16px;
+  }
+
+  .app-shell.is-child .kid-board-card-generic .lesson-svg,
+  .app-shell.is-child .kid-board-card-generic .fraction-svg,
+  .app-shell.is-child .kid-board-card-generic .primary-thinking-svg {
+    width: min(100%, 610px);
+    max-height: min(49vh, 330px);
+  }
+
+  .app-shell.is-child .kid-think-box {
+    min-height: 39px;
+    padding: 6px 10px;
+  }
+
+  .app-shell.is-child .kid-think-box strong {
+    font-size: 12px;
+  }
+}
+
+/* Portrait and phone surfaces inherit the same restrained visual language. */
+@media (max-width: 699px), (min-width: 700px) and (max-width: 1199px) and (orientation: portrait) {
+  .app-shell.is-child .kid-coach {
+    background: #f1f6f8;
+  }
+
+  .app-shell.is-child .kid-speech-bubble {
+    border: 1px solid var(--kid-line);
+    border-left: 3px solid var(--kid-blue);
+    background: #fff;
+  }
+
+  .app-shell.is-child .kid-board-card {
+    border-top-width: 1px;
+  }
+}
