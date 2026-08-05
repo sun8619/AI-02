@@ -10,10 +10,34 @@
   <body>
     <div id="app"></div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script>
+      (() => {
+        let failed = false;
+        const showBootFailure = () => {
+          if (failed) return;
+          failed = true;
+          const root = document.getElementById("app");
+          if (!root || root.children.length) return;
+          root.innerHTML = `
+            <main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#f7fbff;font-family:system-ui,-apple-system,'PingFang SC',sans-serif;color:#17324d">
+              <section style="width:min(520px,100%);padding:32px;text-align:center;background:#fff;border:1px solid #d7e7f4;border-radius:16px;box-shadow:0 14px 36px rgba(48,103,145,.12)">
+                <h1 style="margin:0 0 12px;font-size:24px">页面没有加载完整</h1>
+                <p style="margin:0 0 22px;line-height:1.7;color:#5f7385">请点一下重新加载。仍然打不开时，请告诉家长联系乐之老师处理。</p>
+                <button type="button" onclick="location.reload()" style="border:0;border-radius:10px;padding:12px 22px;background:#19b77b;color:#fff;font-size:18px;font-weight:700;cursor:pointer">重新加载</button>
+              </section>
+            </main>`;
+        };
+        window.addEventListener("error", showBootFailure, true);
+        window.setTimeout(() => {
+          const root = document.getElementById("app");
+          if (!root || !root.children.length) showBootFailure();
+        }, 2500);
+      })();
+    </script>
     <script src="./teaching-engine/grade1-2-question-bank.js?v=2"></script>
     <script src="./teaching-engine/grade1-2-knowledge-cards.js?v=8"></script>
     <script src="./teaching-engine/knowledge-point-teaching-overlays.js?v=2"></script>
     <script src="./teaching-engine/family-teaching-strategies.js?v=7"></script>
-    <script src="./app.js?v=71"></script>
+    <script src="./app.js?v=72"></script>
   </body>
 </html>
