@@ -4011,18 +4011,20 @@ function createConcreteAdditionGuidedSteps(lesson, question) {
   const first = expression?.operator === "+" ? expression.left : numbers[0];
   const second = expression?.operator === "+" ? expression.right : numbers[1];
   const result = expression?.operator === "+" ? expression.result : Number(String(question?.answer || "").match(/\d+/)?.[0] || NaN);
+  const unit = inferApplicationUnit(prompt);
+  const story = inferApplicationStoryLabels(prompt, "加法");
   if (Number.isFinite(first) && Number.isFinite(second)) {
     return [
-      guidedStep("看第一部分", `先看第一部分有几个？`, answerKeywordsForNumber(first).concat([String(first), `${first}个`]), {
-        teacherHint: `加法先找两部分。第一部分是${first}，先说这个数。`,
+      guidedStep("找第一个条件", `题目问${inferApplicationRelation(prompt, question?.explanation || "").childChoice || "一共有多少"}，这句话老师已经读清楚了。先找第一个条件：${story.firstAsk}`, answerKeywordsForNumber(first, unit).concat([String(first), `${first}${unit}`]), {
+        teacherHint: `先不算。题里第一个已知数量是${first}${unit}，先说“${first}${unit}”。`,
         bridgeMessage: `第一部分找到了。`,
       }),
-      guidedStep("看第二部分", `再看又来或另一部分有几个？`, answerKeywordsForNumber(second).concat([String(second), `${second}个`]), {
-        teacherHint: `第二部分是${second}。两部分要合起来。`,
+      guidedStep("找第二个条件", story.secondAsk, answerKeywordsForNumber(second, unit).concat([String(second), `${second}${unit}`]), {
+        teacherHint: `题里另一个已知数量是${second}${unit}。两部分接下来要合起来。`,
         bridgeMessage: `两部分都有了，现在合起来。`,
       }),
-      guidedStep("合起来数", `${first}和${second}合起来一共几个？`, answerKeywords.concat(Number.isFinite(result) ? answerKeywordsForNumber(result) : []), {
-        teacherHint: Number.isFinite(result) ? `${first}+${second}=${result}，所以一共${result}。` : "可以接着数，也可以画图合起来数。",
+      guidedStep("合起来数", `${first}${unit}和${second}${unit}合起来，一共是多少？`, answerKeywords.concat(Number.isFinite(result) ? answerKeywordsForNumber(result, unit) : []), {
+        teacherHint: Number.isFinite(result) ? `${first}+${second}=${result}，所以一共${result}${unit}。` : "可以接着数，也可以画图合起来数。",
         bridgeMessage: `结果有了，最后说清加法的意思。`,
       }),
       guidedStep("说清加法意思", "为什么这里用加法？", ["一共", "合起来", "又来", "加法"], {
@@ -4339,6 +4341,10 @@ function createApplicationGuidedSteps(lesson, question) {
   const operationKeywords = relation.operation ? [relation.operation, relation.symbol, relation.intent].filter(Boolean) : ["加法", "减法", "乘法", "除法"];
   const usefulNumbers = extractNumbers(prompt).slice(0, 3);
   const usefulNumberKeywords = usefulNumbers.map(String).concat(usefulNumbers.map((number) => chineseNumber(number)));
+  const first = usefulNumbers[0];
+  const second = usefulNumbers[1];
+  const unit = inferApplicationUnit(prompt);
+  const story = inferApplicationStoryLabels(prompt, relation.operation);
   const relationAction = childRelationAction(relation);
   const methodPrompt = relation.operation
     ? `先不猜运算名。这个故事是在${relationAction.options}？`
@@ -4346,15 +4352,24 @@ function createApplicationGuidedSteps(lesson, question) {
   const methodHint = relation.operation
     ? `先用故事理解：题目问${relation.childChoice || relation.intent}，意思是${relationAction.explain}，所以后面才用${relation.operation}。先说故事动作：${relationAction.say}。`
     : "先把题目读成小故事：一共通常合起来，还剩或找回通常去掉，平均每份通常平均分。";
+  const conditionSteps = Number.isFinite(first) && Number.isFinite(second)
+    ? [
+        guidedStep("找第一个条件", `题目问${relation.childChoice || "最后要求的数量"}，这句话老师已经读清楚了。现在只找第一个已知数：${story.firstAsk}`, answerKeywordsForNumber(first, unit), {
+          teacherHint: `第一个已知数是${first}${unit}。请只说“${first}${unit}”。`,
+          bridgeMessage: "第一个条件找到了。",
+        }),
+        guidedStep("找第二个条件", story.secondAsk, answerKeywordsForNumber(second, unit), {
+          teacherHint: `第二个已知数是${second}${unit}。请只说“${second}${unit}”。`,
+          bridgeMessage: "两个条件都找到了。",
+        }),
+      ]
+    : [
+        guidedStep("找有用条件", "老师已经帮你读清题目问什么。现在请说出题里一个有用的数。", usefulNumberKeywords.concat(["条件", "有用的数"]), {
+          teacherHint: usefulNumbers.length ? `可以先说${usefulNumbers[0]}。` : "看题里出现的数量，先说一个。",
+        }),
+      ];
   return [
-    guidedStep("看问题问什么", `先看最后一句。题目到底要我们求${relation.childChoice || "什么"}？`, relation.keywords, {
-      teacherHint: `先不算，先把问题说清楚：它要我们求${relation.childChoice || "要求的那个数"}。`,
-    }),
-    guidedStep("找有用条件", "题里给了哪几个有用的数？先把这些数找出来。", usefulNumberKeywords.concat(["两个数", "条件", "有用的数"]), {
-      teacherHint: usefulNumbers.length
-        ? `题里先看数字：${usefulNumbers.join("、")}。先把有用的数说出来，再想怎么算。`
-        : "先别算，先把题里有用的数字找出来。",
-    }),
+    ...conditionSteps,
     guidedStep("想故事动作", methodPrompt, uniqueKeywords(operationKeywords.concat(relation.keywords || [], relation.reasonKeywords || [], [relationAction.say, relationAction.accept], expression ? [formatExpression(expression)] : [])), {
       teacherHint: methodHint,
     }),
@@ -4368,6 +4383,45 @@ function createApplicationGuidedSteps(lesson, question) {
       repeatSentence: createApplicationRepeatSentence(relation, expression),
     }),
   ];
+}
+
+function inferApplicationUnit(prompt) {
+  const text = String(prompt || "");
+  const units = ["千克", "厘米", "分钟", "辆", "个", "只", "本", "块", "张", "条", "朵", "支", "颗", "棵", "艘", "盒", "袋", "件", "人", "元", "角", "分", "米", "克"];
+  return units.find((unit) => new RegExp(`\\d+\\s*${unit}`).test(text)) || "个";
+}
+
+function inferApplicationStoryLabels(prompt, operation = "") {
+  const text = normalizeText(prompt);
+  const unit = inferApplicationUnit(prompt);
+  const noun = applicationNounForUnit(unit);
+  if (operation === "减法") {
+    return {
+      firstAsk: `原来有多少${unit}${noun}？`,
+      secondAsk: `后来拿走、用去或少了多少${unit}${noun}？`,
+    };
+  }
+  if (operation === "乘法") {
+    return {
+      firstAsk: `每组有多少${unit}${noun}？`,
+      secondAsk: "一共有几组？",
+    };
+  }
+  if (operation === "除法") {
+    return {
+      firstAsk: `一共有多少${unit}${noun}？`,
+      secondAsk: "要平均分成几份？",
+    };
+  }
+  return {
+    firstAsk: /原来/.test(text) ? `原来有多少${unit}${noun}？` : `第一部分有多少${unit}${noun}？`,
+    secondAsk: /又|得到|来|增加/.test(text) ? `后来又有多少${unit}${noun}？` : `第二部分有多少${unit}${noun}？`,
+  };
+}
+
+function applicationNounForUnit(unit) {
+  const nouns = { 辆: "车", 本: "书", 只: "", 人: "", 朵: "花", 棵: "树", 艘: "船", 盒: "", 袋: "", 件: "" };
+  return nouns[unit] || "";
 }
 
 function createApplicationRepeatSentence(relation, expression) {
@@ -6011,24 +6065,7 @@ function renderKidVoicePanel() {
 }
 
 function renderVoiceConfirmation() {
-  const confirmation = state.voiceConfirmation;
-  if (!confirmation) return "";
-  const heard = confirmation.heardText || confirmation.submitText || "";
-  const submit = confirmation.submitText || heard;
-  const corrected = normalizeText(heard) !== normalizeText(submit);
-  const unitJoined = confirmation.reason === "number-unit-joined";
-  return `
-    <section class="voice-confirmation" role="status" aria-live="polite">
-      <div class="voice-confirmation-copy">
-        <span>${unitJoined ? "数字和单位可能听粘了" : corrected ? "这句话容易听混" : "老师再确认一下"}</span>
-        <strong>${corrected ? `你说的是“${escapeText(submit)}”吗？` : `我听到“${escapeText(heard)}”，对吗？`}</strong>
-      </div>
-      <div class="voice-confirmation-actions">
-        <button type="button" data-action="confirm-voice">${icon("check")}对，就是这个</button>
-        <button type="button" data-action="retry-voice">${icon("repeat")}不对，我重说</button>
-      </div>
-    </section>
-  `;
+  return "";
 }
 
 function renderKidHelpButtons() {
@@ -6678,8 +6715,6 @@ function inferActiveQuestionFamily(lesson, question = lesson?.activeQuestion || 
     lesson?.sourceQuestionFamily ||
     lesson?.questionBankStats?.family ||
     getKnowledgePointFamily(lesson);
-  if (knownFamily) return knownFamily;
-
   const cleanLesson = {
     ...lesson,
     visualType: lesson?.baseVisualType || lesson?.visualType || "generic",
@@ -6688,7 +6723,7 @@ function inferActiveQuestionFamily(lesson, question = lesson?.activeQuestion || 
   };
   const inferred = inferQuestionTeachingFamily(cleanLesson, question);
   if (inferred && inferred !== "generic") return inferred;
-  return lesson?.activeQuestionFamily || lesson?.sourceQuestionFamily || inferred || "generic";
+  return knownFamily || inferred || "generic";
 }
 
 function renderLessonSvg(lesson, visualMode = getVisualRevealMode(lesson)) {
@@ -6884,6 +6919,14 @@ function renderTenFrameSvg(lesson, visualMode = getVisualRevealMode(lesson)) {
   const family = inferActiveQuestionFamily(lesson, question);
   if (family === "makeTenAdd" && isMakeTenAdditionExpression(expression)) return renderMakeTenFrameSvg(lesson, expression, visualMode);
   if (family === "breakTenSubtract" && isBreakTenSubtractionExpression(expression)) return renderBreakTenFrameSvg(lesson, expression, visualMode);
+  if (["concreteAddition", "concreteSubtraction", "application"].includes(family)) {
+    const applicationVisual = renderApplicationStorySvg(lesson, family, visualMode);
+    if (applicationVisual) return applicationVisual;
+  }
+
+  const sourceText = `${question?.prompt || ""} ${question?.answer || ""} ${lesson?.problem || ""}`;
+  const firstNumber = extractNumbers(sourceText)[0];
+  const filledCount = Number.isFinite(firstNumber) ? Math.max(0, Math.min(10, firstNumber)) : 5;
 
   return `
     <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
@@ -6892,7 +6935,7 @@ function renderTenFrameSvg(lesson, visualMode = getVisualRevealMode(lesson)) {
         ${Array.from({ length: 10 }, (_, index) => {
           const x = (index % 5) * 54;
           const y = Math.floor(index / 5) * 48;
-          const filled = index < 7;
+          const filled = index < filledCount;
           return `<rect x="${x}" y="${y}" width="44" height="38" rx="9" fill="${filled ? "#65d6ad" : "#fff"}" stroke="#244056" stroke-width="3"/>`;
         }).join("")}
       </g>
@@ -6901,6 +6944,69 @@ function renderTenFrameSvg(lesson, visualMode = getVisualRevealMode(lesson)) {
       <text x="318" y="152" class="svg-win">${escapeText(shortSvgText(lesson.microSteps[1] || lesson.node, 12))}</text>
     </svg>
   `;
+}
+
+function renderApplicationStorySvg(lesson, family, visualMode = getVisualRevealMode(lesson)) {
+  const question = lesson?.activeQuestion || null;
+  const prompt = question?.prompt || lesson?.problem || "";
+  const numbers = extractNumbers(prompt);
+  const first = numbers[0];
+  const second = numbers[1];
+  if (!Number.isFinite(first) || !Number.isFinite(second) || first < 0 || second < 0 || first > 20 || second > 20) return "";
+
+  const relation = inferApplicationRelation(prompt, question?.explanation || "");
+  const isSubtract = family === "concreteSubtraction" || relation.operation === "减法";
+  const unit = inferApplicationUnit(prompt);
+  const noun = applicationNounForUnit(unit);
+  const firstLabel = isSubtract ? `原来 ${first}${unit}${noun}` : /原来/.test(prompt) ? `原来 ${first}${unit}${noun}` : `第一部分 ${first}${unit}${noun}`;
+  const secondLabel = isSubtract ? `去掉 ${second}${unit}${noun}` : /又|得到|增加|来/.test(prompt) ? `又有 ${second}${unit}${noun}` : `第二部分 ${second}${unit}${noun}`;
+  const questionLabel = isSubtract ? "去掉后还剩多少？" : "合起来一共有多少？";
+  const symbol = isSubtract ? "−" : "+";
+  const stepIndex = Math.max(0, Number(state.completedSteps) || 0);
+  const activeSide = stepIndex <= 0 ? "first" : stepIndex === 1 ? "second" : "both";
+  const result = Number(String(question?.answer || "").match(/\d+/)?.[0] || NaN);
+  const revealResult = visualMode === "solution" || stepIndex >= 3 || state.phase === "summary";
+  const resultLabel = isSubtract
+    ? `还剩 ${result}${unit}${noun}`
+    : `一共有 ${result}${unit}${noun}`;
+
+  return `
+    <svg class="lesson-svg application-story-svg" viewBox="0 0 520 232" role="img" aria-label="${escapeAttr(prompt)}">
+      <text x="24" y="29" class="svg-title">${escapeText(isSubtract ? "看清原来和去掉" : "看清两部分")}</text>
+      <g transform="translate(30 50)">
+        <rect x="0" y="0" width="205" height="118" rx="16" fill="${activeSide === "first" || activeSide === "both" ? "#edf9f5" : "#f7fafc"}" stroke="#8fcfba" stroke-width="2"/>
+        <text x="16" y="27" class="svg-note">${escapeText(firstLabel)}</text>
+        ${renderApplicationQuantityIcons(first, 16, 42, "#65d6ad", isSubtract ? Math.min(second, first) : 0)}
+      </g>
+      <text x="258" y="119" text-anchor="middle" class="svg-label">${symbol}</text>
+      <g transform="translate(285 50)">
+        <rect x="0" y="0" width="205" height="118" rx="16" fill="${activeSide === "second" || activeSide === "both" ? "#eef6ff" : "#f7fafc"}" stroke="#9fc8f2" stroke-width="2"/>
+        <text x="16" y="27" class="svg-note">${escapeText(secondLabel)}</text>
+        ${renderApplicationQuantityIcons(second, 16, 42, isSubtract ? "#ffb986" : "#4da3ff", 0)}
+      </g>
+      <rect x="76" y="184" width="368" height="38" rx="14" fill="#fff7df" stroke="#ffbd45" stroke-width="2"/>
+      <text x="260" y="209" text-anchor="middle" class="svg-win">${escapeText(revealResult && Number.isFinite(result) ? resultLabel : questionLabel)}</text>
+    </svg>
+  `;
+}
+
+function renderApplicationQuantityIcons(count, startX, startY, color, crossedCount = 0) {
+  const visibleCount = Math.min(count, 10);
+  const icons = Array.from({ length: visibleCount }, (_, index) => {
+    const column = index % 5;
+    const row = Math.floor(index / 5);
+    const x = startX + column * 35;
+    const y = startY + row * 31;
+    const crossed = index >= Math.max(0, visibleCount - Math.min(crossedCount, visibleCount));
+    return `<g>
+      <rect x="${x}" y="${y}" width="27" height="23" rx="7" fill="${color}" stroke="#244056" stroke-width="2"/>
+      ${crossed ? `<path d="M${x + 4} ${y + 4}L${x + 23} ${y + 19}M${x + 23} ${y + 4}L${x + 4} ${y + 19}" stroke="#ef6b62" stroke-width="3" stroke-linecap="round"/>` : ""}
+    </g>`;
+  }).join("");
+  const overflow = count > visibleCount
+    ? `<text x="${startX + 177}" y="${startY + 55}" class="svg-note">共${count}个</text>`
+    : "";
+  return `${icons}${overflow}`;
 }
 
 function renderMakeTenFrameSvg(lesson, expression, visualMode = getVisualRevealMode(lesson)) {
@@ -8093,10 +8199,17 @@ function buildVoiceHotwords(lesson, plan, expectedAnswers, prompt = "") {
     time: ["钟面", "时针", "分针", "几时几分"],
     measure: ["厘米", "千克", "测量单位"],
   };
-  const answerTerms = (expectedAnswers || []).filter((item) => {
+  const requiredUnit = inferVoiceRequiredUnit(prompt);
+  const answerTerms = uniqueKeywords((expectedAnswers || []).flatMap((item) => {
     const value = String(item || "").trim();
-    return value.length >= 2 && value.length <= 9 && !/[0-9零一二两三四五六七八九十百千万]/.test(value);
-  });
+    if (!value || value.length > 9) return [];
+    const values = [value, normalizeComparableVoicePhrase(value)];
+    const number = extractVoiceNumberValues(value)[0];
+    if (requiredUnit && Number.isFinite(number)) {
+      values.push(`${number}${requiredUnit}`, `${chineseNumber(number)}${requiredUnit}`);
+    }
+    return values;
+  }));
   return uniqueKeywords([
     lesson?.node,
     plan?.label,
@@ -8144,16 +8257,6 @@ function processVoiceTranscript(transcript, metadata = {}) {
     return;
   }
 
-  if (assessment.status === "confirm") {
-    state.voiceConfirmation = {
-      heardText: assessment.heardText,
-      submitText: assessment.submitText,
-      reason: assessment.reason,
-    };
-    render();
-    return;
-  }
-
   state.voiceConfirmation = null;
   render();
   handleChildInput(assessment.submitText, "voice");
@@ -8180,15 +8283,7 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
     };
   }
 
-  const correction = findContextualVoiceCorrection(heardText, context);
-  if (correction?.needsConfirmation) {
-    return {
-      status: "confirm",
-      heardText,
-      submitText: correction.text,
-      reason: correction.reason || "contextual-homophone",
-    };
-  }
+  const correction = findNumericUnitVoiceCorrection(heardText, context) || findContextualVoiceCorrection(heardText, context);
 
   const submitText = correction?.text || normalizeSafeVoiceUnits(heardText, context);
   const plausible = isPlausibleVoiceAnswer(submitText, context);
@@ -8205,11 +8300,6 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
     return { status: "accept", heardText, submitText, reason: "child-intent" };
   }
 
-  const numericUnitAmbiguity = findNumericUnitVoiceAmbiguity(heardText, submitText, context, matchesExpected);
-  if (numericUnitAmbiguity) {
-    return { status: "confirm", heardText, submitText, reason: numericUnitAmbiguity };
-  }
-
   if (!plausible && shortAnswer) {
     return {
       status: "retry",
@@ -8220,19 +8310,17 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
     };
   }
 
-  if (
-    plausible &&
-    !matchesExpected &&
-    ["number", "comparison", "yes-no", "choice"].includes(context.expectedType)
-  ) {
-    return { status: "confirm", heardText, submitText, reason: "short-answer-mismatch" };
+  if (!plausible && (lowConfidence || (shortAnswer && marginalAudio))) {
+    return {
+      status: "retry",
+      heardText,
+      submitText: "",
+      reason: lowConfidence ? "low-confidence" : "short-audio",
+      message: "这句声音有点轻，老师没听清。请再完整说一次。",
+    };
   }
 
-  if (lowConfidence || (shortAnswer && marginalAudio)) {
-    return { status: "confirm", heardText, submitText, reason: lowConfidence ? "low-confidence" : "short-audio" };
-  }
-
-  return { status: "accept", heardText, submitText, reason: plausible ? "plausible" : "clear-off-topic" };
+  return { status: "accept", heardText, submitText, reason: correction?.reason || (plausible ? "plausible" : "clear-off-topic") };
 }
 
 function normalizeVoiceMetadata(metadata) {
@@ -8359,6 +8447,33 @@ function findNumericUnitVoiceAmbiguity(heardText, submitText, context, matchesEx
   return "structured-answer-mismatch";
 }
 
+function inferVoiceRequiredUnit(prompt) {
+  const focus = normalizeText(extractVoicePromptFocus(prompt));
+  return ["千克", "厘米", "分钟", "角", "元", "分", "米", "克", "时", "个"].find((unit) => focus.includes(unit)) || "";
+}
+
+function findNumericUnitVoiceCorrection(heardText, context) {
+  if (context?.expectedType !== "number") return null;
+  const requiredUnit = inferVoiceRequiredUnit(context.prompt);
+  if (!requiredUnit) return null;
+  const heard = normalizeComparableVoicePhrase(normalizeSafeVoiceUnits(heardText, context));
+  if (!heard || heard.includes(requiredUnit)) return null;
+
+  const expectedNumbers = Array.from(new Set((context.expectedAnswers || []).flatMap((item) => extractVoiceNumberValues(item))))
+    .map(Number)
+    .filter(Number.isFinite);
+  if (expectedNumbers.length !== 1) return null;
+  const expectedNumber = expectedNumbers[0];
+  const expectedChinese = chineseNumber(expectedNumber);
+
+  // “二十角”常被连续语音识别为“二十九”。只有当前问题明确问“角”，
+  // 且本轮只有一个期望数字时才自动纠正，避免把真正的错误答案改对。
+  if (requiredUnit === "角" && heard === `${expectedChinese}九`) {
+    return { text: `${expectedChinese}角`, reason: "contextual-number-unit-correction" };
+  }
+  return null;
+}
+
 function normalizeComparableVoicePhrase(value) {
   return normalizeText(value).replace(/\d+/g, (digits) => chineseNumber(Number(digits)));
 }
@@ -8368,7 +8483,7 @@ function findContextualVoiceCorrection(heardText, context) {
   const normalizedExpected = expected.map((item) => normalizeText(item));
   const unitCorrected = normalizeSafeVoiceUnits(heardText, context);
   if (unitCorrected !== heardText) {
-    return { text: unitCorrected, needsConfirmation: true, reason: "unit-homophone" };
+    return { text: unitCorrected, reason: "unit-homophone" };
   }
 
   const heard = normalizeText(heardText);
@@ -8382,7 +8497,7 @@ function findContextualVoiceCorrection(heardText, context) {
   if (compareCorrections[heard]) {
     const suggestion = compareCorrections[heard];
     if (normalizedExpected.some((item) => item.includes(suggestion) || suggestion.includes(item))) {
-      return { text: suggestion, needsConfirmation: true, reason: "comparison-homophone" };
+      return { text: suggestion, reason: "comparison-homophone" };
     }
   }
 
@@ -8398,9 +8513,9 @@ function findContextualVoiceCorrection(heardText, context) {
   const targets = numberHomophones[heard] || [];
   const matchingTargets = targets.filter((target) => normalizedExpected.some((item) => item === target || item.startsWith(target)));
   if (matchingTargets.length === 1) {
-    return { text: matchingTargets[0], needsConfirmation: true, reason: "number-homophone" };
+    return { text: matchingTargets[0], reason: "number-homophone" };
   }
-  return { text: unitCorrected, needsConfirmation: false };
+  return { text: unitCorrected, reason: "" };
 }
 
 function shortVoicePrompt(prompt) {

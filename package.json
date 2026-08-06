@@ -14,6 +14,7 @@
     "audit:teaching": "node teaching-engine/teaching-quality-audit.js",
     "audit:scenarios": "node teaching-engine/teaching-scenario-audit.js",
     "audit:paths": "node teaching-engine/teaching-path-audit.js",
-    "audit:page": "node teaching-engine/page-flow-audit.js"
+    "audit:page": "node teaching-engine/page-flow-audit.js",
+    "audit:runtime": "node teaching-engine/runtime-integrity-audit.js"
   }
 }
