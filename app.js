@@ -5478,6 +5478,7 @@ let state = {
   voiceConfirmation: null,
   lastVoiceDiagnostic: null,
   isProcessing: false,
+  teacherReaction: "guiding",
   showLessonPicker: false,
   showKeyboard: false,
   showVisual: true,
@@ -5654,6 +5655,7 @@ function advanceLessonQuestion(reason = "换一道同类题") {
   const starter = createGuidedStepPlan(lesson, selectVariantStartStepIndex(lesson));
 
   state.phase = "guiding";
+  state.teacherReaction = /通过|讲清|过关/.test(reason) ? "celebrating" : "guiding";
   state.completedSteps = starter.index;
   state.mastery = Math.max(58, Math.min(state.mastery, 70));
   state.strategyIndex = 0;
@@ -5934,6 +5936,9 @@ function getKidTeacherMood() {
   if (currentTtsRequest) return "thinking";
   if (state.recording) return "listening";
   if (state.isProcessing) return "thinking";
+  if (["celebrating", "encouraging", "responding", "guiding"].includes(state.teacherReaction)) {
+    return state.teacherReaction;
+  }
   if (state.phase === "summary" || state.teachingState === "MASTERED") return "celebrating";
   if (state.phase === "repair") return "encouraging";
   if (state.lastStudentText) return "responding";
@@ -7722,7 +7727,8 @@ async function toggleVoiceInput(event) {
 function scheduleLatestHelpAction(kind) {
   cancelSupersededInteraction();
   state.isProcessing = true;
-  state.aiContext = kind === "visual" ? "孩子想看当前这一步的图。" : "孩子需要更小的一步。";
+  state.teacherReaction = kind === "visual" ? "guiding" : "encouraging";
+  state.aiContext = kind === "visual" ? "孩子选择只看当前这一步的图。" : "孩子需要老师口头提示一个线索。";
   render();
   pendingHelpTimer = window.setTimeout(() => {
     pendingHelpTimer = null;
@@ -7738,14 +7744,17 @@ function scheduleLatestHelpAction(kind) {
 function showCurrentStepVisual() {
   const lesson = currentLesson();
   const plan = createGuidedStepPlan(lesson, state.completedSteps);
+  const visualLesson = createActiveVisualLesson(lesson);
+  const boardQuestion = getKidBoardPrompt(visualLesson);
   state.showVisual = true;
   state.strategyIndex = Math.max(state.strategyIndex, 1);
-  state.aiContext = "我们只看当前这一步的图。";
+  state.teacherReaction = "guiding";
+  state.aiContext = "老师不重复口头提示，改为引导孩子观察当前图示。";
   state.currentAtomName = plan.label;
   state.currentStep = `小台阶 ${plan.index + 1}：${plan.label}`;
-  state.aiMessage = teacherRepairMessage("先看图里的关键数。", plan);
+  state.aiMessage = `这次不重复刚才的话，我们只看右边的图。先用手指找到图里的数量、位置或单位，再回答图下方这个问题：${boardQuestion}`;
   state.bestStrategy = "画图";
-  addEvidence("看图辅助", "孩子请求用图解释当前小步，老师没有跳到其他内容。", "画图");
+  addEvidence("看图辅助", `孩子改用图观察「${plan.label}」，老师只追问图下方问题。`, "画图");
   resetGeneratedVisualForTurn();
   render();
   speakCurrentMessage();
@@ -7883,6 +7892,7 @@ function changeLesson(reason, targetIndex = null) {
   const starter = lesson.useQuestionBankTutor ? createGuidedStepPlan(lesson, 0) : null;
   state.lessonIndex = nextIndex;
   state.phase = "guiding";
+  state.teacherReaction = "guiding";
   state.recording = false;
   state.voiceStatus = "idle";
   state.voiceConfirmation = null;
@@ -7918,6 +7928,7 @@ function changeLesson(reason, targetIndex = null) {
 function startTeachback() {
   const lesson = currentLesson();
   state.phase = "teachback";
+  state.teacherReaction = "responding";
   state.aiContext = "轮到你当小老师了。";
   state.aiMessage = lesson.teachbackPrompt;
   state.currentStep = "小台阶 3：用自己的话讲";
@@ -9023,6 +9034,7 @@ function handleChildInput(text, inputType) {
   }
 
   cancelSupersededInteraction();
+  state.teacherReaction = "responding";
   state.voiceConfirmation = null;
   state.transcript = "";
 
@@ -9156,6 +9168,7 @@ function applyGatewayTutor(payload, inputType) {
   }
 
   state.phase = nextPhase;
+  state.teacherReaction = nextPhase === "summary" ? "celebrating" : nextPhase === "repair" ? "encouraging" : "responding";
   state.aiContext = payload.aiContext || state.aiContext;
   state.aiMessage = payload.aiMessage || state.aiMessage;
   state.teachingState = payload.teachingState || state.teachingState;
@@ -9240,6 +9253,7 @@ function evaluateAttempt(text, inputType) {
 
   if (unclear) {
     state.phase = "guiding";
+    state.teacherReaction = "encouraging";
     state.mastery = Math.max(48, state.mastery - 1);
     state.currentStep = `小台阶 1：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0] || "先读题"}`;
     state.aiContext = "孩子输入不完整，先拉回当前题。";
@@ -9253,6 +9267,7 @@ function evaluateAttempt(text, inputType) {
 
   if (knowsProcess && picksAnswer) {
     state.phase = "teachback";
+    state.teacherReaction = "celebrating";
     state.mastery = Math.max(state.mastery, 74);
     state.completedSteps = getLessonLadderSteps(lesson).length;
     state.currentStep = "小台阶 3：讲给老师听";
@@ -9267,6 +9282,7 @@ function evaluateAttempt(text, inputType) {
 
   if (picksAnswer) {
     state.phase = "teachback";
+    state.teacherReaction = "celebrating";
     state.mastery = Math.max(state.mastery, 70);
     state.completedSteps = Math.max(state.completedSteps, Math.min(1, getLessonLadderSteps(lesson).length));
     state.currentStep = "小台阶：说清原因";
@@ -9281,6 +9297,7 @@ function evaluateAttempt(text, inputType) {
 
   if (knowsProcess) {
     state.phase = "guiding";
+    state.teacherReaction = "responding";
     state.mastery = Math.max(56, state.mastery);
     state.currentStep = "小台阶：检查答案";
     state.aiContext = "孩子说到了一部分方法，但答案还不稳。";
@@ -9293,6 +9310,7 @@ function evaluateAttempt(text, inputType) {
   }
 
   state.phase = "repair";
+  state.teacherReaction = "encouraging";
   state.mastery = Math.max(52, state.mastery - 2);
   state.aiContext = "孩子回答和当前题不匹配，先给一个更小提示。";
   state.aiMessage = `先停一下。回到「${lesson.node || lesson.title}」这道题：${activeQuestion?.prompt || lesson.problem}。请只回答这个小问题：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0]}。`;
@@ -9372,6 +9390,7 @@ function advanceGuidedStepOrComplete(lesson, plan, inputType) {
 
   const nextPlan = createGuidedStepPlan(lesson, plan.index + 1);
   state.phase = "guiding";
+  state.teacherReaction = "celebrating";
   state.completedSteps = nextPlan.index;
   clearGuidedRepairAttempts();
   state.mastery = Math.max(state.mastery, 58 + nextPlan.index * 5);
@@ -9391,6 +9410,7 @@ function askReasonAfterFullAnswer(lesson, inputType) {
   const reasonIndex = Math.max(0, steps.findIndex((step) => step.isReason));
   const reasonPlan = createGuidedStepPlan(lesson, reasonIndex >= 0 ? reasonIndex : steps.length - 1);
   state.phase = "guiding";
+  state.teacherReaction = "celebrating";
   state.completedSteps = reasonPlan.index;
   clearGuidedRepairAttempts();
   state.mastery = Math.max(state.mastery, 70);
@@ -9422,6 +9442,7 @@ function completeQuestionBankRound(lesson, inputType) {
   }
 
   state.phase = "summary";
+  state.teacherReaction = "celebrating";
   state.mastery = Math.max(state.mastery, 86);
   state.completedSteps = getLessonLadderSteps(lesson).length;
   state.currentStep = "完成：会做，也能说原因";
@@ -9443,6 +9464,7 @@ function startKnowledgeTeachbackCheck(lesson, inputType) {
   const key = `${lesson?.id || ""}|${lesson?.activeQuestion?.id || lesson?.problem || ""}|teachback|${state.passedQuestionIds?.length || 0}`;
   const move = createStrategyDialogueMove(family, "teachback", key);
   state.phase = "teachback";
+  state.teacherReaction = "responding";
   state.mastery = Math.max(state.mastery, 82);
   state.completedSteps = getLessonLadderSteps(lesson).length;
   state.currentStep = "最后一步：讲给老师听";
@@ -9516,6 +9538,7 @@ function createCompletionMessage(lesson = currentLesson(), prefix = "这个知�
 
 function keepOnCurrentGuidedStep(lesson, plan, prefix, inputType, signal) {
   state.phase = "repair";
+  state.teacherReaction = "encouraging";
   recordGuidedRepairAttempt(lesson, plan);
   state.mastery = Math.max(50, state.mastery - 1);
   state.teachingState = "GUIDED_STEP";
@@ -9689,6 +9712,7 @@ function maybeContinueWithVariantAfterTeachback(inputType) {
   const starter = createGuidedStepPlan(lesson, selectVariantStartStepIndex(lesson));
 
   state.phase = "guiding";
+  state.teacherReaction = "guiding";
   state.completedSteps = starter.index;
   clearGuidedRepairAttempts();
   state.mastery = Math.max(state.mastery, 76);
@@ -9733,6 +9757,7 @@ function evaluateTeachback(text, inputType) {
     const family = getLessonTeachingFamily(lesson);
     const move = createStrategyDialogueMove(family, "cannotAnswer", `${lesson?.id || ""}|teachback|${normalized}`, { includeHint: true });
     state.phase = "repair";
+    state.teacherReaction = "encouraging";
     state.mastery = Math.max(state.mastery, 72);
     state.currentStep = "最后一步：再讲一次";
     state.aiContext = "孩子讲不出来，老师给半句示范。";
@@ -9765,6 +9790,7 @@ function evaluateTeachback(text, inputType) {
     if (maybeContinueWithVariantAfterTeachback(inputType)) return;
 
     state.phase = "summary";
+    state.teacherReaction = "celebrating";
     state.mastery = 86;
     state.completedSteps = getLessonLadderSteps(lesson).length;
     state.currentStep = "完成：能讲清楚原因";
@@ -9783,6 +9809,7 @@ function evaluateTeachback(text, inputType) {
   }
 
   state.phase = "repair";
+  state.teacherReaction = "encouraging";
   state.mastery = Math.max(state.mastery, 68);
   state.currentStep = "小台阶 3：再讲一次";
   state.aiContext = "你已经说出了一部分，还差一点原因。";
@@ -9800,15 +9827,16 @@ function switchExplanation(reason) {
   const lesson = currentLesson();
   const plan = createGuidedStepPlan(lesson, state.completedSteps);
   state.phase = "repair";
+  state.teacherReaction = "encouraging";
   state.strategyIndex = Math.min(lesson.strategies.length - 1, state.strategyIndex + 1);
-  state.aiContext = reason;
-  state.aiMessage = teacherRepairMessage("没关系。", plan);
+  state.aiContext = "老师只给一个口头线索，不直接展示答案。";
+  state.aiMessage = teacherRepairMessage("我先给你一个小提示，不直接说答案。", plan);
   state.showVisual = true;
   state.bestStrategy = "画图";
   state.currentAtomName = plan.label;
   state.currentStep = `小台阶 ${plan.index + 1}：${plan.label}`;
   resetGeneratedVisualForTurn();
-  addEvidence("换讲法", `AI 停在「${plan.label}」并给更小提示。`, "小提示");
+  addEvidence("口头提示", `老师停在「${plan.label}」，只给一个口头线索。`, "口头提示");
   render();
   speakCurrentMessage();
 }
