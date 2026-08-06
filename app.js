@@ -5515,6 +5515,50 @@ let recordingSession = null;
 let recognitionSession = null;
 let realtimeVoiceSession = null;
 let currentAudio = null;
+let currentTtsRequest = null;
+let currentTutorRequest = null;
+let ttsGeneration = 0;
+let tutorGeneration = 0;
+let pendingHelpTimer = null;
+
+function stopTeacherSpeech() {
+  ttsGeneration += 1;
+  if (currentTtsRequest) {
+    currentTtsRequest.abort();
+    currentTtsRequest = null;
+  }
+  if (currentAudio) {
+    try {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      currentAudio.removeAttribute("src");
+      currentAudio.load();
+    } catch (error) {
+      console.debug("Previous teacher audio already stopped", error);
+    }
+    currentAudio = null;
+  }
+  window.speechSynthesis?.cancel?.();
+  setTeacherLiveMood(getKidTeacherMood());
+}
+
+function cancelPendingTutorResponse() {
+  tutorGeneration += 1;
+  if (currentTutorRequest) {
+    currentTutorRequest.abort();
+    currentTutorRequest = null;
+  }
+}
+
+function cancelSupersededInteraction({ cancelHelp = true } = {}) {
+  cancelPendingTutorResponse();
+  stopTeacherSpeech();
+  if (cancelHelp && pendingHelpTimer) {
+    window.clearTimeout(pendingHelpTimer);
+    pendingHelpTimer = null;
+  }
+  state.isProcessing = false;
+}
 
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
@@ -5885,6 +5929,39 @@ function renderKidProgressDots(lesson) {
   `;
 }
 
+function getKidTeacherMood() {
+  if (currentAudio && !currentAudio.paused) return "speaking";
+  if (currentTtsRequest) return "thinking";
+  if (state.recording) return "listening";
+  if (state.isProcessing) return "thinking";
+  if (state.phase === "summary" || state.teachingState === "MASTERED") return "celebrating";
+  if (state.phase === "repair") return "encouraging";
+  if (state.lastStudentText) return "responding";
+  return "guiding";
+}
+
+function getKidTeacherMoodLabel(mood) {
+  return {
+    listening: "我在听",
+    thinking: "我想一想",
+    speaking: "我来讲",
+    celebrating: "真不错",
+    encouraging: "一起试试",
+    responding: "接着来",
+    guiding: "看这里",
+  }[mood] || "看这里";
+}
+
+function setTeacherLiveMood(mood) {
+  const moods = ["guiding", "listening", "thinking", "speaking", "celebrating", "encouraging", "responding"];
+  document.querySelectorAll(".kid-teacher-avatar").forEach((node) => {
+    moods.forEach((name) => node.classList.remove(`is-${name}`));
+    node.classList.add(`is-${mood}`);
+    const label = node.querySelector(".kid-teacher-status");
+    if (label) label.textContent = getKidTeacherMoodLabel(mood);
+  });
+}
+
 function renderKidQuestionBubble(lesson) {
   const plan = createGuidedStepPlan(lesson, state.completedSteps);
   const problem = childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem);
@@ -5894,9 +5971,11 @@ function renderKidQuestionBubble(lesson) {
       ? "这一步学会了。你可以换下一个知识点，也可以再练一题。"
       : `看这题：${problem} ${shortPrompt}`;
   const message = state.aiMessage || fallbackMessage;
+  const messageLength = Array.from(message).length;
+  const lengthClass = messageLength > 118 ? "is-long" : messageLength > 62 ? "is-medium" : "is-short";
 
   return `
-    <section class="kid-speech-bubble" aria-label="老师提问">
+    <section class="kid-speech-bubble ${lengthClass}" aria-label="老师提问">
       <span class="kid-speaker-label">乐之老师</span>
       <p>${escapeText(message)}</p>
       ${state.lastStudentText ? `<div class="kid-last-answer"><span>刚才你说</span><strong>${escapeText(state.lastStudentText)}</strong></div>` : ""}
@@ -5905,14 +5984,14 @@ function renderKidQuestionBubble(lesson) {
 }
 
 function renderKidVoicePanel() {
-  const locked = state.isProcessing || state.voiceStatus === "processing";
-  const inputLocked = state.recording || locked;
+  const recognitionBusy = state.voiceStatus === "processing";
+  const inputLocked = state.recording || recognitionBusy;
   return `
     <section class="kid-input-panel" aria-label="回答区">
       <div class="kid-answer-actions">
-        <button class="kid-primary-voice ${state.recording ? "is-recording" : ""} ${locked ? "is-processing" : ""}" data-action="voice" ${locked ? "disabled" : ""}>
+        <button class="kid-primary-voice ${state.recording ? "is-recording" : ""} ${recognitionBusy ? "is-processing" : ""}" data-action="voice" ${recognitionBusy ? "disabled" : ""}>
           ${icon("mic")}
-          <span>${state.recording ? "说完了" : locked ? "老师正在想" : "点一下开始说"}</span>
+          <span>${state.recording ? "说完了" : recognitionBusy ? "正在听清" : state.isProcessing ? "有新想法就说" : "点一下开始说"}</span>
         </button>
         <button class="kid-type-trigger" data-action="toggle-keyboard" ${inputLocked ? "disabled" : ""}>
           ${icon("keyboard")}
@@ -5949,15 +6028,16 @@ function renderVoiceConfirmation() {
 
 function renderKidHelpButtons() {
   const explainAction = state.phase === "teachback" || state.phase === "repair" ? "cant-explain" : "dont-understand";
+  const teachback = state.phase === "teachback";
   return `
     <div class="kid-help-row" aria-label="求助按钮">
-      <button class="kid-help-button" data-action="${explainAction}">
+      <button class="kid-help-button" data-action="${explainAction}" aria-label="${teachback ? "老师先示范一句，我再跟着讲" : "老师把当前问题再拆小一步"}">
         <span aria-hidden="true">🤔</span>
-        <strong>${state.phase === "teachback" ? "我讲不出来" : "我需要提示"}</strong>
+        <span class="kid-help-copy"><strong>${teachback ? "老师先说一句" : "老师提示一步"}</strong><small>${teachback ? "我照着说" : "把问题拆简单"}</small></span>
       </button>
-      <button class="kid-help-button" data-action="show-visual">
+      <button class="kid-help-button" data-action="show-visual" aria-label="把当前这一步换成图来讲">
         ${icon("image")}
-        <strong>看提示图</strong>
+        <span class="kid-help-copy"><strong>老师画图讲</strong><small>只讲当前一步</small></span>
       </button>
       <button class="kid-help-button kid-help-secondary" data-action="change-lesson">
         ${icon("book")}
@@ -6164,9 +6244,11 @@ function getKidBoardPrompt(lesson) {
 }
 
 function renderKidTeacherAvatar(size = "large") {
+  const mood = getKidTeacherMood();
   return `
-    <div class="kid-teacher-avatar kid-teacher-${size}" aria-hidden="true">
+    <div class="kid-teacher-avatar kid-teacher-${size} is-${mood}" aria-hidden="true">
       <img src="${TEACHER_AVATAR_SRC}" alt="" />
+      ${size === "large" ? `<span class="kid-teacher-status">${getKidTeacherMoodLabel(mood)}</span>` : ""}
     </div>
   `;
 }
@@ -7632,8 +7714,41 @@ function bindEvents() {
 
 async function toggleVoiceInput(event) {
   event.preventDefault();
-  if (state.isProcessing || state.voiceStatus === "processing") return;
+  if (state.voiceStatus === "processing") return;
+  if (!state.recording) cancelSupersededInteraction();
   await handleVoiceButton();
+}
+
+function scheduleLatestHelpAction(kind) {
+  cancelSupersededInteraction();
+  state.isProcessing = true;
+  state.aiContext = kind === "visual" ? "孩子想看当前这一步的图。" : "孩子需要更小的一步。";
+  render();
+  pendingHelpTimer = window.setTimeout(() => {
+    pendingHelpTimer = null;
+    state.isProcessing = false;
+    if (kind === "visual") {
+      showCurrentStepVisual();
+    } else {
+      switchExplanation("孩子说没懂，老师换成更小的一步。 ");
+    }
+  }, 220);
+}
+
+function showCurrentStepVisual() {
+  const lesson = currentLesson();
+  const plan = createGuidedStepPlan(lesson, state.completedSteps);
+  state.showVisual = true;
+  state.strategyIndex = Math.max(state.strategyIndex, 1);
+  state.aiContext = "我们只看当前这一步的图。";
+  state.currentAtomName = plan.label;
+  state.currentStep = `小台阶 ${plan.index + 1}：${plan.label}`;
+  state.aiMessage = teacherRepairMessage("先看图里的关键数。", plan);
+  state.bestStrategy = "画图";
+  addEvidence("看图辅助", "孩子请求用图解释当前小步，老师没有跳到其他内容。", "画图");
+  resetGeneratedVisualForTurn();
+  render();
+  speakCurrentMessage();
 }
 
 async function handleAction(event) {
@@ -7711,7 +7826,7 @@ async function handleAction(event) {
   }
 
   if (action === "dont-understand" || action === "cant-explain") {
-    switchExplanation("孩子说没懂，AI 换了一种讲法。");
+    scheduleLatestHelpAction("hint");
     return;
   }
 
@@ -7738,19 +7853,7 @@ async function handleAction(event) {
   }
 
   if (action === "show-visual") {
-    const lesson = currentLesson();
-    const plan = createGuidedStepPlan(lesson, state.completedSteps);
-    state.showVisual = true;
-    state.strategyIndex = Math.max(state.strategyIndex, 1);
-    state.aiContext = "我们看图再说一遍。";
-    state.currentAtomName = plan.label;
-    state.currentStep = `小台阶 ${plan.index + 1}：${plan.label}`;
-    state.aiMessage = teacherRepairMessage("先看图里的关键数。", plan);
-    state.bestStrategy = "画图";
-    addEvidence("看图辅助", "孩子请求再看图，AI 切换到图示讲法。", "画图");
-    resetGeneratedVisualForTurn();
-    render();
-    speakCurrentMessage();
+    scheduleLatestHelpAction("visual");
     return;
   }
 
@@ -8909,8 +9012,8 @@ function blobToDataUrl(blob) {
 }
 
 function handleChildInput(text, inputType) {
-  if (state.isProcessing || state.voiceStatus === "processing" || state.recording) {
-    toastMessage("老师正在回复，等这句说完再继续。");
+  if (state.voiceStatus === "processing" || state.recording) {
+    toastMessage("先把这一句话说完，我马上接着听。");
     return;
   }
 
@@ -8919,6 +9022,7 @@ function handleChildInput(text, inputType) {
     return;
   }
 
+  cancelSupersededInteraction();
   state.voiceConfirmation = null;
   state.transcript = "";
 
@@ -8941,10 +9045,9 @@ function handleChildInput(text, inputType) {
 
   state.lastStudentText = text;
   state.isProcessing = true;
-  state.voiceStatus = "processing";
   resetGeneratedVisualForTurn();
   render();
-  askGatewayTutor(text, inputType);
+  void askGatewayTutor(text, inputType);
 }
 
 async function askGatewayTutor(text, inputType) {
@@ -8965,10 +9068,15 @@ async function askGatewayTutor(text, inputType) {
     return;
   }
 
+  const requestGeneration = ++tutorGeneration;
+  const requestController = new AbortController();
+  currentTutorRequest = requestController;
+
   try {
     const response = await fetch("/api/learning/turn", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: requestController.signal,
       body: JSON.stringify({
         text,
         inputType,
@@ -9011,15 +9119,21 @@ async function askGatewayTutor(text, inputType) {
         },
       }),
     });
+    if (requestGeneration !== tutorGeneration) return;
     const payload = await response.json().catch(() => ({}));
+    if (requestGeneration !== tutorGeneration) return;
     if (!response.ok || payload.mode === "mock") {
       throw new Error(payload.detail || payload.error || "模型暂不可用");
     }
     applyGatewayTutor(payload, inputType);
-  } catch {
+  } catch (error) {
+    if (error?.name === "AbortError" || requestGeneration !== tutorGeneration) return;
     evaluateLocally(text, inputType);
+  } finally {
+    if (requestGeneration === tutorGeneration) currentTutorRequest = null;
   }
 
+  if (requestGeneration !== tutorGeneration) return;
   state.voiceStatus = "idle";
   state.isProcessing = false;
   render();
@@ -9695,42 +9809,68 @@ function switchExplanation(reason) {
   state.currentStep = `小台阶 ${plan.index + 1}：${plan.label}`;
   resetGeneratedVisualForTurn();
   addEvidence("换讲法", `AI 停在「${plan.label}」并给更小提示。`, "小提示");
-  speakCurrentMessage();
   render();
+  speakCurrentMessage();
 }
 
 async function speakCurrentMessage() {
   const text = toSpokenText(state.aiMessage.trim());
+  stopTeacherSpeech();
   if (!text) return;
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio = null;
-  }
+  const playbackGeneration = ttsGeneration;
+  setTeacherLiveMood("thinking");
 
   if (window.location.protocol !== "file:") {
+    const requestController = new AbortController();
+    currentTtsRequest = requestController;
     try {
       const response = await fetch("/api/speech/synthesis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: requestController.signal,
         body: JSON.stringify({ text }),
       });
+      if (playbackGeneration !== ttsGeneration) return;
       const payload = await response.json().catch(() => ({}));
+      if (playbackGeneration !== ttsGeneration) return;
       const audioUrl =
         payload.audioDataUrl ||
         (payload.audioBase64 ? `data:audio/${payload.format || "mp3"};base64,${payload.audioBase64}` : "");
       if (response.ok && audioUrl) {
-        currentAudio = new Audio(audioUrl);
-        await currentAudio.play();
+        const audio = new Audio(audioUrl);
+        currentAudio = audio;
+        audio.onplay = () => {
+          if (playbackGeneration === ttsGeneration) setTeacherLiveMood("speaking");
+        };
+        audio.onended = () => {
+          if (currentAudio === audio) currentAudio = null;
+          if (playbackGeneration === ttsGeneration) setTeacherLiveMood(getKidTeacherMood());
+        };
+        audio.onerror = () => {
+          if (currentAudio === audio) currentAudio = null;
+          if (playbackGeneration === ttsGeneration) setTeacherLiveMood(getKidTeacherMood());
+        };
+        await audio.play();
         return;
       }
       notifyTtsProblem(payload);
     } catch (error) {
+      if (error?.name === "AbortError" || playbackGeneration !== ttsGeneration) return;
       notifyTtsProblem({ error: error?.message || "TTS request failed" });
+    } finally {
+      if (playbackGeneration === ttsGeneration) currentTtsRequest = null;
     }
   }
 
-  if (!ALLOW_BROWSER_TTS_FALLBACK) return;
-  if (!window.speechSynthesis) return;
+  if (playbackGeneration !== ttsGeneration) return;
+  if (!ALLOW_BROWSER_TTS_FALLBACK) {
+    setTeacherLiveMood(getKidTeacherMood());
+    return;
+  }
+  if (!window.speechSynthesis) {
+    setTeacherLiveMood(getKidTeacherMood());
+    return;
+  }
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "zh-CN";
@@ -9738,6 +9878,12 @@ async function speakCurrentMessage() {
   if (preferredVoice) utterance.voice = preferredVoice;
   utterance.rate = 0.88;
   utterance.pitch = 1.04;
+  utterance.onstart = () => {
+    if (playbackGeneration === ttsGeneration) setTeacherLiveMood("speaking");
+  };
+  utterance.onend = () => {
+    if (playbackGeneration === ttsGeneration) setTeacherLiveMood(getKidTeacherMood());
+  };
   window.speechSynthesis.speak(utterance);
 }
 

@@ -9354,3 +9354,535 @@ body:has(.app-shell.is-child) {
     border-top-width: 1px;
   }
 }
+
+/* Child learning studio v21 -----------------------------------------------
+   One consistent reading scale, a useful tutor/board split, and visible
+   teacher states. Newer rules intentionally supersede earlier experiments. */
+.app-shell.is-child {
+  --kid-type-ui: 12px;
+  --kid-type-body: 16px;
+  --kid-type-focus: 22px;
+}
+
+.app-shell.is-child .kid-brand strong {
+  font-size: 22px;
+}
+
+.app-shell.is-child .kid-brand small,
+.app-shell.is-child .kid-progress-step em,
+.app-shell.is-child .kid-day-pill strong,
+.app-shell.is-child .kid-lesson-switch span,
+.app-shell.is-child .kid-board-ribbon,
+.app-shell.is-child .kid-board-head span,
+.app-shell.is-child .kid-board-head strong {
+  font-size: var(--kid-type-ui);
+}
+
+.app-shell.is-child .kid-board-card h2,
+.app-shell.is-child .kid-board-card h3 {
+  font-size: var(--kid-type-focus);
+  line-height: 1.3;
+}
+
+.app-shell.is-child .kid-board-fallback .svg-title {
+  font-size: 23px;
+}
+
+.app-shell.is-child .kid-board-fallback .svg-label,
+.app-shell.is-child .kid-board-fallback .svg-note,
+.app-shell.is-child .kid-board-fallback .svg-win {
+  font-size: 19px;
+}
+
+.app-shell.is-child .kid-speech-bubble p,
+.app-shell.is-child .kid-primary-voice span,
+.app-shell.is-child .kid-think-box strong {
+  font-size: var(--kid-type-body);
+}
+
+.app-shell.is-child .kid-teacher-avatar {
+  position: relative;
+  overflow: visible;
+  isolation: isolate;
+}
+
+.app-shell.is-child .kid-teacher-avatar img {
+  display: block;
+  transform-origin: 50% 92%;
+  will-change: transform;
+}
+
+.app-shell.is-child .kid-teacher-status {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  border-radius: 999px;
+  color: #245a48;
+  background: rgba(240, 251, 247, 0.94);
+  box-shadow: 0 5px 14px rgba(38, 56, 74, 0.12);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-guiding img,
+.app-shell.is-child .kid-teacher-avatar.is-responding img {
+  animation: kidTeacherBreathe 4.2s ease-in-out infinite;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-listening img {
+  animation: kidTeacherListen 1.5s ease-in-out infinite;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-thinking img {
+  animation: kidTeacherThink 1.8s ease-in-out infinite;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-speaking img {
+  animation: kidTeacherSpeak 0.8s ease-in-out infinite;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-encouraging img {
+  animation: kidTeacherNod 1.5s ease-in-out 2;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-celebrating img {
+  animation: kidTeacherCelebrate 1s ease-in-out 2;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-celebrating::after {
+  content: "✦  ✦";
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  color: #d79620;
+  font-size: 20px;
+  animation: kidTeacherSparkle 1.2s ease-in-out infinite;
+}
+
+@keyframes kidTeacherBreathe {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-4px) rotate(0.4deg); }
+}
+
+@keyframes kidTeacherListen {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.018); }
+}
+
+@keyframes kidTeacherThink {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-1.4deg); }
+}
+
+@keyframes kidTeacherSpeak {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes kidTeacherNod {
+  0%, 100% { transform: rotate(0deg); }
+  45% { transform: rotate(1.8deg); }
+}
+
+@keyframes kidTeacherCelebrate {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8px) scale(1.025); }
+}
+
+@keyframes kidTeacherSparkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+.app-shell.is-child .kid-help-button {
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 7px 11px;
+  text-align: left;
+}
+
+.app-shell.is-child .kid-help-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.app-shell.is-child .kid-help-copy strong {
+  color: var(--kid-ink);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.app-shell.is-child .kid-help-copy small {
+  color: var(--kid-muted);
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+@media (min-width: 1200px) and (orientation: landscape) {
+  .app-shell.is-child .kid-workspace {
+    grid-template-columns: clamp(440px, 31vw, 600px) minmax(0, 1fr);
+  }
+
+  .app-shell.is-child .kid-coach {
+    grid-template-rows: minmax(210px, 29vh) auto auto auto;
+    align-content: center;
+    gap: 12px;
+    padding: 24px clamp(24px, 2.2vw, 40px);
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: min(100%, 360px);
+    height: clamp(210px, 28vh, 300px);
+    border-radius: 14px;
+    background: #e7f1f5;
+    box-shadow: 0 12px 26px rgba(38, 56, 74, 0.1);
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-large img {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+    object-position: center 18%;
+  }
+
+  .app-shell.is-child .kid-speech-bubble {
+    min-height: 116px;
+    max-height: min(32vh, 310px);
+    padding: 16px 18px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble.is-medium {
+    min-height: 158px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble.is-long {
+    min-height: 208px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble p {
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  .app-shell.is-child .kid-help-row {
+    gap: 10px;
+  }
+
+  .app-shell.is-child .kid-help-button {
+    min-height: 50px;
+  }
+
+  .app-shell.is-child .kid-board-card {
+    width: min(100%, 1060px);
+  }
+
+  .app-shell.is-child .kid-board-card-generic .lesson-svg,
+  .app-shell.is-child .kid-board-card-generic .fraction-svg,
+  .app-shell.is-child .kid-board-card-generic .primary-thinking-svg {
+    width: min(100%, 650px);
+    max-height: min(46vh, 390px);
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1199px) and (orientation: landscape) {
+  .app-shell.is-child .kid-workspace {
+    grid-template-columns: clamp(330px, 37vw, 410px) minmax(0, 1fr);
+  }
+
+  .app-shell.is-child .kid-coach {
+    grid-template-rows: minmax(142px, 23vh) auto auto auto;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: min(100%, 250px);
+    height: clamp(142px, 22vh, 190px);
+    border-radius: 12px;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-large img {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+    object-position: center 18%;
+  }
+
+  .app-shell.is-child .kid-speech-bubble {
+    min-height: 104px;
+    max-height: min(29vh, 216px);
+  }
+
+  .app-shell.is-child .kid-speech-bubble.is-long {
+    min-height: 170px;
+  }
+}
+
+@media (min-width: 700px) and (orientation: landscape) and (max-height: 760px) {
+  .app-shell.is-child .kid-coach {
+    grid-template-rows: 132px auto auto auto;
+    gap: 7px;
+    padding: 10px 18px;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: min(100%, 220px);
+    height: 132px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble {
+    min-height: 92px;
+    max-height: 178px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble.is-medium {
+    min-height: 124px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble.is-long {
+    min-height: 156px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble p {
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .app-shell.is-child .kid-help-button {
+    min-height: 44px;
+  }
+
+  .app-shell.is-child .kid-help-copy strong {
+    font-size: 12px;
+  }
+
+  .app-shell.is-child .kid-help-copy small {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 699px), (min-width: 700px) and (max-width: 1199px) and (orientation: portrait) {
+  .app-shell.is-child .kid-speech-bubble.is-medium {
+    min-height: 132px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble.is-long {
+    min-height: 172px;
+    max-height: 30vh;
+    overflow: auto;
+  }
+
+  .app-shell.is-child .kid-help-copy strong {
+    font-size: 12px;
+  }
+
+  .app-shell.is-child .kid-help-copy small {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.is-child .kid-teacher-avatar img,
+  .app-shell.is-child .kid-teacher-avatar::after {
+    animation: none !important;
+  }
+}
+
+/* Child learning studio v22 -----------------------------------------------
+   Final layout ownership for the tutor rail. Earlier responsive experiments
+   used multi-column coach docks; these rules keep the teacher conversation in
+   one predictable reading column and prevent two-line help labels clipping. */
+.app-shell.is-child .kid-help-button {
+  height: auto;
+  overflow: visible;
+}
+
+.app-shell.is-child .kid-help-button .kid-help-copy {
+  flex: 1 1 auto;
+  width: auto;
+  height: auto;
+  overflow: visible;
+}
+
+.app-shell.is-child .kid-help-button > span:first-child,
+.app-shell.is-child .kid-help-button > svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.app-shell.is-child .kid-help-button .kid-help-copy strong,
+.app-shell.is-child .kid-help-button .kid-help-copy small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+@media (min-width: 1200px) and (orientation: landscape) {
+  .app-shell.is-child .kid-workspace {
+    grid-template-columns: clamp(430px, 34vw, 560px) minmax(0, 1fr);
+  }
+
+  .app-shell.is-child .kid-coach {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "teacher"
+      "speech"
+      "input"
+      "help";
+    align-content: center;
+    align-items: stretch;
+    justify-items: stretch;
+    gap: 10px;
+    padding: 16px clamp(24px, 2.2vw, 36px);
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    grid-area: teacher;
+    justify-self: center;
+    width: 100%;
+    max-width: 300px;
+    height: clamp(210px, 30vh, 290px);
+    overflow: hidden;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-large img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+  }
+
+  .app-shell.is-child .kid-speech-bubble {
+    grid-area: speech;
+    width: 100%;
+    min-height: 118px;
+    max-height: min(31vh, 260px);
+  }
+
+  .app-shell.is-child .kid-speech-bubble.is-medium {
+    min-height: 150px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble.is-long {
+    min-height: 190px;
+  }
+
+  .app-shell.is-child .kid-input-panel {
+    grid-area: input;
+  }
+
+  .app-shell.is-child .kid-help-row {
+    grid-area: help;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: stretch;
+  }
+
+  .app-shell.is-child .kid-help-button {
+    min-height: 56px;
+    padding: 8px 12px;
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1199px) and (orientation: landscape) {
+  .app-shell.is-child .kid-workspace {
+    grid-template-columns: clamp(340px, 38vw, 420px) minmax(0, 1fr);
+  }
+
+  .app-shell.is-child .kid-coach {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "teacher"
+      "speech"
+      "input"
+      "help";
+    align-content: center;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 18px;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    grid-area: teacher;
+    justify-self: center;
+    width: 100%;
+    max-width: 230px;
+    height: clamp(165px, 24vh, 205px);
+    overflow: hidden;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-large img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+  }
+
+  .app-shell.is-child .kid-speech-bubble {
+    grid-area: speech;
+    width: 100%;
+    min-height: 102px;
+    max-height: min(27vh, 200px);
+  }
+
+  .app-shell.is-child .kid-input-panel {
+    grid-area: input;
+  }
+
+  .app-shell.is-child .kid-help-row {
+    grid-area: help;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-shell.is-child .kid-help-button {
+    min-height: 52px;
+    padding: 7px 10px;
+  }
+}
+
+@media (min-width: 700px) and (orientation: landscape) and (max-height: 760px) {
+  .app-shell.is-child .kid-coach {
+    grid-template-rows: auto auto auto auto;
+    gap: 7px;
+    padding-block: 9px;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: 100%;
+    max-width: 210px;
+    height: 180px;
+  }
+
+  .app-shell.is-child .kid-speech-bubble,
+  .app-shell.is-child .kid-speech-bubble.is-medium,
+  .app-shell.is-child .kid-speech-bubble.is-long {
+    min-height: 92px;
+    max-height: 150px;
+  }
+
+  .app-shell.is-child .kid-help-button {
+    min-height: 50px;
+  }
+}
+
+@media (max-width: 699px), (min-width: 700px) and (max-width: 1199px) and (orientation: portrait) {
+  .app-shell.is-child .kid-help-button {
+    min-height: 42px;
+    padding: 5px 7px;
+  }
+
+  .app-shell.is-child .kid-help-copy strong {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+}
