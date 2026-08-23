@@ -1314,13 +1314,8 @@ function getKnowledgePointFamily(pointOrId) {
 }
 
 function getLessonTeachingFamily(lesson) {
-  return (
-    lesson?.activeQuestionFamily ||
-    lesson?.sourceQuestionFamily ||
-    lesson?.questionBankStats?.family ||
-    getKnowledgePointFamily(lesson) ||
-    inferQuestionTeachingFamily(lesson, lesson?.activeQuestion)
-  );
+  const inferred = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+  return inferred || lesson?.sourceQuestionFamily || getKnowledgePointFamily(lesson) || "generic";
 }
 
 function getPlanTeachingFamily(lesson, plan = null) {
@@ -1337,7 +1332,9 @@ function getPlanTeachingFamily(lesson, plan = null) {
   ].filter(Boolean).join(" "));
 
   if ((activeFamily === "angle" || activeFamily === "shape") && isGeometryAngleContext(text)) return activeFamily;
-  if (isCompositionTeachingText(text)) return "composition";
+  // "分成"也会出现在凑十法、破十法和平均分的讲解里。只有知识点本身
+  // 已经被判定为数的组成，或当前没有更具体的方法时，才使用通用组成规则。
+  if (activeFamily === "composition" || (activeFamily === "generic" && isCompositionTeachingText(text))) return "composition";
   if (isMoneyApplicationText(text) && !isMoneyUnitConversionText(text)) return "moneyApplication";
   if (hasMoneyTerm(text)) return activeFamily === "moneyApplication" ? "moneyApplication" : "money";
   return activeFamily;
@@ -1539,10 +1536,12 @@ function createTeachingProfileForPoint(point, primaryQuestion, familyOverride = 
     .filter((step) => !/换个例子|换一道|当小老师|讲一遍|复述/.test(step))
     .slice(0, 3);
   const overlaySteps = normalizeTextList(overlay?.microSteps || overlay?.substeps, []);
+  // A reviewed knowledge-point overlay is the source of truth. Mixing the old
+  // generic steps back in can turn a multiplication lesson into mixed arithmetic.
+  const pointSpecificSteps = overlaySteps.length ? overlaySteps : selectedSourceSteps;
   const substeps = uniqueKeywords([
-    ...overlaySteps,
+    ...pointSpecificSteps,
     ...standard.steps,
-    ...selectedSourceSteps,
   ]).slice(0, 7);
 
   return {
@@ -1565,21 +1564,34 @@ function inferTeachingFamily(point, question) {
 }
 
 function inferQuestionTeachingFamily(point, question) {
-  const questionText = normalizeText(`${question?.type || ""} ${question?.prompt || ""} ${question?.explanation || ""} ${question?.answer || ""}`);
+  const questionPromptText = normalizeText(`${question?.type || ""} ${question?.prompt || ""}`);
+  const questionText = normalizeText(`${questionPromptText} ${question?.explanation || ""} ${question?.answer || ""}`);
   const pointText = normalizeText(`${point?.title || ""} ${point?.node || ""} ${point?.lesson || ""}`);
   const text = `${questionText} ${pointText}`;
   const visualType = point?.visualType || "";
   const expression = parseTeachingArithmeticExpression(question);
   const overlayFamily = getKnowledgePointFamily(point);
-  const operatorCount = countQuestionArithmeticOperators(questionText);
+  // Count only operators the child can see in the prompt. Answers and
+  // explanations often repeat the same expression and previously made a
+  // single multiplication question look like a multi-step mixed calculation.
+  const promptOperatorCount = countQuestionArithmeticOperators(questionPromptText);
+  const promptChain = parseArithmeticChain(questionPromptText);
 
   if (/经过.*时间|从.*开始.*结束|到.*结束|多长时间/.test(text)) return "timeDuration";
-  if (/钟|时间|时针|分针|几时|半时|[0-9一二三四五六七八九十]+分/.test(text) && !/元|角|人民币|纸币|硬币/.test(text)) return "time";
+  if (window.LezhiQuestionFamilyGuard?.isClockTimeTeachingText(questionText, pointText)) return "time";
   if (/分类|统计|读表|记录表|表格|象形统计图|条形统计|最多|最少/.test(text)) return "data";
   if (/推理|排除|不是|可能|一定/.test(text)) return "logic";
   if (/观察物体|正面|侧面|上面|从.*看|看到的是/.test(text)) return "observation";
   if (/图形|长方体|正方体|圆柱|球|长方形|正方形|三角形|圆|对称|平移|旋转|轴对称/.test(text)) return "shape";
   if (/角的|直角|锐角|钝角|顶点|两条边|张开/.test(text)) return "angle";
+  // Specialised arithmetic methods must win before generic wording such as
+  // "分成". Make-ten and break-ten both split a number, but they are not
+  // number-composition lessons.
+  const guardedArithmeticFamily = window.LezhiQuestionFamilyGuard?.detectSpecializedArithmeticFamily?.(questionPromptText, questionText);
+  if (guardedArithmeticFamily) return guardedArithmeticFamily;
+  if (promptOperatorCount >= 2 || promptChain || ((/连加|连减|加减混合|混合运算|乘加|乘减|小括号/.test(questionPromptText)) && promptOperatorCount >= 1)) return "mixedCalculation";
+  if (/凑十|进位|9加|8加|7加|6加/.test(text) || isMakeTenAdditionExpression(expression)) return "makeTenAdd";
+  if (/破十|退位|十几减|想加算减|借十/.test(text) || isBreakTenSubtractionExpression(expression)) return "breakTenSubtract";
   if (/分成|组成|合起来检查/.test(text) && !hasMoneyTerm(text)) return "composition";
   if (isMoneyApplicationText(text) && !isMoneyUnitConversionText(questionText)) return "moneyApplication";
   if (/元|角|人民币|钱|纸币|硬币/.test(text)) return "money";
@@ -1590,11 +1602,13 @@ function inferQuestionTeachingFamily(point, question) {
   if (/进一法|去尾法|至少需要|最多可以|每条船|每辆车|每盒|每箱/.test(text)) return "remainderApplication";
   if (/搭配|排列|组合|不同搭配|多少种|路线/.test(text)) return "arrangement";
   if (/比.*多多少|比.*少多少|多多少|少多少|相差/.test(text)) return "comparisonDifference";
+  // A word problem can contain "又来" or "一共", but its first microsteps are
+  // often reading the question and locating the two conditions. Keep the
+  // knowledge-point family so remediation checks the same reading step instead
+  // of jumping ahead to choosing an operation.
+  if (overlayFamily === "application") return "application";
   if (/第几个|第\s*\d+|前面|后面|从左|从右/.test(questionText)) return "ordinal";
   if (/比较|大小|大于|小于|等于|符号/.test(text) || /[□_]\s*[0-9一二三四五六七八九十百]/.test(questionText) || /[0-9一二三四五六七八九十百]\s*[□_]/.test(questionText)) return "compare";
-  if (operatorCount >= 2 || parseArithmeticChain(questionText) || ((/连加|连减|加减混合|混合运算|乘加|乘减|小括号/.test(text)) && operatorCount >= 1)) return "mixedCalculation";
-  if (/凑十|进位|9加|8加|7加|6加/.test(text) || isMakeTenAdditionExpression(expression)) return "makeTenAdd";
-  if (/破十|退位|十几减|想加算减|借十/.test(text) || isBreakTenSubtractionExpression(expression)) return "breakTenSubtract";
   if (/乘法|几个几|同样多|口诀|×/.test(text)) return "multiplication";
   if (/除法|平均分|每份|求商|÷/.test(text)) return "division";
   if (/拿走|去掉|还剩|飞走|用去|少了/.test(text) || isConcreteSubtractionExpression(expression, text)) return "concreteSubtraction";
@@ -2078,6 +2092,7 @@ function standardizeGuidedStepsForChild(steps, lesson) {
         answerKeywords,
         isFinal: false,
       };
+      normalizedStep.responseInstruction = createStepResponseInstruction(lesson, normalizedStep);
       const scaffoldHint = createConceptScaffoldHint(lesson, normalizedStep);
       if (!normalizedStep.teacherHint || isThinTeacherHint(normalizedStep.teacherHint)) {
         normalizedStep.teacherHint = scaffoldHint || createTeacherHintForStep(lesson, normalizedStep);
@@ -2086,7 +2101,8 @@ function standardizeGuidedStepsForChild(steps, lesson) {
     });
 
   if (!normalized.length) {
-    normalized.push(guidedStep("先看题目", "先说题目问什么。", ["题目", "问什么"]));
+    const problem = childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || "这道题");
+    normalized.push(guidedStep("看清问题", `本题是：${problem} 题目最后问什么？请把最后的问题说一遍。`, ["题目", "问题", "求什么"]));
   }
 
   if (!normalized.some((step) => step.isReason)) {
@@ -2104,6 +2120,21 @@ function standardizeGuidedStepsForChild(steps, lesson) {
 
   normalized[normalized.length - 1].isFinal = true;
   return normalized;
+}
+
+function createStepResponseInstruction(lesson, step) {
+  if (!step) return "";
+  if (step.isReason) {
+    const sentence = step.repeatSentence || createTeacherRepeatSentenceForStep(lesson, step);
+    return sentence ? `不会时就跟着老师说：“${sentence.replace(/[。！？!?]+$/, "")}。”` : "请只说一句原因";
+  }
+  const label = normalizeText(step.label || "");
+  const prompt = normalizeText(step.prompt || "");
+  if (/中间结果|记中间/.test(label)) return "请只说第一步得到的中间结果";
+  const answerShape = createAnswerShapeInstruction(step, lesson);
+  if (answerShape) return answerShape;
+  if (/哪边|哪个|哪一个|谁|多少|几|是什么|应该|怎么/.test(prompt)) return "请只回答这个小问题";
+  return "请说出你在这一步看到的一个数或一个词";
 }
 
 function createTeacherHintForStep(lesson, step) {
@@ -2613,14 +2644,14 @@ function guidedStep(label, prompt, answerKeywords, options = {}) {
 
 function formatChildStepPrompt(plan) {
   const prompt = String(plan?.prompt || "").trim();
-  if (!prompt) return "先说你看到的一个线索。";
+  if (!prompt) return "先看当前题目。请说出你看到的一个数或一个词。";
   if (plan?.isReason) {
     return formatReasonChildPrompt(plan);
   }
-  if (shouldModelBeforeAsking(plan)) return formatTeacherModelFirstPrompt(plan);
-  if (/为什么|怎么想|怎么知道|怎么比较|怎么检查/.test(prompt)) return `${prompt} 先说一句就行。`;
-  if (/先说|先答|先看|再答|最后|答案是多少|是多少|几/.test(prompt)) return prompt;
-  return `${prompt} 先说一步就行。`;
+  const modeledPrompt = shouldModelBeforeAsking(plan) ? formatTeacherModelFirstPrompt(plan) : prompt;
+  const instruction = String(plan?.responseInstruction || createAnswerShapeInstruction(plan) || "").trim();
+  if (!instruction || normalizeText(modeledPrompt).includes(normalizeText(instruction))) return modeledPrompt;
+  return `${modeledPrompt.replace(/[。！？!?]+$/, "")}。${ensureChineseSentence(instruction)}`;
 }
 
 function getReasonRepeatSentence(plan) {
@@ -3097,9 +3128,12 @@ function createRetryInstructionForStep(plan, shouldModelAnswer = false) {
   );
 }
 
-function createAnswerShapeInstruction(plan) {
+function createAnswerShapeInstruction(plan, lessonOverride = null) {
   if (!plan) return "";
-  const lesson = safeCurrentLesson();
+  // When a child switches knowledge points, the new plan is built before the
+  // global current lesson finishes updating. Prefer the lesson being built so
+  // the response instruction cannot leak from the previous topic.
+  const lesson = lessonOverride || safeCurrentLesson();
   const family = getPlanTeachingFamily(lesson, plan);
   const label = normalizeText(plan.label || "");
   const prompt = normalizeText(plan.prompt || "");
@@ -3135,6 +3169,8 @@ function createAnswerShapeInstruction(plan) {
     if (/分针|长针/.test(text)) return "这次只说长针指向几";
     return "这次只说一个时间";
   }
+  if (/够不够|够减.*吗|能不能直接减/.test(text)) return "这次只说：够，还是不够";
+  if (/是不是|是否|对不对|一样吗|能不能/.test(text)) return "这次只说：是，还是不是";
   if (family === "placeValue" || /十位|个位|数位/.test(text)) return "这次只说这个数字表示几个十或几个一";
   if (family === "shape" || /图形|边|角|面|顶点/.test(text)) return "这次只说一个图形特征";
   if (/几|多少|等于|算/.test(text)) return "这次只说一个数，能带单位就带单位";
@@ -4066,11 +4102,12 @@ function createMixedCalculationGuidedSteps(lesson, question) {
       }),
     ];
   }
+  const problem = childFacingPrompt(question?.prompt || lesson?.problem || "这道题");
   return [
-    guidedStep("看第一步", "先看这道题有没有乘除或小括号。第一步应该算哪里？", ["第一步", "先算", "乘除", "小括号", "左边"]),
-    guidedStep("记中间结果", "第一步算完的数要先记住。", ["中间结果", "记住"]),
-    guidedStep("算到最后", "再接着算，最后答案是多少？", answerKeywords),
-    guidedStep("说清顺序", "你先算什么，再算什么？为什么？", ["先", "再", "乘除", "从左往右", "中间结果"], { isReason: true, isFinal: true }),
+    guidedStep("看第一步", `本题是：${problem}。先找运算符或小括号。请只说第一步要算的那一小段算式。`, ["第一步", "先算", "乘除", "小括号", "左边"]),
+    guidedStep("记中间结果", "第一步算完得到多少？请只说这个中间结果。", ["中间结果", "记住"]),
+    guidedStep("算到最后", "把中间结果放回原题，再算下一步。最后答案是多少？", answerKeywords),
+    guidedStep("说清顺序", "请说完整：先算什么，再算什么？", ["先", "再", "乘除", "从左往右", "中间结果"], { isReason: true, isFinal: true }),
   ];
 }
 
@@ -5328,7 +5365,13 @@ function createCurriculumLesson(spec) {
     questionBank[Math.max(0, Number(spec.questionCursor || 0))] ||
     null;
   const problem = activeQuestion?.prompt || spec.problem;
-  const activeQuestionFamily = spec.sourceQuestionFamily || spec.activeQuestionFamily || inferQuestionTeachingFamily(spec, activeQuestion);
+  const inferredQuestionFamily = inferQuestionTeachingFamily(
+    { ...spec, activeQuestionFamily: "", sourceQuestionFamily: "", visualType: spec.baseVisualType || spec.visualType || "generic" },
+    activeQuestion,
+  );
+  const activeQuestionFamily = inferredQuestionFamily && inferredQuestionFamily !== "generic"
+    ? inferredQuestionFamily
+    : spec.sourceQuestionFamily || spec.activeQuestionFamily || "generic";
   const visualType = visualTypeForTeachingFamily(activeQuestionFamily, spec.baseVisualType || spec.visualType || "generic");
   return {
     id: spec.id,
@@ -5540,6 +5583,8 @@ let state = {
   mastery: 64,
   completedSteps: 0,
   guidedRepairCounts: {},
+  remediationCheck: null,
+  remediationAttempts: 0,
   todayQuestion: 2,
   transcript: "",
   lastStudentText: "",
@@ -5679,13 +5724,14 @@ function getQuestionBankSample(lesson = currentLesson()) {
 
 function activateLessonQuestion(lesson, question, cursor = 0) {
   if (!lesson || !question) return false;
-  const questionFamily = inferActiveQuestionFamily({ ...lesson, activeQuestion: question, problem: question.prompt }, question);
-  lesson.activeQuestionFamily = questionFamily;
-  lesson.sourceQuestionFamily = questionFamily || lesson.sourceQuestionFamily;
-  lesson.visualType = visualTypeForTeachingFamily(questionFamily, lesson.baseVisualType || lesson.visualType || "generic");
+  clearRemediationCheck();
   lesson.activeQuestion = question;
-  lesson.questionCursor = Math.max(0, cursor);
   lesson.problem = question.prompt;
+  const questionFamily = inferActiveQuestionFamily({ ...lesson, activeQuestionFamily: "", activeQuestion: question, problem: question.prompt }, question);
+  lesson.activeQuestionFamily = questionFamily;
+  lesson.visualType = visualTypeForTeachingFamily(questionFamily, lesson.baseVisualType || lesson.visualType || "generic");
+  lesson.questionCursor = Math.max(0, cursor);
+  lesson.visualContextKey = `${lesson.id || "lesson"}|${question.id || question.prompt}|${questionFamily}`;
   lesson.answer = createAnswerRules(lesson, question);
   lesson.visualTitle = createVisualTitle(lesson);
   lesson.imagePrompt = createImagePrompt(lesson);
@@ -5718,6 +5764,7 @@ function advanceLessonQuestion(reason = "换一道同类题") {
   state.lastStudentText = "";
   state.transcript = "";
   state.engineSession = null;
+  clearRemediationCheck();
   state.teachingState = "GUIDED_STEP";
   state.currentAtomName = starter.label;
   state.currentStep = `小台阶 ${starter.index + 1}：${starter.label}`;
@@ -5913,21 +5960,22 @@ function renderChildView() {
   const lesson = currentLesson();
 
   return `
-    <main class="child-stage kid-classroom">
+    <main class="child-stage kid-classroom lesson-shell">
       ${renderKidTopbar(lesson)}
-      <section class="kid-workspace" aria-label="孩子学习区">
-        <aside class="kid-coach" aria-label="老师引导区">
+      <section class="kid-workspace lesson-stage" aria-label="孩子学习区">
+        <aside class="kid-coach teacher-cove" aria-label="老师引导区">
           ${renderKidTeacherAvatar("large")}
           ${renderKidQuestionBubble(lesson)}
           ${renderKidVoicePanel()}
           ${renderKidHelpButtons()}
         </aside>
 
-        <section class="kid-board" aria-label="看图想一想">
+        <section class="kid-board learning-canvas" aria-label="看图想一想">
           <button class="kid-board-ribbon" data-action="toggle-lesson-picker" aria-expanded="${state.showLessonPicker ? "true" : "false"}">
             ${escapeText(lesson.node)}
           </button>
           ${state.showLessonPicker ? renderLessonPicker() : ""}
+          ${renderKidCurrentProblem(lesson)}
           ${renderKidBoardVisual(lesson)}
         </section>
       </section>
@@ -6022,14 +6070,14 @@ function setTeacherLiveMood(mood) {
 }
 
 function renderKidQuestionBubble(lesson) {
-  const plan = createGuidedStepPlan(lesson, state.completedSteps);
+  const plan = getCurrentVisualPlan(lesson) || createGuidedStepPlan(lesson, state.completedSteps);
   const problem = childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem);
   const shortPrompt = formatChildStepPrompt(plan).replace(/^看这题[:：]\s*/, "");
   const fallbackMessage =
     state.phase === "summary"
       ? "这一步学会了。你可以换下一个知识点，也可以再练一题。"
       : `看这题：${problem} ${shortPrompt}`;
-  const message = state.aiMessage || fallbackMessage;
+  const message = ensureTeacherMessageHasAnswerTarget(state.aiMessage || fallbackMessage, lesson, plan);
   const messageLength = Array.from(message).length;
   const lengthClass = messageLength > 118 ? "is-long" : messageLength > 62 ? "is-medium" : "is-short";
 
@@ -6038,6 +6086,43 @@ function renderKidQuestionBubble(lesson) {
       <span class="kid-speaker-label">乐之老师</span>
       <p>${escapeText(message)}</p>
       ${state.lastStudentText ? `<div class="kid-last-answer"><span>刚才你说</span><strong>${escapeText(state.lastStudentText)}</strong></div>` : ""}
+    </section>
+  `;
+}
+
+function ensureTeacherMessageHasAnswerTarget(message, lesson, plan) {
+  const value = String(message || "").trim();
+  if (!value || state.phase === "summary") return value;
+  if (plan?.isReason && /照着|跟着|说一遍|一句原因/.test(value)) return value;
+  const tail = value.slice(-90);
+  const hasQuestion = /[？?]/.test(tail);
+  const hasDirectInstruction = /(请回答|现在回答|这次只说|请只说|请说出|照着.*说|跟着.*说|你先说)/.test(tail);
+  if (hasQuestion || hasDirectInstruction) return value;
+  const target = formatCompactStepPrompt(plan);
+  if (!target) return value;
+  return `${value} 现在只回答这一小问：${target}`;
+}
+
+function renderKidCurrentProblem(lesson) {
+  const question = childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || "");
+  if (!question) return "";
+  const plan = getCurrentVisualPlan(lesson);
+  const ladder = getLessonLadderSteps(lesson);
+  const currentNumber = Math.min(ladder.length || 1, Math.max(1, Number(plan?.index ?? state.completedSteps) + 1));
+  const currentLabel = state.remediationCheck?.checkPrompt || plan?.label || state.currentAtomName || "看清题目";
+  return `
+    <section class="kid-current-problem task-ribbon" aria-label="当前题目和当前小步">
+      <div class="kid-task-main">
+        <span>今天的题目</span>
+        <strong>${escapeText(question)}</strong>
+      </div>
+      <div class="kid-task-step">
+        <span>${state.remediationCheck ? "讲完马上试" : "这一小步"}</span>
+        <strong>${escapeText(currentLabel)}</strong>
+      </div>
+      <div class="kid-task-count" aria-label="第 ${currentNumber} 步，共 ${ladder.length || 1} 步">
+        <b>${currentNumber}</b><span>/ ${ladder.length || 1}</span>
+      </div>
     </section>
   `;
 }
@@ -6116,7 +6201,7 @@ function renderKidBoardVisual(lesson) {
 function renderKidMoneyBoard(lesson) {
   const money = getMoneyVisualNumbers(lesson);
   const prompt = getKidBoardPrompt(lesson);
-  const plan = createGuidedStepPlan(lesson, state.completedSteps);
+  const plan = getCurrentVisualPlan(lesson) || createGuidedStepPlan(lesson, state.completedSteps);
   const label = normalizeText(`${plan?.label || ""}${plan?.prompt || ""}${state.currentStep || ""}`);
   const yuanCount = Math.max(1, Math.min(4, money.yuan || 3));
   const extraJiao = Math.max(0, Math.min(9, money.jiao || 0));
@@ -6170,7 +6255,7 @@ function renderKidShoppingBoard(lesson) {
   const sourcePrompt = lesson.activeQuestion?.prompt || lesson.problem || "";
   const story = parseMoneyApplicationQuestion(sourcePrompt, lesson.activeQuestion?.explanation || "");
   if (!story) return renderKidMoneyBoard(lesson);
-  const plan = createGuidedStepPlan(lesson, state.completedSteps);
+  const plan = getCurrentVisualPlan(lesson) || createGuidedStepPlan(lesson, state.completedSteps);
   const phase = getShoppingBoardPhase(plan);
   return `
     <div class="kid-board-card kid-shopping-board">
@@ -6265,6 +6350,7 @@ function renderShoppingAmountBox(label, amount, active) {
 }
 
 function getKidBoardPrompt(lesson) {
+  if (state.remediationCheck?.checkPrompt) return state.remediationCheck.checkPrompt;
   const plan = createGuidedStepPlan(lesson, state.completedSteps);
   const prompt = String(plan?.prompt || lesson.problem || "").trim();
   if (isMoneyApplicationLesson(lesson)) {
@@ -6676,18 +6762,63 @@ function getVisualPanelLabel(lesson) {
 }
 
 function createActiveVisualLesson(lesson) {
+  const remediation = state.remediationCheck;
+  if (remediation) {
+    const family = remediation.family || inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
+    const familyVisualType = visualTypeForTeachingFamily(
+      family,
+      lesson?.baseVisualType || lesson?.visualType || "generic"
+    );
+    const visualType = family && family !== "generic"
+      ? familyVisualType
+      : remediation.visualType || familyVisualType;
+    const question = {
+      id: remediation.id,
+      prompt: remediation.checkPrompt,
+      answer: remediation.answer,
+      answerKeywords: remediation.answerKeywords,
+      explanation: remediation.explanation,
+    };
+    return {
+      ...lesson,
+      activeQuestion: question,
+      activeQuestionFamily: family,
+      sourceQuestionFamily: family,
+      problem: remediation.checkPrompt,
+      visualType,
+      visualTitle: "老师讲完，马上试一题",
+      visualContextKey: `${lesson?.id || "lesson"}|${remediation.id}|${remediation.attempt}|${visualType}`,
+      visualLabel: "当前讲解检测图",
+    };
+  }
   const visualType = getActiveVisualType(lesson);
   const visualTitle = createActiveVisualTitle(lesson, visualType);
+  const question = lesson?.activeQuestion || null;
+  const visualContextKey = `${lesson?.id || "lesson"}|${question?.id || question?.prompt || lesson?.problem || ""}|${visualType}|${Number(state.completedSteps) || 0}`;
   return {
     ...lesson,
+    activeQuestion: question,
+    problem: question?.prompt || lesson?.problem || "",
     visualType,
     visualTitle,
+    visualContextKey,
     visualLabel: ["compare", "count", "position"].includes(visualType) ? "程序辅助理解" : lesson.visualLabel,
   };
 }
 
 function getCurrentVisualPlan(lesson = currentLesson()) {
   if (!lesson) return null;
+  if (state.remediationCheck) {
+    return {
+      index: Number(state.remediationCheck.originalPlanIndex) || 0,
+      totalSteps: getLessonLadderSteps(lesson).length,
+      label: state.remediationCheck.title || "讲完再试",
+      prompt: state.remediationCheck.checkPrompt,
+      answerKeywords: state.remediationCheck.answerKeywords,
+      isReason: false,
+      isFinal: false,
+    };
+  }
   const index = Math.max(0, Number(state.completedSteps) || 0);
   return createGuidedStepPlan(lesson, index);
 }
@@ -6727,7 +6858,12 @@ function inferActiveQuestionFamily(lesson, question = lesson?.activeQuestion || 
 }
 
 function renderLessonSvg(lesson, visualMode = getVisualRevealMode(lesson)) {
-  const visualType = getActiveVisualType(lesson);
+  const hasBoundRemediationVisual = Boolean(
+    state.remediationCheck &&
+    lesson?.activeQuestion?.id === state.remediationCheck.id &&
+    lesson?.visualType
+  );
+  const visualType = hasBoundRemediationVisual ? lesson.visualType : getActiveVisualType(lesson);
   const visualLesson = visualType === lesson.visualType
     ? lesson
     : { ...lesson, visualType, visualTitle: createVisualTitle({ ...lesson, visualType }) };
@@ -7426,10 +7562,17 @@ function renderJiaoDecomposeSvg(lesson, money) {
 
 function getMoneyVisualNumbers(lesson) {
   const questionSource = `${lesson.activeQuestion?.prompt || ""} ${lesson.activeQuestion?.answer || ""} ${lesson.activeQuestion?.explanation || ""}`;
-  const source = normalizeText(`${state.currentStep || ""} ${questionSource} ${lesson.problem || ""} ${state.aiMessage || ""}`);
+  const hasBoundRemediationQuestion = Boolean(
+    state.remediationCheck && lesson.activeQuestion?.id === state.remediationCheck.id
+  );
+  const source = normalizeText(
+    hasBoundRemediationQuestion
+      ? questionSource
+      : `${state.currentStep || ""} ${questionSource} ${lesson.problem || ""} ${state.aiMessage || ""}`
+  );
   const decomposeMatch = source.match(/(\d+)角(?:里面|里|可以|能)?.{0,8}几元几角/);
   const yuanJiaoMatch = source.match(/(\d+)元(\d+)角/);
-  const pureYuanQuestion = /(\d+)元是几角/.test(source);
+  const pureYuanQuestion = /(\d+)元(?:是|等于)?(?:多少|几)角/.test(source);
   const yuanOnlyMatch = source.match(/(\d+)元/);
   const decomposeJiao = decomposeMatch ? Number(decomposeMatch[1]) : 0;
   const yuan = yuanJiaoMatch ? Number(yuanJiaoMatch[1]) : pureYuanQuestion && yuanOnlyMatch ? Number(yuanOnlyMatch[1]) : yuanOnlyMatch ? Number(yuanOnlyMatch[1]) : 3;
@@ -8009,6 +8152,7 @@ function changeLesson(reason, targetIndex = null) {
   state.mastery = 60;
   state.completedSteps = 0;
   clearGuidedRepairAttempts();
+  clearRemediationCheck();
   state.transcript = "";
   state.lastStudentText = "";
   state.aiContext = reason || lesson.initialContext;
@@ -8033,6 +8177,7 @@ function changeLesson(reason, targetIndex = null) {
 
 function startTeachback() {
   const lesson = currentLesson();
+  clearRemediationCheck();
   state.phase = "teachback";
   state.teacherReaction = "responding";
   state.aiContext = "轮到你当小老师了。";
@@ -9334,6 +9479,11 @@ function applyGatewayTutor(payload, inputType) {
 
 function evaluateLocally(text, inputType) {
   const lesson = currentLesson();
+  if (state.remediationCheck) {
+    evaluateRemediationCheck(text, inputType);
+    return;
+  }
+
   if (lesson.useQuestionBankTutor && state.phase !== "teachback") {
     evaluateQuestionBankAttempt(text, inputType);
     return;
@@ -9362,7 +9512,7 @@ function evaluateAttempt(text, inputType) {
 
   if (cannotAnswer) {
     const plan = createGuidedStepPlan(lesson, state.completedSteps || 0);
-    keepOnCurrentGuidedStep(lesson, plan, "没关系，老师先讲这一小步。", inputType, "孩子请求讲解");
+    teachCurrentMicrostepAndRecheck(lesson, plan, "没关系，这一小步老师先讲明白。", inputType, "孩子请求讲解");
     return;
   }
 
@@ -9424,18 +9574,149 @@ function evaluateAttempt(text, inputType) {
     return;
   }
 
+  const plan = createGuidedStepPlan(lesson, state.completedSteps || 0);
+  teachCurrentMicrostepAndRecheck(lesson, plan, "这次还没对上，老师先讲清这一小步。", inputType, "答案错误");
+}
+
+function clearRemediationCheck() {
+  state.remediationCheck = null;
+  state.remediationAttempts = 0;
+}
+
+function createMicrostepExplanation(lesson, plan, attempt = 0) {
+  const family = getPlanTeachingFamily(lesson, plan) || getLessonTeachingFamily(lesson) || "generic";
+  const fallback = {
+    id: `repair-${family}-${Date.now()}`,
+    family,
+    title: plan?.label || "老师讲这一小步",
+    explanation: plan?.teacherHint || "先读清当前小问题，再只做一个动作。",
+    demonstration: plan?.repeatSentence || "老师先示范一道相似的小题。",
+    checkPrompt: formatCompactStepPrompt(plan) || childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || "这道题"),
+    answerKeywords: uniqueKeywords(plan?.answerKeywords || []),
+    answer: plan?.answerKeywords?.[0] || "",
+    responseInstruction: plan?.responseInstruction || "只说答案就可以。",
+    visualType: visualTypeForTeachingFamily(family, lesson?.visualType || "generic"),
+    sourceIds: [],
+    originalQuestion: lesson?.activeQuestion?.prompt || lesson?.problem || "",
+    originalStepLabel: plan?.label || "",
+    attempt,
+  };
+
+  try {
+    return (
+      window.LezhiMicrostepExplanations?.create?.({
+        family,
+        lesson,
+        question: lesson?.activeQuestion || null,
+        plan,
+        attempt,
+      }) || fallback
+    );
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal, attempt = null) {
+  const nextAttempt = attempt === null ? Math.max(0, Number(state.remediationAttempts) || 0) : Math.max(0, Number(attempt) || 0);
+  const remediation = createMicrostepExplanation(lesson, plan, nextAttempt);
+  const specificHint = String(plan?.teacherHint || "").trim();
+  const explanation = specificHint && !isThinTeacherHint(specificHint) ? specificHint : remediation.explanation;
+
   state.phase = "repair";
   state.teacherReaction = "encouraging";
-  state.mastery = Math.max(52, state.mastery - 2);
-  state.aiContext = "孩子回答和当前题不匹配，先给一个更小提示。";
-  state.aiMessage = `先停一下。回到「${lesson.node || lesson.title}」这道题：${activeQuestion?.prompt || lesson.problem}。请只回答这个小问题：${getLessonLadderSteps(lesson)[0] || lesson.microSteps[0]}。`;
-  state.currentStep = "小台阶 1：先找题目条件";
+  state.remediationAttempts = nextAttempt;
+  state.remediationCheck = {
+    ...remediation,
+    originalPlanIndex: Number(plan?.index) || 0,
+    originalPlanLabel: plan?.label || "当前小步",
+  };
+  recordGuidedRepairAttempt(lesson, plan);
+  state.mastery = Math.max(48, state.mastery - 1);
+  state.teachingState = "REMEDIATION_RECHECK";
+  state.currentAtomName = plan?.label || remediation.title;
+  state.currentStep = `老师讲解：${plan?.label || remediation.title}`;
+  state.aiContext = "孩子当前小步答错或请求讲解。老师先解释方法，再用一道近似题检查理解。";
+  state.aiMessage = [
+    prefix,
+    explanation,
+    remediation.demonstration ? `比如：${remediation.demonstration}` : "",
+    `现在换一道很像的小题：${remediation.checkPrompt}`,
+    remediation.responseInstruction || "只说答案就可以。",
+  ]
+    .filter(Boolean)
+    .join(" ");
   state.showVisual = true;
-  state.strategyIndex = 1;
-  state.bestStrategy = lesson.strategies[1]?.label || "画图";
+  state.strategyIndex = Math.max(state.strategyIndex, 1);
+  state.bestStrategy = "讲一步，再试一道";
   resetGeneratedVisualForTurn();
-  addEvidence("答非所问或答案不稳", "孩子回答没有匹配当前题答案，AI 拉回当前题并给更小提示。", "小提示");
+  addEvidence(signal, `老师讲解「${plan?.label || remediation.title}」，随后用近似题检查。`, inputType === "voice" ? "语音回答" : "键盘回答");
   speakCurrentMessage();
+}
+
+function evaluateRemediationCheck(text, inputType) {
+  const lesson = currentLesson();
+  const remediation = state.remediationCheck;
+  if (!remediation) {
+    evaluateAttempt(text, inputType);
+    return;
+  }
+
+  const normalized = normalizeText(text);
+  const originalPlanIndex = Math.max(0, Number(remediation.originalPlanIndex) || 0);
+  const originalPlan = createGuidedStepPlan(lesson, originalPlanIndex);
+
+  if (isCannotAnswerText(normalized)) {
+    teachCurrentMicrostepAndRecheck(
+      lesson,
+      originalPlan,
+      "没关系，老师换一个例子再讲一次。",
+      inputType,
+      "讲解后仍需帮助",
+      Math.min(3, (Number(state.remediationAttempts) || 0) + 1),
+    );
+    return;
+  }
+
+  if (isUnclearChildText(normalized)) {
+    state.teacherReaction = "encouraging";
+    state.aiContext = "讲解后的检查题没有听清，不判错，也不推进。";
+    state.aiMessage = `老师没听清。现在只回答这道小题：${remediation.checkPrompt} ${remediation.responseInstruction || "只说答案就可以。"}`;
+    resetGeneratedVisualForTurn();
+    addEvidence("检查题输入不清", "没有默认判错或判对，继续停在讲解后的检查题。", inputType === "voice" ? "语音回答" : "键盘回答");
+    speakCurrentMessage();
+    return;
+  }
+
+  if (matchesGuidedKeywords(normalized, remediation.answerKeywords || [])) {
+    clearRemediationCheck();
+    state.phase = "guiding";
+    state.teacherReaction = "celebrating";
+    state.teachingState = "GUIDED_STEP";
+    state.aiContext = "孩子听完讲解后答对近似题，说明当前小步已经听懂。";
+    addEvidence("讲解后检测通过", `孩子通过了「${originalPlan.label}」的近似题。`, inputType === "voice" ? "语音回答" : "键盘回答");
+    advanceGuidedStepOrComplete(lesson, originalPlan, inputType);
+    return;
+  }
+
+  if (isLikelyOffTopicAnswer(normalized, lesson, { ...originalPlan, prompt: remediation.checkPrompt, answerKeywords: remediation.answerKeywords })) {
+    state.teacherReaction = "encouraging";
+    state.aiContext = "孩子的回答和讲解后的检查题无关，老师拉回当前小题。";
+    state.aiMessage = `我们先只做眼前这道：${remediation.checkPrompt} ${remediation.responseInstruction || "只说答案就可以。"}`;
+    resetGeneratedVisualForTurn();
+    addEvidence("检查题答非所问", "没有推进学习状态，重新明确回答目标。", inputType === "voice" ? "语音回答" : "键盘回答");
+    speakCurrentMessage();
+    return;
+  }
+
+  teachCurrentMicrostepAndRecheck(
+    lesson,
+    originalPlan,
+    "这道检查题还差一点。老师换个例子再讲。",
+    inputType,
+    "讲解后检测未通过",
+    Math.min(3, (Number(state.remediationAttempts) || 0) + 1),
+  );
 }
 
 function evaluateQuestionBankAttempt(text, inputType) {
@@ -9455,7 +9736,7 @@ function evaluateQuestionBankAttempt(text, inputType) {
   const unclear = isUnclearChildText(normalized);
 
   if (cannotAnswer) {
-    keepOnCurrentGuidedStep(lesson, plan, "没关系，老师先讲这一小步。", inputType, "孩子请求讲解");
+    teachCurrentMicrostepAndRecheck(lesson, plan, "没关系，这一小步老师先讲明白。", inputType, "孩子请求讲解");
     return;
   }
 
@@ -9490,14 +9771,15 @@ function evaluateQuestionBankAttempt(text, inputType) {
   }
 
   if (looksLikeShortAnswer(normalized)) {
-    keepOnCurrentGuidedStep(lesson, plan, "这个答案还不对。", inputType, "答案错误");
+    teachCurrentMicrostepAndRecheck(lesson, plan, "这个答案还不对，我们把这一小步弄明白。", inputType, "答案错误");
     return;
   }
 
-  keepOnCurrentGuidedStep(lesson, plan, "这次还没对上。", inputType, "小台阶未稳");
+  teachCurrentMicrostepAndRecheck(lesson, plan, "这次还没对上，老师讲清这一小步。", inputType, "小台阶未稳");
 }
 
 function advanceGuidedStepOrComplete(lesson, plan, inputType) {
+  clearRemediationCheck();
   if (plan.isFinal || plan.index >= plan.totalSteps - 1) {
     completeQuestionBankRound(lesson, inputType);
     return;
@@ -9521,6 +9803,7 @@ function advanceGuidedStepOrComplete(lesson, plan, inputType) {
 }
 
 function askReasonAfterFullAnswer(lesson, inputType) {
+  clearRemediationCheck();
   const steps = createGuidedStepPlan(lesson, 0).steps;
   const reasonIndex = Math.max(0, steps.findIndex((step) => step.isReason));
   const reasonPlan = createGuidedStepPlan(lesson, reasonIndex >= 0 ? reasonIndex : steps.length - 1);
@@ -9542,6 +9825,7 @@ function askReasonAfterFullAnswer(lesson, inputType) {
 }
 
 function completeQuestionBankRound(lesson, inputType) {
+  clearRemediationCheck();
   recordQuestionPass(lesson);
   const targetPassCount = getTargetQuestionPassCount(lesson);
   const passedCount = (state.passedQuestionIds || []).length;
@@ -9575,6 +9859,7 @@ function completeQuestionBankRound(lesson, inputType) {
 }
 
 function startKnowledgeTeachbackCheck(lesson, inputType) {
+  clearRemediationCheck();
   const family = getLessonTeachingFamily(lesson);
   const key = `${lesson?.id || ""}|${lesson?.activeQuestion?.id || lesson?.problem || ""}|teachback|${state.passedQuestionIds?.length || 0}`;
   const move = createStrategyDialogueMove(family, "teachback", key);
