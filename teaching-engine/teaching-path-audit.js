@@ -123,29 +123,8 @@ function simulatePoint(point) {
     session = result.engineSession;
   }
 
-  if (session?.current_state !== TeachingState.FEYNMAN_EXPLAIN && session?.current_state !== TeachingState.MASTERED) {
-    failures.push("通过检验题后没有进入讲给老师听");
-  }
-
-  if (session?.current_state === TeachingState.FEYNMAN_EXPLAIN) {
-    const weakTeachback = runTeachingTurn({ graph, lesson, childText: "好的", session, inputType: "audit" });
-    assertRepair(weakTeachback, failures, "费曼复述里敷衍回答不应过关");
-    collectMessage(messages, weakTeachback);
-
-    result = runTeachingTurn({
-      graph,
-      lesson,
-      childText: answerForTeachback(point),
-      session,
-      inputType: "audit",
-    });
-    turns += 1;
-    collectMessage(messages, result);
-    session = result?.engineSession || session;
-  }
-
   if (session?.current_state !== TeachingState.MASTERED) {
-    failures.push("完整路径没有到达掌握状态");
+    failures.push("老师归纳并通过整题检验后，没有到达掌握状态");
   }
 
   const messageFailures = scoreMessages(messages);
@@ -272,23 +251,24 @@ function scoreMessages(messages) {
 
 function getAssessmentPlan(point) {
   const templates = point?.assessment_templates || [];
-  if (templates.length <= 4) return templates;
+  const eligible = templates.filter((item) =>
+    [MasteryDimension.DIRECT, MasteryDimension.VARIANT].includes(item.dimension),
+  );
+  if (eligible.length <= 3) return eligible;
   const plan = [];
   const add = (template) => {
     if (template && !plan.some((item) => item.id === template.id)) plan.push(template);
   };
-  const direct = templates.filter((item) => item.dimension === MasteryDimension.DIRECT);
-  const variant = templates.filter((item) => item.dimension === MasteryDimension.VARIANT);
-  const reasoning = templates.filter((item) => item.dimension === MasteryDimension.REASONING);
+  const direct = eligible.filter((item) => item.dimension === MasteryDimension.DIRECT);
+  const variant = eligible.filter((item) => item.dimension === MasteryDimension.VARIANT);
   add(direct[0]);
   add(variant[0] || direct[1]);
   add(variant.find((item) => item.primary_atom_id !== plan[1]?.primary_atom_id) || variant[1]);
-  add(reasoning[0]);
-  for (const template of templates) {
-    if (plan.length >= 4) break;
+  for (const template of eligible) {
+    if (plan.length >= 3) break;
     add(template);
   }
-  return plan.slice(0, 4);
+  return plan.slice(0, 3);
 }
 
 function printHumanSummary(data) {

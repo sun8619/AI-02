@@ -123,15 +123,7 @@ function auditPageFlow(point) {
     session = result?.engineSession || session;
   }
 
-  if (session?.current_state === TeachingState.FEYNMAN_EXPLAIN) {
-    const weakTeachback = runTeachingTurn({ graph, lesson, childText: "好的", session, inputType: "audit" });
-    captureResult(events, "teachback-weak", weakTeachback, point, null, true);
-    const result = runTeachingTurn({ graph, lesson, childText: answerForTeachback(point), session, inputType: "audit" });
-    captureResult(events, "teachback-pass", result, point, null, false);
-    session = result?.engineSession || session;
-  }
-
-  if (session?.current_state !== TeachingState.MASTERED) gaps.push("完整页面路径没有走到掌握状态");
+  if (session?.current_state !== TeachingState.MASTERED) gaps.push("老师归纳并通过整题检验后，页面没有走到掌握状态");
 
   const clearPrompt = scoreClearPrompts(events);
   const naturalness = scoreNaturalness(events);

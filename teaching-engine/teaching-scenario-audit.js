@@ -42,7 +42,8 @@ const summary = {
     cannotAnswerScaffold: percent(reports, (item) => item.routes.cannotAnswerScaffold),
     offTopicRecovery: percent(reports, (item) => item.routes.offTopicRecovery),
     variantPractice: percent(reports, (item) => item.routes.variantPractice),
-    teachback: percent(reports, (item) => item.routes.teachback),
+    teacherSummary: percent(reports, (item) => item.routes.teacherSummary),
+    wholeQuestionChecks: percent(reports, (item) => item.routes.wholeQuestionChecks),
   },
   weakestPoints: reports
     .filter((item) => item.level !== "ready" || item.critical.length)
@@ -90,7 +91,7 @@ function scoreScenarioPoint(point) {
   addScore(scoreParts, scoreSafeRepairs(allText, atoms, gaps, critical), 14);
   addScore(scoreParts, scoreDialogueRoutes(strategy, atoms, gaps, critical), 14);
   addScore(scoreParts, scoreVariants(assessments, strategy, gaps), 13);
-  addScore(scoreParts, scoreReasonAndTeachback(point, atoms, dimensions, gaps, critical), 12);
+  addScore(scoreParts, scoreSummaryAndWholeChecks(point, atoms, assessments, strategy, dimensions, gaps, critical), 12);
   addScore(scoreParts, scoreMasteryPace(strategy, assessments, gaps), 7);
   addScore(scoreParts, scoreVisualSupport(family, point, gaps), 5);
 
@@ -111,7 +112,10 @@ function scoreScenarioPoint(point) {
       cannotAnswerScaffold: atoms.every((atom) => hasCannotScaffold(atom)),
       offTopicRecovery: (strategy.dialogueMoves?.offTopic || []).length >= 2,
       variantPractice: assessments.filter((item) => item.dimension === "variant_problem").length >= 2 && (strategy.variants || []).length >= 2,
-      teachback: Boolean(point.feynman_prompt?.child_prompt) && (point.feynman_prompt?.required_signals || []).length >= 4,
+      teacherSummary: (strategy.teachingMethods || []).length >= 2 || atoms.filter((atom) => /方法|先|再|因为|所以/.test(atom.teach_prompt || "")).length >= 2,
+      wholeQuestionChecks:
+        assessments.some((item) => item.dimension === "direct_problem") &&
+        assessments.filter((item) => item.dimension === "variant_problem").length >= 2,
     },
   };
 }
@@ -216,7 +220,6 @@ function scoreDialogueRoutes(strategy, atoms, gaps, critical) {
     ["repair", "答错后补救话术不足"],
     ["offTopic", "跑题拉回话术不足"],
     ["cannotAnswer", "不会答时示范话术不足"],
-    ["teachback", "复述引导话术不足"],
   ];
   for (const [key, message] of routeChecks) {
     if ((moves[key] || []).length < 2) {
@@ -249,25 +252,29 @@ function scoreVariants(assessments, strategy, gaps) {
   return clamp01(score);
 }
 
-function scoreReasonAndTeachback(point, atoms, dimensions, gaps, critical) {
+function scoreSummaryAndWholeChecks(point, atoms, assessments, strategy, dimensions, gaps, critical) {
   let score = 1;
-  const reasonAtoms = atoms.filter((atom) => /为什么|原因|说清|因为/.test(`${atom.atom_name || ""}${atom.teach_prompt || ""}`));
-  const prompt = String(point.feynman_prompt?.child_prompt || "");
-  const signals = point.feynman_prompt?.required_signals || [];
-  if (!dimensions.has("reasoning") && reasonAtoms.length < 1) {
-    critical.push("缺少说理检查");
+  const directQuestions = assessments.filter((item) => item.dimension === "direct_problem");
+  const variantQuestions = assessments.filter((item) => item.dimension === "variant_problem");
+  const summarySources = [
+    ...(strategy.teachingMethods || []),
+    ...atoms.map((atom) => atom.teach_prompt || ""),
+  ].filter((text) => /方法|先|再|因为|所以|换|凑|拆|平均|数位|单位/.test(text));
+  if (!summarySources.length) {
+    critical.push("缺少老师归纳讲法");
     score -= 0.35;
   }
-  if (!prompt) {
-    critical.push("缺少讲给老师听");
+  if (!directQuestions.length) {
+    critical.push("缺少整题直接检验");
     score -= 0.35;
-  } else if (!/先|再|为什么|方法|讲/.test(prompt)) {
-    gaps.push("复述提示不够像方法讲解");
-    score -= 0.2;
   }
-  if (signals.length < 4) {
-    gaps.push("费曼复述判定信号不足");
+  if (variantQuestions.length < 2) {
+    gaps.push("整题变式检验少于2道");
     score -= 0.18;
+  }
+  if (dimensions.has("reasoning") && !atoms.some((atom) => /为什么|原因|说清|因为/.test(`${atom.atom_name || ""}${atom.teach_prompt || ""}`))) {
+    gaps.push("说理材料存在，但缺少老师示范讲法");
+    score -= 0.1;
   }
   return clamp01(score);
 }
@@ -312,7 +319,7 @@ function scoreVisualSupport(family, point, gaps) {
 
 function hasUsefulRepair(atom) {
   const text = String(atom?.repair_prompt || "");
-  return /先|再|看|找|说|想|换|凑|破|平均|数位|单位|因为|方法|关键词|补/.test(text) && !/这题最后是(?!多少)|最后答案是(?!多少)|这题答案是(?!多少)|所以答案是(?!多少)/.test(text);
+  return /先|再|看|找|说|想|算|换|凑|破|平均|数位|单位|因为|方法|关键词|补/.test(text) && !/这题最后是(?!多少)|最后答案是(?!多少)|这题答案是(?!多少)|所以答案是(?!多少)/.test(text);
 }
 
 function hasCannotScaffold(atom) {
@@ -375,7 +382,8 @@ function printHumanSummary(data) {
   console.log(`- 不会答示范覆盖：${data.routeCoverage.cannotAnswerScaffold}%`);
   console.log(`- 跑题拉回覆盖：${data.routeCoverage.offTopicRecovery}%`);
   console.log(`- 变式练习覆盖：${data.routeCoverage.variantPractice}%`);
-  console.log(`- 讲给老师听覆盖：${data.routeCoverage.teachback}%`);
+  console.log(`- 老师归纳覆盖：${data.routeCoverage.teacherSummary}%`);
+  console.log(`- 整题检验覆盖：${data.routeCoverage.wholeQuestionChecks}%`);
 
   if (data.criticalFindings.length) {
     console.log("\n优先修复的关键问题：");

@@ -1159,7 +1159,7 @@ function createQuestionBankBlueprint(point, questions, originalPrimaryQuestion, 
       commonGaps: normalizeTextList(teachingProfile.commonGaps || point.commonGaps, ["只报答案不说原因", "漏看题目条件", "换题后不稳"]),
       keywords: normalizeTextList(point.keywords, [point.title, point.unit]).concat(point.questionTypes || []),
       answerKeywords: uniqueKeywords(questionAnswerKeywords.concat(point.answerKeywords || [])),
-      masterySignals: normalizeTextList(teachingProfile.masterySignals || point.masterySignals, ["能做直接题", "能做变式题", "能说出原因", "能讲给老师听"]),
+      masterySignals: getStandardMasterySignals(),
       diagnosticFocus: uniqueKeywords([...(point.commonGaps || []), ...(pointOverlay?.diagnostics || []), ...(pointOverlay?.commonGaps || [])]),
       substeps: normalizeTextList(teachingProfile.substeps || point.substeps || point.microSteps, microSteps),
       visualType,
@@ -1286,10 +1286,9 @@ function visualTypeForTeachingFamily(family, fallback = "generic") {
 
 function getStandardMasterySignals() {
   return [
-  "能独立做一道直接题",
-  "换数字或情境后还能做",
-  "能用一句话说出原因",
-  "能当小老师讲一遍",
+    "老师归纳后能独立做直接题",
+    "换数字或情境后还能独立作答",
+    "答错后听讲解能做对相近题",
   ];
 }
 
@@ -5191,14 +5190,14 @@ function getCompareSymbol(value) {
   const text = String(value || "");
   if (text.includes("<") || text.includes("小于")) return "<";
   if (text.includes(">") || text.includes("大于")) return ">";
-  if (text.includes("=") || text.includes("等于")) return "=";
+  if (text.includes("=") || /等于|等号|一样大|相等/.test(text)) return "=";
   return "";
 }
 
 function compareSymbolKeywords(symbol) {
   if (symbol === "<") return ["<", "小于", "小于号"];
   if (symbol === ">") return [">", "大于", "大于号"];
-  if (symbol === "=") return ["=", "等于", "等号", "一样大"];
+  if (symbol === "=") return ["=", "等于", "等号", "等于号", "一样大", "相等"];
   return ["<", ">", "=", "大于", "小于", "等于"];
 }
 
@@ -5396,9 +5395,9 @@ function createCurriculumLesson(spec) {
     initialMessage: spec.initialMessage || `我们先学「${spec.node}」。先看这题：${problem}`,
     initialStep: spec.initialStep || `小台阶 1：${spec.microSteps[0]}`,
     stepHint: spec.stepHint || spec.microSteps[0],
-    teachbackPrompt: `这次换你当小老师，讲给我听：${spec.node} 这题应该先想什么？`,
-    repairPrompt: `没关系，我们换个更小的说法。先看图，再说：${spec.microSteps[0]}。`,
-    doneMessage: "这次不只是答案对了，你也说出了怎么想。",
+    teachbackPrompt: `老师先把「${spec.node}」的方法讲一次，然后我们做几道完整题。`,
+    repairPrompt: `没关系，老师只拆当前这道题。先看图，再做：${spec.microSteps[0]}。`,
+    doneMessage: "老师讲过方法，你也能独立做对完整题了。",
     prerequisites: createPrerequisites(spec),
     microSteps: spec.microSteps,
     commonGaps: spec.commonGaps,
@@ -5596,8 +5595,13 @@ let state = {
   engineSession: null,
   masteryEvidence: createEmptyMasteryEvidence(),
   passedQuestionIds: [],
+  assessmentMode: false,
+  assessmentQuestionInRepair: false,
+  assessmentAskedQuestionIds: [],
+  assessmentOriginQuestionId: "",
+  assessmentTargetCount: 0,
   parentSignals: null,
-  feynmanStatus: "还没开始讲",
+  feynmanStatus: "等待老师归纳",
   canExplainWhy: false,
   canUseOwnWords: false,
   bestStrategy: lessons[0].strategies[0].label,
@@ -6010,13 +6014,13 @@ function renderKidTopbar(lesson) {
 
 function renderKidProgressDots(lesson) {
   const practiceStates = ["PRACTICE_SET", "ERROR_ANALYSIS", "REMEDIATION_TEACH", "REMEDIATION_RECHECK"];
-  const teachbackStates = ["FEYNMAN_EXPLAIN", "FEYNMAN_EVAL", "MASTERED", "EXIT_WITH_NEXT"];
-  const current = state.phase === "summary" || state.phase === "teachback" || teachbackStates.includes(state.teachingState)
+  const masteredStates = ["MASTERED", "EXIT_WITH_NEXT"];
+  const current = state.phase === "summary" || masteredStates.includes(state.teachingState)
     ? 2
-    : practiceStates.includes(state.teachingState)
+    : state.assessmentMode || practiceStates.includes(state.teachingState)
       ? 1
       : 0;
-  const steps = ["先看懂", "再试试", "讲出来"];
+  const steps = ["先学会", "做整题", "已掌握"];
   return `
     <div class="kid-progress" aria-label="本轮学习进度">
       ${steps
@@ -6108,8 +6112,20 @@ function renderKidCurrentProblem(lesson) {
   if (!question) return "";
   const plan = getCurrentVisualPlan(lesson);
   const ladder = getLessonLadderSteps(lesson);
-  const currentNumber = Math.min(ladder.length || 1, Math.max(1, Number(plan?.index ?? state.completedSteps) + 1));
-  const currentLabel = state.remediationCheck?.checkPrompt || plan?.label || state.currentAtomName || "看清题目";
+  const wholeQuestionMode = Boolean(state.assessmentMode && !state.assessmentQuestionInRepair && !state.remediationCheck);
+  const assessmentNumber = Math.min(
+    state.assessmentTargetCount || 3,
+    Math.max(1, (state.passedQuestionIds || []).length + 1),
+  );
+  const assessmentTotal = state.assessmentTargetCount || 3;
+  const currentNumber = wholeQuestionMode
+    ? assessmentNumber
+    : Math.min(ladder.length || 1, Math.max(1, Number(plan?.index ?? state.completedSteps) + 1));
+  const totalSteps = wholeQuestionMode ? assessmentTotal : ladder.length || 1;
+  const currentLabel = wholeQuestionMode
+    ? "直接答整题"
+    : state.remediationCheck?.checkPrompt || plan?.label || state.currentAtomName || "看清题目";
+  const countUnit = wholeQuestionMode ? "题" : "步";
   return `
     <section class="kid-current-problem task-ribbon" aria-label="当前题目和当前小步">
       <div class="kid-task-main">
@@ -6117,11 +6133,11 @@ function renderKidCurrentProblem(lesson) {
         <strong>${escapeText(question)}</strong>
       </div>
       <div class="kid-task-step">
-        <span>${state.remediationCheck ? "讲完马上试" : "这一小步"}</span>
+        <span>${wholeQuestionMode ? "整题检验" : state.remediationCheck ? "讲完马上试" : "这一小步"}</span>
         <strong>${escapeText(currentLabel)}</strong>
       </div>
-      <div class="kid-task-count" aria-label="第 ${currentNumber} 步，共 ${ladder.length || 1} 步">
-        <b>${currentNumber}</b><span>/ ${ladder.length || 1}</span>
+      <div class="kid-task-count" aria-label="第 ${currentNumber} ${countUnit}，共 ${totalSteps} ${countUnit}">
+        <b>${currentNumber}</b><span>/ ${totalSteps}</span>
       </div>
     </section>
   `;
@@ -6154,13 +6170,12 @@ function renderVoiceConfirmation() {
 }
 
 function renderKidHelpButtons() {
-  const explainAction = state.phase === "teachback" || state.phase === "repair" ? "cant-explain" : "dont-understand";
-  const teachback = state.phase === "teachback";
+  const explainAction = state.phase === "repair" ? "cant-explain" : "dont-understand";
   return `
     <div class="kid-help-row" aria-label="求助按钮">
-      <button class="kid-help-button" data-action="${explainAction}" aria-label="${teachback ? "老师先示范一句，我再跟着讲" : "老师把当前问题再拆小一步"}">
+      <button class="kid-help-button" data-action="${explainAction}" aria-label="老师把当前问题再拆小一步">
         <span aria-hidden="true">🤔</span>
-        <span class="kid-help-copy"><strong>${teachback ? "老师先说一句" : "老师提示一步"}</strong><small>${teachback ? "我照着说" : "把问题拆简单"}</small></span>
+        <span class="kid-help-copy"><strong>老师提示一步</strong><small>把问题拆简单</small></span>
       </button>
       <button class="kid-help-button" data-action="show-visual" aria-label="把当前这一步换成图来讲">
         ${icon("image")}
@@ -6172,6 +6187,12 @@ function renderKidHelpButtons() {
       </button>
     </div>
   `;
+}
+
+function getKidBoardStageLabel() {
+  if (state.assessmentMode && !state.assessmentQuestionInRepair && !state.remediationCheck) return "整题检验";
+  if (state.remediationCheck) return "讲完马上试";
+  return "这一小步";
 }
 
 function renderKidBoardVisual(lesson) {
@@ -6186,7 +6207,7 @@ function renderKidBoardVisual(lesson) {
     <div class="kid-board-card kid-board-card-generic">
       <div class="kid-board-head">
         <span>${icon("image")}看图想一想</span>
-        <strong>这一小步</strong>
+        <strong>${getKidBoardStageLabel()}</strong>
       </div>
       <h2>${escapeText(visualLesson.visualTitle || "把题目拆成小台阶")}</h2>
       <div class="kid-board-fallback">${renderLessonSvg(visualLesson, getVisualRevealMode(visualLesson))}</div>
@@ -6213,7 +6234,7 @@ function renderKidMoneyBoard(lesson) {
     <div class="kid-board-card kid-money-board">
       <div class="kid-board-head">
         <span>${icon("image")}看图想一想</span>
-        <strong>这一小步</strong>
+        <strong>${getKidBoardStageLabel()}</strong>
       </div>
       <h2>${escapeText(lesson.visualTitle || "先把元换成角")}</h2>
       <div class="kid-money-layout">
@@ -6261,7 +6282,7 @@ function renderKidShoppingBoard(lesson) {
     <div class="kid-board-card kid-shopping-board">
       <div class="kid-board-head">
         <span>${icon("image")}看图想一想</span>
-        <strong>这一小步</strong>
+        <strong>${getKidBoardStageLabel()}</strong>
       </div>
       <h2>${escapeText(getShoppingBoardTitle(phase))}</h2>
       <div class="kid-shopping-layout ${phase}">
@@ -6312,7 +6333,7 @@ function getShoppingBoardTitle(phase) {
     pay: "先把付的钱换成角",
     price: "再把价钱换成角",
     compute: "用付的钱减价钱",
-    reason: "把方法讲给老师听",
+    reason: "老师讲清为什么",
   };
   return titles[phase] || titles.question;
 }
@@ -6351,6 +6372,9 @@ function renderShoppingAmountBox(label, amount, active) {
 
 function getKidBoardPrompt(lesson) {
   if (state.remediationCheck?.checkPrompt) return state.remediationCheck.checkPrompt;
+  if (state.assessmentMode && !state.assessmentQuestionInRepair) {
+    return childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || "");
+  }
   const plan = createGuidedStepPlan(lesson, state.completedSteps);
   const prompt = String(plan?.prompt || lesson.problem || "").trim();
   if (isMoneyApplicationLesson(lesson)) {
@@ -6624,29 +6648,28 @@ function renderVoiceDock() {
 function renderVoiceButtonLabel() {
   if (state.recording) return "结束说话";
   if (state.isProcessing || state.voiceStatus === "processing") return "正在想";
-  if (state.phase === "teachback") return "开始讲";
   return "开始说";
 }
 
 function renderVoiceButtonAriaLabel() {
   if (state.recording) return "点击结束说话";
   if (state.isProcessing || state.voiceStatus === "processing") return "老师正在思考";
-  if (state.phase === "teachback") return "点击开始讲给老师听";
   return "点击开始说话";
 }
 
 function renderStepHint() {
   const lesson = currentLesson();
+  if (state.assessmentMode && !state.assessmentQuestionInRepair) {
+    return "现在做一道完整题，只说最后答案。答错时老师才会把这一题拆开讲。";
+  }
   if (lesson.useQuestionBankTutor && ["guiding", "repair"].includes(state.phase)) {
     return `这一轮先回答：${formatChildStepPrompt(createGuidedStepPlan(lesson, state.completedSteps))}`;
   }
-  if (state.teachingState === "PRACTICE_SET") return "现在不是新讲解，是小闯关。答错也没关系，老师会只补那一个小地方。";
+  if (state.teachingState === "PRACTICE_SET") return "现在做整题，只说最后答案。答错也没关系，老师只拆这一题。";
   if (state.teachingState === "REMEDIATION_TEACH" || state.teachingState === "REMEDIATION_RECHECK") return "我们只补刚才没稳的小台阶，不会整章重来。";
   if (state.teachingState === "FALLBACK_PREREQUISITE") return "这是前置小台阶，补完会自动回到刚才的知识点。";
-  if (state.teachingState === "FEYNMAN_EXPLAIN" || state.teachingState === "FEYNMAN_EVAL") return "你来当小老师，重点说先做什么、为什么这样做。";
-  if (state.phase === "teachback") return "你已经会做这一步了。现在试着用自己的话讲给老师听。";
   if (state.phase === "repair") return "没关系，我们换一种讲法。先看图，再慢慢说。";
-  if (state.phase === "summary") return "你能说出为什么，这个知识点就更稳了。";
+  if (state.phase === "summary") return "老师已经把方法讲过，你也独立做对了几道整题。";
   return lesson.stepHint;
 }
 
@@ -6658,7 +6681,7 @@ function renderTeachingStageLabel() {
     CHECK_UNDERSTANDING: "试一试",
     SPLIT_ATOM: "再小一步",
     FALLBACK_PREREQUISITE: "补一小步",
-    PRACTICE_SET: "闯关检验",
+    PRACTICE_SET: "整题检验",
     ERROR_ANALYSIS: "看哪里没稳",
     REMEDIATION_TEACH: "再看一遍",
     REMEDIATION_RECHECK: "再试一次",
@@ -6679,7 +6702,7 @@ function renderChildStepTitle(step) {
 function renderDockNote() {
   if (state.isProcessing || state.voiceStatus === "processing") return "老师听到了，马上接着讲。";
   if (state.voiceConfirmation) return "先看看老师有没有听对。听错了就点“我重说”。";
-  if (state.phase === "teachback") return "像小老师一样讲给老师听，说不完整也没关系。";
+  if (state.assessmentMode && !state.assessmentQuestionInRepair) return "这次不用讲步骤，只说最后答案。答错了老师再拆开讲。";
   if (state.phase === "repair") return "可以看着图说，不用一次讲完整。";
   if (state.phase === "summary") return "这一题已经完成，可以换知识点或去家长页看记录。";
   return "点一下开始说话，说完再点一下结束。也可以直接说“换知识点”。";
@@ -6723,6 +6746,7 @@ function renderLearningVisual() {
 
 function getVisualRevealMode(lesson = currentLesson()) {
   if (!lesson) return "question";
+  if (state.assessmentMode && !state.assessmentQuestionInRepair) return "question";
   const plan = createGuidedStepPlan(lesson, state.completedSteps || 0);
   const text = normalizeText(`${plan?.label || ""}${plan?.prompt || ""}${state.currentStep || ""}${state.currentAtomName || ""}`);
   if (state.phase === "summary" || state.phase === "teachback") return "solution";
@@ -6819,6 +6843,17 @@ function getCurrentVisualPlan(lesson = currentLesson()) {
       isFinal: false,
     };
   }
+  if (state.assessmentMode && !state.assessmentQuestionInRepair) {
+    return {
+      index: Math.max(0, (state.passedQuestionIds || []).length),
+      totalSteps: state.assessmentTargetCount || 3,
+      label: "直接答整题",
+      prompt: childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || ""),
+      answerKeywords: lesson?.activeQuestion?.answerKeywords || [],
+      isReason: false,
+      isFinal: false,
+    };
+  }
   const index = Math.max(0, Number(state.completedSteps) || 0);
   return createGuidedStepPlan(lesson, index);
 }
@@ -6830,7 +6865,7 @@ function createActiveVisualTitle(lesson, visualType) {
     if (plan?.isReason || /原因|为什么|说清|讲/.test(label)) return "说清为什么";
     return label;
   }
-  if (state.phase === "summary") return "会做，也能讲清楚";
+  if (state.phase === "summary") return "老师已归纳，整题已通过";
   return createVisualTitle({ ...lesson, visualType });
 }
 
@@ -7680,7 +7715,7 @@ function renderPracticePanel() {
     <div class="practice-panel">
       <div>
         <span>今天第 ${state.todayQuestion} 题</span>
-        <strong>${state.phase === "summary" ? "已讲清楚 1 个知识点" : `掌握度 ${state.mastery}%`}</strong>
+        <strong>${state.phase === "summary" ? "已通过 1 个知识点" : `掌握度 ${state.mastery}%`}</strong>
       </div>
       <div class="mastery-ring" style="--value: ${state.mastery}%">
         <b>${state.mastery}%</b>
@@ -7754,7 +7789,7 @@ function renderParentView() {
       <section class="parent-hero">
         <div>
           <h1>给家长看的进展</h1>
-          <p>孩子端只保留师生对话；这里记录知识点拆分、换讲法、看图辅助和“讲给老师听”的结果。</p>
+          <p>孩子端只保留师生对话；这里记录知识点拆分、换讲法、看图辅助、整题检验和错题补救结果。</p>
         </div>
         <button class="btn btn-primary" data-action="summary-view">${icon("book")}查看本题总结</button>
       </section>
@@ -7796,15 +7831,15 @@ function renderParentView() {
           <div class="metric-large">
             <span>掌握度</span>
             <strong>${state.mastery}%</strong>
-            <p>${state.canExplainWhy ? "能用自己的话讲出关键原因。" : "会做，但还需要继续练习讲清楚原因。"}</p>
+            <p>${(state.passedQuestionIds || []).length ? `已独立通过 ${(state.passedQuestionIds || []).length} 道整题。` : "等待老师归纳后进行整题检验。"}</p>
           </div>
         </article>
 
         <article class="parent-card">
           <div class="metric-large">
-            <span>讲给老师听</span>
+            <span>整题检验</span>
             <strong>${escapeText(state.feynmanStatus)}</strong>
-            <p>记录孩子是否真的理解，而不是只会报答案。</p>
+            <p>直接题、变式题和错题补救共同判断掌握，不要求孩子精准复述。</p>
           </div>
         </article>
 
@@ -7899,8 +7934,8 @@ function renderSummaryView() {
           <p>${escapeText(lesson.summary)}</p>
         </div>
         <div class="summary-block">
-          <h2>是否能讲出来</h2>
-          <p>${state.canExplainWhy ? escapeText(lesson.explainSummary) : "孩子目前还需要看图和提示才能讲清楚原因。"}</p>
+          <h2>老师归纳与整题检验</h2>
+          <p>${escapeText(state.feynmanStatus)}。${(state.passedQuestionIds || []).length ? `孩子已独立通过 ${(state.passedQuestionIds || []).length} 道完整题。` : "接下来会用少量完整题确认是否掌握。"}</p>
         </div>
         <div class="summary-block">
           <h2>下次建议</h2>
@@ -8163,8 +8198,13 @@ function changeLesson(reason, targetIndex = null) {
   state.engineSession = null;
   state.masteryEvidence = createEmptyMasteryEvidence();
   state.passedQuestionIds = [];
+  state.assessmentMode = false;
+  state.assessmentQuestionInRepair = false;
+  state.assessmentAskedQuestionIds = [];
+  state.assessmentOriginQuestionId = "";
+  state.assessmentTargetCount = 0;
   state.parentSignals = null;
-  state.feynmanStatus = "还没开始讲";
+  state.feynmanStatus = "等待老师归纳";
   state.canExplainWhy = false;
   state.canUseOwnWords = false;
   state.bestStrategy = lesson.strategies[0].label;
@@ -8176,17 +8216,7 @@ function changeLesson(reason, targetIndex = null) {
 }
 
 function startTeachback() {
-  const lesson = currentLesson();
-  clearRemediationCheck();
-  state.phase = "teachback";
-  state.teacherReaction = "responding";
-  state.aiContext = "轮到你当小老师了。";
-  state.aiMessage = lesson.teachbackPrompt;
-  state.currentStep = "小台阶 3：用自己的话讲";
-  state.feynmanStatus = "等待孩子讲";
-  resetGeneratedVisualForTurn();
-  render();
-  speakCurrentMessage();
+  startWholeQuestionAssessment(currentLesson(), "button");
 }
 
 async function generateStoryImage() {
@@ -8275,22 +8305,29 @@ function createVoiceRecognitionContext() {
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .slice(0, 48);
-  const fallbackPrompt = formatChildStepPrompt(plan) || question?.prompt || lesson?.problem || "";
+  const wholeQuestionMode = Boolean(state.assessmentMode && !state.assessmentQuestionInRepair && !state.remediationCheck);
+  const fallbackPrompt = wholeQuestionMode
+    ? question?.prompt || lesson?.problem || ""
+    : formatChildStepPrompt(plan) || question?.prompt || lesson?.problem || "";
   const prompt = resolveCurrentVoicePrompt(fallbackPrompt);
   // Voice validation must follow the question the child can currently see.
   // Mixing the final exercise answer into an earlier micro-step makes valid
   // replies such as "右边" look like invalid comparison-symbol answers.
-  const expectedAnswers = stepExpectedAnswers.length ? stepExpectedAnswers : questionExpectedAnswers;
-  const expectedType = inferVoiceAnswerType(prompt, plan, expectedAnswers);
+  const expectedAnswers = wholeQuestionMode
+    ? questionExpectedAnswers
+    : stepExpectedAnswers.length
+      ? stepExpectedAnswers
+      : questionExpectedAnswers;
+  const expectedType = inferVoiceAnswerType(prompt, wholeQuestionMode ? null : plan, expectedAnswers);
   return {
     lessonId: lesson?.id || "",
     questionId: question?.id || "",
     lessonName: lesson?.node || lesson?.lesson || "",
-    stepLabel: plan?.label || state.currentAtomName || "",
+    stepLabel: wholeQuestionMode ? "整题只答结果" : plan?.label || state.currentAtomName || "",
     prompt,
     expectedType,
     expectedAnswers,
-    hotwords: buildVoiceHotwords(lesson, plan, expectedAnswers, prompt),
+    hotwords: buildVoiceHotwords(lesson, wholeQuestionMode ? null : plan, expectedAnswers, prompt),
   };
 }
 
@@ -9427,6 +9464,11 @@ function applyGatewayTutor(payload, inputType) {
     payload.evidenceText = "孩子没有给出可判断的回答，系统没有推进掌握状态。";
   }
 
+  if (nextPhase === "teachback") {
+    startWholeQuestionAssessment(lesson, inputType);
+    return;
+  }
+
   state.phase = nextPhase;
   state.teacherReaction = nextPhase === "summary" ? "celebrating" : nextPhase === "repair" ? "encouraging" : "responding";
   state.aiContext = payload.aiContext || state.aiContext;
@@ -9440,12 +9482,6 @@ function applyGatewayTutor(payload, inputType) {
   state.feynmanStatus = payload.feynmanStatus || state.feynmanStatus;
   state.bestStrategy = payload.bestStrategy || state.bestStrategy;
 
-  if (nextPhase === "teachback") {
-    state.completedSteps = getLessonLadderSteps(lesson).length;
-    state.mastery = Math.max(state.mastery, 74);
-    state.currentStep = payload.currentStep || "小台阶 3：讲给老师听";
-  }
-
   if (nextPhase === "repair") {
     state.showVisual = true;
     state.strategyIndex = Math.max(state.strategyIndex, 1);
@@ -9457,11 +9493,12 @@ function applyGatewayTutor(payload, inputType) {
   if (nextPhase === "summary") {
     state.completedSteps = getLessonLadderSteps(lesson).length;
     state.mastery = Math.max(state.mastery, 86);
-    state.currentStep = payload.currentStep || "完成：能讲清楚原因";
+    state.currentStep = payload.currentStep || "完成：整题检验通过";
     state.currentAtomName = "";
     state.teachingState = "MASTERED";
-    state.canExplainWhy = true;
-    state.canUseOwnWords = true;
+    state.canExplainWhy = false;
+    state.canUseOwnWords = false;
+    state.feynmanStatus = "老师已归纳，整题通过";
     state.aiMessage = createCompletionMessage(lesson, payload.aiMessage || lesson.doneMessage);
   }
 
@@ -9489,8 +9526,8 @@ function evaluateLocally(text, inputType) {
     return;
   }
 
-  if (state.phase === "teachback" || state.phase === "repair") {
-    evaluateTeachback(text, inputType);
+  if (state.phase === "teachback") {
+    startWholeQuestionAssessment(lesson, inputType);
   } else {
     evaluateAttempt(text, inputType);
   }
@@ -9531,32 +9568,12 @@ function evaluateAttempt(text, inputType) {
   }
 
   if (knowsProcess && picksAnswer) {
-    state.phase = "teachback";
-    state.teacherReaction = "celebrating";
-    state.mastery = Math.max(state.mastery, 74);
-    state.completedSteps = getLessonLadderSteps(lesson).length;
-    state.currentStep = "小台阶 3：讲给老师听";
-    state.aiContext = "你已经会做这一步了。";
-    state.aiMessage = "这次换你当小老师，讲给我听一遍。";
-    state.feynmanStatus = "等待孩子讲";
-    resetGeneratedVisualForTurn();
-    addEvidence("答对并进入复述", `孩子能做出「${lesson.node}」，开始进入讲给老师听。`, inputType === "voice" ? "语音回答" : "键盘回答");
-    speakCurrentMessage();
+    startWholeQuestionAssessment(lesson, inputType);
     return;
   }
 
   if (picksAnswer) {
-    state.phase = "teachback";
-    state.teacherReaction = "celebrating";
-    state.mastery = Math.max(state.mastery, 70);
-    state.completedSteps = Math.max(state.completedSteps, Math.min(1, getLessonLadderSteps(lesson).length));
-    state.currentStep = "小台阶：说清原因";
-    state.aiContext = "孩子答案对了，但还没有说明原因。";
-    state.aiMessage = `答案对了。你再说一句：为什么是${formatExpectedAnswer(activeQuestion, lesson)}？`;
-    state.feynmanStatus = "会做，等待说理";
-    resetGeneratedVisualForTurn();
-    addEvidence("答案正确，追问原因", `孩子答出了「${formatExpectedAnswer(activeQuestion, lesson)}」，继续检查是否会说理。`, inputType === "voice" ? "语音回答" : "键盘回答");
-    speakCurrentMessage();
+    startWholeQuestionAssessment(lesson, inputType);
     return;
   }
 
@@ -9721,6 +9738,10 @@ function evaluateRemediationCheck(text, inputType) {
 
 function evaluateQuestionBankAttempt(text, inputType) {
   const lesson = currentLesson();
+  if (state.assessmentMode && !state.assessmentQuestionInRepair) {
+    evaluateWholeQuestionAssessment(text, inputType);
+    return;
+  }
   const normalized = normalizeText(text);
   const activeQuestion = lesson.activeQuestion || null;
   const plan = createGuidedStepPlan(lesson, state.completedSteps);
@@ -9786,6 +9807,10 @@ function advanceGuidedStepOrComplete(lesson, plan, inputType) {
   }
 
   const nextPlan = createGuidedStepPlan(lesson, plan.index + 1);
+  if (nextPlan.isReason) {
+    completeQuestionBankRound(lesson, inputType);
+    return;
+  }
   state.phase = "guiding";
   state.teacherReaction = "celebrating";
   state.completedSteps = nextPlan.index;
@@ -9804,79 +9829,229 @@ function advanceGuidedStepOrComplete(lesson, plan, inputType) {
 
 function askReasonAfterFullAnswer(lesson, inputType) {
   clearRemediationCheck();
-  const steps = createGuidedStepPlan(lesson, 0).steps;
-  const reasonIndex = Math.max(0, steps.findIndex((step) => step.isReason));
-  const reasonPlan = createGuidedStepPlan(lesson, reasonIndex >= 0 ? reasonIndex : steps.length - 1);
-  state.phase = "guiding";
-  state.teacherReaction = "celebrating";
-  state.completedSteps = reasonPlan.index;
-  clearGuidedRepairAttempts();
-  state.mastery = Math.max(state.mastery, 70);
-  state.teachingState = "GUIDED_STEP";
-  state.currentAtomName = reasonPlan.label;
-  state.currentStep = `小台阶 ${reasonPlan.index + 1}：${reasonPlan.label}`;
-  state.aiContext = "孩子答出了结果，继续检查是否能说原因。";
-  state.aiMessage = teacherReasonMessage(reasonPlan);
-  state.feynmanStatus = "会做，等待说理";
-  state.showVisual = true;
-  resetGeneratedVisualForTurn();
-  addEvidence("答案正确，追问原因", `孩子答出了「${formatExpectedAnswer(lesson.activeQuestion, lesson)}」，继续检查说理。`, inputType === "voice" ? "语音回答" : "键盘回答");
-  speakCurrentMessage();
+  addEvidence("答案正确", `孩子答出了「${formatExpectedAnswer(lesson.activeQuestion, lesson)}」，老师接着归纳方法。`, inputType === "voice" ? "语音回答" : "键盘回答");
+  startWholeQuestionAssessment(lesson, inputType);
 }
 
 function completeQuestionBankRound(lesson, inputType) {
   clearRemediationCheck();
+  if (!state.assessmentMode) {
+    startWholeQuestionAssessment(lesson, inputType);
+    return;
+  }
+
   recordQuestionPass(lesson);
-  const targetPassCount = getTargetQuestionPassCount(lesson);
+  state.assessmentQuestionInRepair = false;
+  const targetPassCount = state.assessmentTargetCount || getTargetQuestionPassCount(lesson);
   const passedCount = (state.passedQuestionIds || []).length;
 
-  if (passedCount < targetPassCount && getLessonQuestionBank(lesson).length > 1) {
-    advanceLessonQuestion(`孩子通过了第 ${passedCount} 道，换个问法再确认。`);
+  if (passedCount < targetPassCount && activateNextAssessmentQuestion(lesson, `答对了。已经完成 ${passedCount} 道，再来一道小变化。`)) {
     return;
   }
 
-  if (!state.masteryEvidence?.teachback) {
-    startKnowledgeTeachbackCheck(lesson, inputType);
+  finishWholeQuestionAssessment(lesson, inputType);
+}
+
+function startWholeQuestionAssessment(lesson, inputType) {
+  const originalQuestionId = lesson?.activeQuestion?.id || lesson?.problem || "";
+  const methodSummary = createTeacherMethodSummaryForLesson(lesson);
+  state.assessmentMode = true;
+  state.assessmentQuestionInRepair = false;
+  state.assessmentOriginQuestionId = originalQuestionId;
+  state.assessmentAskedQuestionIds = originalQuestionId ? [originalQuestionId] : [];
+  state.assessmentTargetCount = getTargetQuestionPassCount(lesson);
+  state.passedQuestionIds = [];
+  state.masteryEvidence = createEmptyMasteryEvidence();
+  state.feynmanStatus = "老师已归纳，等待整题检验";
+  state.canExplainWhy = false;
+  state.canUseOwnWords = false;
+
+  if (activateNextAssessmentQuestion(lesson, `刚才这类题，老师帮你收一下方法：${methodSummary}`)) {
+    addEvidence("老师归纳方法", `老师总结「${lesson.node}」的方法，随后开始整题检验。`, inputType === "voice" ? "语音回答" : "键盘回答");
     return;
   }
 
+  finishWholeQuestionAssessment(lesson, inputType);
+}
+
+function activateNextAssessmentQuestion(lesson, lead = "") {
+  const bank = getAssessmentQuestionCandidates(lesson);
+  if (!bank.length) return false;
+  const asked = new Set(state.assessmentAskedQuestionIds || []);
+  const currentCursor = Math.max(0, Number(lesson?.questionCursor) || 0);
+  let selected = null;
+  let selectedCursor = -1;
+
+  for (let offset = 1; offset <= bank.length; offset += 1) {
+    const candidate = bank[(currentCursor + offset) % bank.length];
+    const id = candidate?.id || candidate?.prompt;
+    if (candidate && id && !asked.has(id)) {
+      selected = candidate;
+      selectedCursor = getLessonQuestionBank(lesson).findIndex((item) => item === candidate || item?.id === candidate?.id);
+      break;
+    }
+  }
+
+  if (!selected) return false;
+  activateLessonQuestion(lesson, selected, selectedCursor >= 0 ? selectedCursor : currentCursor);
+  state.assessmentAskedQuestionIds = uniqueKeywords([...(state.assessmentAskedQuestionIds || []), selected.id || selected.prompt]);
+  state.phase = "assessment";
+  state.teacherReaction = /答对|完成/.test(lead) ? "celebrating" : "guiding";
+  state.assessmentQuestionInRepair = false;
+  state.completedSteps = getLessonLadderSteps(lesson).length;
+  clearGuidedRepairAttempts();
+  state.mastery = Math.max(state.mastery, 70);
+  state.teachingState = "PRACTICE_SET";
+  state.currentAtomName = "整题只答结果";
+  state.currentStep = `整题检验 ${(state.passedQuestionIds || []).length + 1}/${state.assessmentTargetCount || 3}`;
+  state.aiContext = "老师已经归纳方法，现在用完整题检查孩子是否能独立迁移。";
+  state.aiMessage = [
+    lead,
+    `现在做一道完整题：${childFacingPrompt(selected.prompt || lesson.problem)}`,
+    "这次不用拆小步，只说最后答案。",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  state.showVisual = true;
+  state.lastStudentText = "";
+  state.transcript = "";
+  state.engineSession = null;
+  resetGeneratedVisualForTurn();
+  addEvidence("进入整题检验", `第 ${(state.passedQuestionIds || []).length + 1} 道：${selected.prompt}`, "独立整题");
+  render();
+  speakCurrentMessage();
+  return true;
+}
+
+function evaluateWholeQuestionAssessment(text, inputType) {
+  const lesson = currentLesson();
+  const question = lesson?.activeQuestion || null;
+  const normalized = normalizeText(text);
+  const prompt = childFacingPrompt(question?.prompt || lesson?.problem || "这道题");
+
+  if (isCannotAnswerText(normalized)) {
+    beginAssessmentQuestionRepair(lesson, inputType, "没关系，这一道老师拆开讲。", "整题请求讲解");
+    return;
+  }
+
+  if (isUnclearChildText(normalized)) {
+    keepOnWholeQuestionAssessment(lesson, `老师没听清。还是这道完整题：${prompt}`, inputType, "整题输入不清");
+    return;
+  }
+
+  if (matchesWholeQuestionAnswer(normalized, question, lesson)) {
+    state.teacherReaction = "celebrating";
+    state.aiContext = "孩子独立答对完整题。";
+    addEvidence("整题答对", `孩子独立答对：${question?.prompt || lesson.problem}`, inputType === "voice" ? "语音回答" : "键盘回答");
+    completeQuestionBankRound(lesson, inputType);
+    return;
+  }
+
+  if (isLikelyOffTopicWholeAnswer(normalized)) {
+    keepOnWholeQuestionAssessment(lesson, `我们先回到这道题：${prompt}`, inputType, "整题答非所问");
+    return;
+  }
+
+  beginAssessmentQuestionRepair(lesson, inputType, "这道整题还没答对。老师只拆这一道给你讲。", "整题答案错误");
+}
+
+function beginAssessmentQuestionRepair(lesson, inputType, prefix, signal) {
+  state.assessmentQuestionInRepair = true;
+  state.completedSteps = 0;
+  const plan = createGuidedStepPlan(lesson, 0);
+  teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal);
+}
+
+function keepOnWholeQuestionAssessment(lesson, prefix, inputType, signal) {
+  state.phase = "assessment";
+  state.teacherReaction = "encouraging";
+  state.teachingState = "PRACTICE_SET";
+  state.currentAtomName = "整题只答结果";
+  state.aiContext = "孩子没有给出可判断的整题答案，停在原题，不推进也不判错。";
+  state.aiMessage = `${prefix} 这次只说最后答案。`;
+  state.showVisual = true;
+  resetGeneratedVisualForTurn();
+  addEvidence(signal, "没有推进学习状态，继续停在当前整题。", inputType === "voice" ? "语音回答" : "键盘回答");
+  speakCurrentMessage();
+}
+
+function matchesWholeQuestionAnswer(normalizedText, question, lesson) {
+  if (!normalizedText || !question) return false;
+  const expected = normalizeText(question.answer || "");
+  const expectedNumbers = Array.from(expected.matchAll(/\d+/g), (match) => match[0]);
+  const spokenNumbers = Array.from(normalizedText.matchAll(/\d+/g), (match) => match[0]);
+  if (expectedNumbers.length > 1) {
+    return expectedNumbers.every((number) => spokenNumbers.includes(number) || normalizedText.includes(chineseNumber(Number(number))));
+  }
+  const keywords = uniqueKeywords([
+    question.answer,
+    ...(question.answerKeywords || []),
+    ...expandedQuestionAnswerKeywords(question, lesson),
+  ]);
+  return matchesGuidedKeywords(normalizedText, keywords);
+}
+
+function isLikelyOffTopicWholeAnswer(normalizedText) {
+  if (!normalizedText) return true;
+  if (/冰淇淋|吃|玩|游戏|动画片|睡觉|不想学|不要学|累了|无聊/.test(normalizedText)) return true;
+  const hasAnswerSignal = /\d|一|二|三|四|五|六|七|八|九|十|百|千|万|元|角|分|个|只|本|支|块|张|条|米|克|大|小|多|少|对|错|左|右|<|>|=/.test(normalizedText);
+  return normalizedText.length > 8 && !hasAnswerSignal;
+}
+
+function getAssessmentQuestionCandidates(lesson) {
+  return getLessonQuestionBank(lesson).filter((question) => {
+    if (!question?.prompt || question?.answer === undefined || question?.answer === null || String(question.answer).trim() === "") return false;
+    return !/为什么|说一说|说明理由|讲一讲|方法是什么/.test(String(question.prompt));
+  });
+}
+
+function createTeacherMethodSummaryForLesson(lesson) {
+  const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null) || getLessonTeachingFamily(lesson);
+  const summaries = {
+    money: "元、角、分不能直接混着算，先换成同一种单位，再计算。",
+    moneyApplication: "先找付了多少钱和东西多少钱，换成同一种单位，再用付的钱减去价钱。",
+    makeTenAdd: "先从一个数里拿出一点，把另一个数凑成10，再加剩下的。",
+    breakTenSubtract: "个位不够减时，把十拆开，先减到10或从10里减，再处理剩下的。",
+    concreteAddition: "看到两部分合起来，就把两部分相加。",
+    concreteSubtraction: "看到从原来里面拿走或求还剩，就用原来的数减去拿走的数。",
+    composition: "先看总数和已经知道的一部分，再找缺少的那一部分。",
+    multiplication: "先找每组有几个，再数一共有几组，就是几个几。",
+    division: "先确认要平均分，再看分成几份或每份几个。",
+    compare: "先看清两边的数量或数位，再判断谁大谁小，最后填符号。",
+    calculation: "先看运算符号和顺序，再一步一步算，最后检查。",
+    application: "先看题目最后问什么，再找有用的数量和它们的关系。",
+    placeValue: "先看数字在哪一位；位置不同，表示的大小就不同。",
+    time: "先看短针确定几时，再看长针确定几分。",
+    measure: "先判断物体的大小、长短或轻重，再选合适的单位。",
+    shape: "判断图形要看边、角和面的特征，不能只看摆放方向。",
+    data: "先看清表格或图例表示什么，再找到对应数量。",
+    logic: "先记住确定条件，再逐个排除不可能，最后检查剩下的答案。",
+  };
+  return summaries[family] || "先看题目问什么，再找有用条件，最后按顺序算出结果。";
+}
+
+function finishWholeQuestionAssessment(lesson, inputType) {
+  const passedCount = (state.passedQuestionIds || []).length;
   state.phase = "summary";
   state.teacherReaction = "celebrating";
   state.mastery = Math.max(state.mastery, 86);
   state.completedSteps = getLessonLadderSteps(lesson).length;
-  state.currentStep = "完成：会做，也能说原因";
+  state.currentStep = "完成：整题检验通过";
   state.currentAtomName = "";
   state.teachingState = "MASTERED";
-  state.aiContext = "孩子已经通过少量变式确认，不继续刷题。";
-  state.aiMessage = createCompletionMessage(lesson);
-  state.feynmanStatus = "能讲清楚";
-  state.canExplainWhy = true;
-  state.canUseOwnWords = true;
+  state.aiContext = "老师已经归纳方法，孩子通过少量完整题确认掌握。";
+  state.aiMessage = createCompletionMessage(lesson, `这个知识点先过关。老师把方法讲过，你又独立做对了 ${passedCount} 道完整题。`);
+  state.feynmanStatus = "老师已归纳，整题通过";
+  state.canExplainWhy = false;
+  state.canUseOwnWords = false;
   state.showVisual = true;
   resetGeneratedVisualForTurn();
-  addEvidence("知识点过关", `已用 ${passedCount} 道小题确认掌握，没有继续机械刷题。`, inputType === "voice" ? "语音回答" : "键盘回答");
+  addEvidence("知识点过关", `老师归纳后，孩子独立通过 ${passedCount} 道完整题。`, inputType === "voice" ? "语音回答" : "键盘回答");
   speakCurrentMessage();
 }
 
 function startKnowledgeTeachbackCheck(lesson, inputType) {
-  clearRemediationCheck();
-  const family = getLessonTeachingFamily(lesson);
-  const key = `${lesson?.id || ""}|${lesson?.activeQuestion?.id || lesson?.problem || ""}|teachback|${state.passedQuestionIds?.length || 0}`;
-  const move = createStrategyDialogueMove(family, "teachback", key);
-  state.phase = "teachback";
-  state.teacherReaction = "responding";
-  state.mastery = Math.max(state.mastery, 82);
-  state.completedSteps = getLessonLadderSteps(lesson).length;
-  state.currentStep = "最后一步：讲给老师听";
-  state.currentAtomName = "讲清方法";
-  state.teachingState = "FEYNMAN_CHECK";
-  state.aiContext = "孩子已通过直接题和变式题，进入讲给老师听。";
-  state.aiMessage = `${move || "现在换你当小老师。"}${createTeachbackCheckPrompt(lesson)}`;
-  state.feynmanStatus = "等待孩子讲";
-  state.showVisual = true;
-  resetGeneratedVisualForTurn();
-  addEvidence("进入费曼复述", "孩子做题和变式已通过，开始检查是否能用自己的话讲清。", inputType === "voice" ? "语音回答" : "键盘回答");
-  speakCurrentMessage();
+  startWholeQuestionAssessment(lesson, inputType);
 }
 
 function createTeachbackCheckPrompt(lesson) {
@@ -9930,7 +10105,7 @@ function createTeachbackStarterSentence(family) {
   return starters[family] || "我先看题目问什么";
 }
 
-function createCompletionMessage(lesson = currentLesson(), prefix = "这个知识点先过关。你不是只背答案，也能说出怎么想。") {
+function createCompletionMessage(lesson = currentLesson(), prefix = "这个知识点先过关。老师讲过方法，你也能独立做对完整题了。") {
   const nextLesson = lessons[getNextLessonIndex()];
   const nextText = nextLesson ? `接下来可以继续学「${nextLesson.node}」，` : "";
   return `${prefix}${nextText}也可以点上面的“当前知识点”自己选。你可以说“继续下一个”，或者说“我想自己选”。`;
@@ -9987,21 +10162,26 @@ function hasProcessSignalForFullAnswer(normalizedText) {
 }
 
 function getTargetQuestionPassCount(lesson) {
-  const bankLength = getLessonQuestionBank(lesson).length;
-  if (bankLength <= 1) return 1;
-  const configured = Number(lesson?.targetPassCount || lesson?.teachingProfile?.targetPassCount || 4);
-  return Math.min(bankLength, Math.max(3, Math.min(4, configured || 4)));
+  const candidates = getAssessmentQuestionCandidates(lesson);
+  if (!candidates.length) return 0;
+  const originId = state.assessmentOriginQuestionId || lesson?.activeQuestion?.id || lesson?.problem || "";
+  const availableCount = candidates.filter((question) => (question?.id || question?.prompt) !== originId).length;
+  return Math.min(3, Math.max(1, availableCount || candidates.length));
 }
 
 function expandedQuestionAnswerKeywords(question, lesson) {
   if (!question) return [];
   const keywords = normalizeTextList(question.answerKeywords, [question.answer]);
   const looseKeywords = expandLooseAnswerKeywords(question);
-  if (lesson?.visualType !== "money" && lesson?.id !== "renminbi-conversion") return uniqueKeywords(keywords.concat(looseKeywords));
+  const symbol = getCompareSymbol([question.answer, ...(question.answerKeywords || [])].join(" "));
+  const symbolKeywords = symbol ? compareSymbolKeywords(symbol) : [];
+  if (lesson?.visualType !== "money" && lesson?.id !== "renminbi-conversion") {
+    return uniqueKeywords(keywords.concat(looseKeywords, symbolKeywords));
+  }
   const unit = inferMoneyTargetUnit(question.prompt || "", question);
   const answerNumber = Number(String(question.answer || "").match(/\d+/)?.[0] || NaN);
-  if (!Number.isFinite(answerNumber)) return uniqueKeywords(keywords.concat(looseKeywords));
-  return uniqueKeywords(keywords.concat(looseKeywords, answerKeywordsForNumber(answerNumber, unit || "")));
+  if (!Number.isFinite(answerNumber)) return uniqueKeywords(keywords.concat(looseKeywords, symbolKeywords));
+  return uniqueKeywords(keywords.concat(looseKeywords, symbolKeywords, answerKeywordsForNumber(answerNumber, unit || "")));
 }
 
 function expandLooseAnswerKeywords(question) {
@@ -10151,76 +10331,7 @@ function createTeachbackVariantBridge(lesson, starter, nextQuestion) {
 }
 
 function evaluateTeachback(text, inputType) {
-  const lesson = currentLesson();
-  const normalized = normalizeText(text);
-  if (isCannotAnswerText(normalized) || isUnclearChildText(normalized)) {
-    const family = getLessonTeachingFamily(lesson);
-    const move = createStrategyDialogueMove(family, "cannotAnswer", `${lesson?.id || ""}|teachback|${normalized}`, { includeHint: true });
-    state.phase = "repair";
-    state.teacherReaction = "encouraging";
-    state.mastery = Math.max(state.mastery, 72);
-    state.currentStep = "最后一步：再讲一次";
-    state.aiContext = "孩子讲不出来，老师给半句示范。";
-    state.aiMessage = `${move || "没关系，老师先示范一句。"}${lesson.repairPrompt || createTeachbackCheckPrompt(lesson)}`;
-    state.feynmanStatus = "会做但讲不清";
-    state.showVisual = true;
-    state.strategyIndex = 1;
-    state.bestStrategy = lesson.strategies[1]?.label || "画图";
-    resetGeneratedVisualForTurn();
-    addEvidence("讲不出来", "孩子还不能复述方法，AI 给半句示范，不直接判错。", "费曼补救");
-    speakCurrentMessage();
-    return;
-  }
-  const mentionsConcept = includesAny(normalized, lesson.answer.conceptKeywords);
-  const explainsWhy = includesAny(normalized, lesson.answer.whyKeywords);
-  const usesOwnWords = includesAny(normalized, lesson.answer.ownWordsKeywords);
-  const comparesResult = includesAny(normalized, lesson.answer.resultKeywords);
-  const methodLikeTeachback =
-    looksLikeReason(normalized) &&
-    (mentionsConcept || usesOwnWords || normalized.length >= 8);
-  const enoughTeachback =
-    mentionsConcept &&
-    explainsWhy &&
-    (comparesResult || usesOwnWords || methodLikeTeachback);
-
-  if (enoughTeachback) {
-    recordMasteryEvidence("teachback");
-    recordMasteryEvidence("reasoning");
-    recordQuestionPass(lesson);
-    if (maybeContinueWithVariantAfterTeachback(inputType)) return;
-
-    state.phase = "summary";
-    state.teacherReaction = "celebrating";
-    state.mastery = 86;
-    state.completedSteps = getLessonLadderSteps(lesson).length;
-    state.currentStep = "完成：能讲清楚原因";
-    state.currentAtomName = "";
-    state.teachingState = "MASTERED";
-    state.aiContext = "你讲清楚了关键原因。";
-    state.aiMessage = createCompletionMessage(lesson, lesson.doneMessage);
-    state.feynmanStatus = "能讲清楚";
-    state.canExplainWhy = true;
-    state.canUseOwnWords = usesOwnWords;
-    state.bestStrategy = usesOwnWords ? lesson.strategies[1]?.label || state.bestStrategy : state.bestStrategy;
-    resetGeneratedVisualForTurn();
-    addEvidence("能用自己的话解释", `孩子复述时能说出「${lesson.node}」的关键原因。`, inputType === "voice" ? "讲给老师听" : "打字复述");
-    speakCurrentMessage();
-    return;
-  }
-
-  state.phase = "repair";
-  state.teacherReaction = "encouraging";
-  state.mastery = Math.max(state.mastery, 68);
-  state.currentStep = "小台阶 3：再讲一次";
-  state.aiContext = "你已经说出了一部分，还差一点原因。";
-  state.aiMessage = lesson.repairPrompt;
-  state.feynmanStatus = "会做但讲不清";
-  state.showVisual = true;
-  state.strategyIndex = 1;
-  state.bestStrategy = lesson.strategies[1]?.label || "画图";
-  resetGeneratedVisualForTurn();
-  addEvidence("会做但讲不清", "孩子复述不完整，AI 没有判错，而是换成看图追问。", "画图");
-  speakCurrentMessage();
+  startWholeQuestionAssessment(currentLesson(), inputType);
 }
 
 function switchExplanation(reason) {

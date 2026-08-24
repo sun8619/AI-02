@@ -68,7 +68,7 @@ export function runTeachingTurn({ graph, lesson, childText, session, inputType =
   }
 
   if (currentSession.current_state === TeachingState.FEYNMAN_EXPLAIN || currentSession.current_state === TeachingState.FEYNMAN_EVAL) {
-    return evaluateFeynman({ point, session: currentSession, text, inputType });
+    return finishAfterWholeQuestionChecks({ point, session: currentSession, inputType });
   }
 
   if (currentSession.current_state === TeachingState.PRACTICE_SET || currentSession.current_state === TeachingState.REMEDIATION_RECHECK) {
@@ -206,11 +206,11 @@ function advanceAtomOrPractice({ graph, point, session, atom, inputType }) {
     point,
     session: nextSession,
     phase: "guiding",
-    aiContext: "进入掌握检验。先做直接题，再做变式题和说理题。",
+    aiContext: "老师先归纳方法，再用三道整题确认孩子是否会独立使用。",
     aiMessage: makeEnterAssessmentMessage(firstQuestion, point),
     currentStep: `闯关检验 1/${assessmentPlan.length || 1}`,
     evidenceSignal: "进入掌握检验",
-    evidenceText: "当前知识点的核心小台阶已走完，开始做直接题、变式题和说理题。",
+    evidenceText: "当前知识点的小台阶已走完。老师先讲一次方法，再做少量整题；只有答错才拆小步。",
     bestStrategy: "闯关检验",
     inputType,
     assessment: firstQuestion || null,
@@ -301,77 +301,38 @@ function evaluateAssessment({ graph, point, session, text, inputType }) {
     });
   }
 
+  return finishAfterWholeQuestionChecks({
+    point,
+    session: {
+      ...session,
+      assessment_records: records,
+      assessment_index: templates.length,
+    },
+    inputType,
+  });
+}
+
+function finishAfterWholeQuestionChecks({ point, session, inputType }) {
   return buildResult({
     point,
     session: {
       ...session,
-      current_state: TeachingState.FEYNMAN_EXPLAIN,
-      assessment_records: records,
-      assessment_index: templates.length,
+      current_state: TeachingState.MASTERED,
     },
-    phase: "teachback",
-    aiContext: "掌握检验全对，进入费曼复述。",
-    aiMessage: makeTeachbackPrompt(point),
-    currentStep: "你来当小老师",
-    feynmanStatus: "等待孩子讲",
-    evidenceSignal: "掌握检验全对",
-    evidenceText: "直接题、变式题和说理题已通过，进入讲给老师听。",
-    bestStrategy: "费曼复述",
+    phase: "summary",
+    aiContext: "孩子已通过少量整题检验，不再要求精准复述。",
+    aiMessage: "这几道整题都能独立答出来，说明这个方法已经会用了。这个知识点先过关。",
+    currentStep: "完成：整题会独立做",
+    feynmanStatus: "老师已归纳，整题通过",
+    evidenceSignal: "整题检验通过",
+    evidenceText: "老师已讲过方法，孩子通过直接题和变式题确认掌握。",
+    bestStrategy: "少量整题检验",
     inputType,
   });
 }
 
 function evaluateFeynman({ point, session, text, inputType }) {
-  const normalized = normalizeText(text);
-  const requiredSignals = point.feynman_prompt?.required_signals || [];
-  const hitCount = requiredSignals.filter((signal) => normalized.includes(normalizeText(signal))).length;
-  const passed = hitCount >= Math.max(2, Math.ceil(requiredSignals.length * 0.6));
-  const record = {
-    prompt_id: point.feynman_prompt?.id || "",
-    answer_text: text,
-    required_signal_count: requiredSignals.length,
-    hit_count: hitCount,
-    passed,
-  };
-
-  if (passed) {
-    return buildResult({
-      point,
-      session: {
-        ...session,
-        current_state: TeachingState.MASTERED,
-        feynman_records: session.feynman_records.concat(record),
-      },
-      phase: "summary",
-      aiContext: "孩子通过费曼复述，知识点标记为稳定掌握。",
-      aiMessage: "步骤和原因都说出来了。这个知识点更稳了。",
-      currentStep: "完成：能用自己的话讲",
-      feynmanStatus: "能讲清楚",
-      evidenceSignal: "费曼复述通过",
-      evidenceText: `孩子讲中了 ${hitCount}/${requiredSignals.length} 个关键点。`,
-      bestStrategy: "费曼复述",
-      inputType,
-    });
-  }
-
-  return buildResult({
-    point,
-    session: {
-      ...session,
-      current_state: TeachingState.FEYNMAN_EXPLAIN,
-      feynman_records: session.feynman_records.concat(record),
-      consecutive_fail_count: session.consecutive_fail_count + 1,
-    },
-    phase: "repair",
-    aiContext: "孩子会做但讲不完整，进入半句脚手架。",
-    aiMessage: makeFeynmanScaffold(requiredSignals, point),
-    currentStep: "再讲一次：补一句为什么",
-    feynmanStatus: "会做但讲不清",
-    evidenceSignal: "费曼复述未完整",
-    evidenceText: `孩子只讲中了 ${hitCount}/${requiredSignals.length} 个关键点，需要半句脚手架。`,
-    bestStrategy: "半句脚手架",
-    inputType,
-  });
+  return finishAfterWholeQuestionChecks({ point, session, inputType });
 }
 
 function handleFailure({ graph, point, session, atom, errorTag, inputType }) {
@@ -466,27 +427,26 @@ function getCurrentAssessment(point, session) {
 
 function getAssessmentPlan(point) {
   const templates = point?.assessment_templates || [];
-  if (templates.length <= 4) return templates;
+  const resultQuestions = templates.filter((item) => item.dimension !== MasteryDimension.REASONING);
+  const candidates = resultQuestions.length ? resultQuestions : templates;
+  if (candidates.length <= 3) return candidates;
 
   const plan = [];
   const add = (template) => {
     if (template && !plan.some((item) => item.id === template.id)) plan.push(template);
   };
-  const direct = templates.filter((item) => item.dimension === MasteryDimension.DIRECT);
-  const variant = templates.filter((item) => item.dimension === MasteryDimension.VARIANT);
-  const reasoning = templates.filter((item) => item.dimension === MasteryDimension.REASONING);
+  const direct = candidates.filter((item) => item.dimension === MasteryDimension.DIRECT);
+  const variant = candidates.filter((item) => item.dimension === MasteryDimension.VARIANT);
 
   add(direct[0]);
   add(variant[0] || direct[1]);
   add(variant.find((item) => item.primary_atom_id !== plan[1]?.primary_atom_id) || variant[1]);
-  add(reasoning[0]);
-
-  for (const template of templates) {
-    if (plan.length >= 4) break;
+  for (const template of candidates) {
+    if (plan.length >= 3) break;
     add(template);
   }
 
-  return plan.slice(0, 4);
+  return plan.slice(0, 3);
 }
 
 function makeAssessmentPromptMessage(template, prefix = "", point = null) {
@@ -575,18 +535,24 @@ function makeNextAtomMessage({ point, previousAtom, nextAtom, session }) {
 }
 
 function makeEnterAssessmentMessage(firstQuestion, point) {
-  const opener = pickText([
-    "我们不用做很多题，先用一小题看看你是不是会用了。",
-    "现在做一个小检查，不是考试，答错老师会继续带你。",
-    "方法学过了，换一道小题试试看。",
-  ], `${point?.id}|assessment-start`);
-  return makeAssessmentPromptMessage(firstQuestion, `${opener}`, point);
+  const summary = makeTeacherMethodSummary(point);
+  return `老师把方法收一下：${summary} 现在做三道整题，不再拆小步。第一题：${firstQuestion?.prompt || "先看这一题。"} 只说最后答案。`;
 }
 
 function makeNextAssessmentMessage(nextQuestion, nextIndex, templates, point, session) {
   const opener = pickText(assessmentTransitionOptions(point?.teaching_family || "generic"), `${point?.id}|${nextQuestion?.id}|${nextIndex}|${session?.assessment_records?.length}`);
-  const progress = templates?.length ? `第${nextIndex + 1}小题，` : "";
-  return makeAssessmentPromptMessage(nextQuestion, `${opener}${progress}`, point);
+  const progress = templates?.length ? `第${nextIndex + 1}题，` : "";
+  return `${opener}${progress}${nextQuestion?.prompt || "看这一题。"} 只说最后答案。`;
+}
+
+function makeTeacherMethodSummary(point) {
+  const sentence = getReasoningSentence(point?.teaching_family || "generic", point);
+  const atomSummary = (point?.atoms || [])
+    .map((atom) => atom.atom_name)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join("，再");
+  return `${sentence}${atomSummary ? ` 方法就是先${atomSummary}。` : ""}`;
 }
 
 function assessmentTransitionOptions(family) {
@@ -1093,7 +1059,9 @@ function buildParentSignals(point, session) {
     stuck_chain: session.stuck_events.slice(-5),
     remediation_count: session.remediation_records.length,
     assessment_passed: session.assessment_records.length > 0 && session.assessment_records.every((record) => record.passed),
-    feynman_passed: session.feynman_records.some((record) => record.passed),
+    teacher_summary_completed: session.assessment_records.length > 0,
+    whole_question_check_passed: session.assessment_records.length > 0 && session.assessment_records.every((record) => record.passed),
+    feynman_passed: false,
   };
 }
 

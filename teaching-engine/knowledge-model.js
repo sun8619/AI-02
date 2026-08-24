@@ -123,20 +123,16 @@ export function summarizeMastery(records) {
     ratios[dimension] = totals[dimension] ? dimensions[dimension] / totals[dimension] : 0;
   }
 
+  const directReady = totals[MasteryDimension.DIRECT] > 0 && ratios[MasteryDimension.DIRECT] === 1;
+  const variantReady = totals[MasteryDimension.VARIANT] === 0 || ratios[MasteryDimension.VARIANT] === 1;
   const score =
-    ratios[MasteryDimension.DIRECT] * 0.25 +
-    ratios[MasteryDimension.VARIANT] * 0.25 +
-    ratios[MasteryDimension.REASONING] * 0.25 +
-    ratios[MasteryDimension.FEYNMAN] * 0.25;
+    ratios[MasteryDimension.DIRECT] * 0.55 +
+    (totals[MasteryDimension.VARIANT] ? ratios[MasteryDimension.VARIANT] : ratios[MasteryDimension.DIRECT]) * 0.45;
 
   return {
     score: Number(score.toFixed(2)),
     ratios,
-    passed:
-      ratios[MasteryDimension.DIRECT] === 1 &&
-      ratios[MasteryDimension.VARIANT] === 1 &&
-      ratios[MasteryDimension.REASONING] === 1 &&
-      ratios[MasteryDimension.FEYNMAN] === 1,
+    passed: directReady && variantReady,
   };
 }
 

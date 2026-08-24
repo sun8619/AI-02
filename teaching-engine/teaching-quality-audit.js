@@ -94,7 +94,6 @@ function scorePoint(point) {
   const atoms = point.atoms || [];
   const assessments = point.assessment_templates || [];
   const remediationRules = point.remediation_rules || [];
-  const feynmanSignals = point.feynman_prompt?.required_signals || [];
   const dimensions = new Set(assessments.map((item) => item.dimension));
   const naturalness = scoreNaturalness(point, atoms);
   const gaps = [];
@@ -109,8 +108,8 @@ function scorePoint(point) {
   if ((atoms.length >= 4 || (overlay?.microSteps || []).length >= 5) && atoms.every((atom) => atom.prompt && atom.atom_name)) score += 16;
   else gaps.push("小台阶不足或缺少儿童提问");
 
-  if (assessments.length >= 4 && dimensions.has("direct_problem") && dimensions.has("variant_problem") && dimensions.has("reasoning")) score += 16;
-  else gaps.push("缺少直接题/变式题/说理题之一");
+  if (assessments.length >= 3 && dimensions.has("direct_problem") && dimensions.has("variant_problem")) score += 16;
+  else gaps.push("缺少直接题或变式整题检验");
 
   if (remediationRules.length >= atoms.length) score += 10;
   else if (remediationRules.length >= 3) {
@@ -120,8 +119,8 @@ function scorePoint(point) {
     gaps.push("补救规则不足");
   }
 
-  if (feynmanSignals.length >= 4 && point.feynman_prompt?.child_prompt) score += 11;
-  else gaps.push("费曼复述要求不足");
+  if ((strategy?.teachingMethods || []).length >= 2 || atoms.filter((atom) => /方法|先|再|因为|所以|换|凑|拆/.test(atom.teach_prompt || "")).length >= 2) score += 11;
+  else gaps.push("老师归纳方法不足");
 
   if ((strategy?.diagnostics || []).length >= 3) score += 9;
   else gaps.push("错误诊断不够细");
