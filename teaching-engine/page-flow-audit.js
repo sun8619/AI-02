@@ -310,13 +310,21 @@ function scoreAnswerLeak(events) {
     if (![MasteryDimension.DIRECT, MasteryDimension.VARIANT].includes(event.assessmentDimension)) return false;
     const answerTokens = expectedAnswerTokens(event.expected);
     if (!answerTokens.length) return false;
-    return answerTokens.some((token) => token && containsExpectedAnswer(event.message, token, event.expected));
+    const teacherScaffold = removeAssessmentPrompt(event.message, event.assessmentPrompt);
+    return answerTokens.some((token) => token && containsExpectedAnswer(teacherScaffold, token, event.expected));
   });
   let score = 100 - Math.min(60, risky.length * 15);
   return {
     score: Math.max(0, score),
     gaps: risky.slice(0, 4).map((event) => `检验题提示疑似提前出现答案：${shorten(event.message)}`),
   };
+}
+
+function removeAssessmentPrompt(message, prompt) {
+  const text = String(message || "");
+  const assessment = String(prompt || "").trim();
+  if (!assessment) return text;
+  return text.replace(assessment, "本轮检验题");
 }
 
 function scoreKnowledgeBoundary(events, point) {
@@ -395,7 +403,7 @@ function containsExpectedAnswer(message, token, expected = {}) {
 
 function stripNonAnswerNumbers(message) {
   return String(message || "")
-    .replace(/第\s*\d+\s*小题/g, "第 小题")
+    .replace(/第\s*\d+\s*(?:小?题|关|步)/g, "本轮")
     .replace(/\d+\s*[+＋\-－×xX*÷/]\s*\d+/g, "算式")
     .replace(/比如[:：]?\s*\d+\s*(元|角|分|个|只|本|支|米|厘米|克|千克)?/g, "比如");
 }

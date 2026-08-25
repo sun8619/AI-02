@@ -546,13 +546,7 @@ function makeNextAssessmentMessage(nextQuestion, nextIndex, templates, point, se
 }
 
 function makeTeacherMethodSummary(point) {
-  const sentence = getReasoningSentence(point?.teaching_family || "generic", point);
-  const atomSummary = (point?.atoms || [])
-    .map((atom) => atom.atom_name)
-    .filter(Boolean)
-    .slice(0, 3)
-    .join("，再");
-  return `${sentence}${atomSummary ? ` 方法就是先${atomSummary}。` : ""}`;
+  return getReasoningSentence(point?.teaching_family || "generic", point);
 }
 
 function assessmentTransitionOptions(family) {

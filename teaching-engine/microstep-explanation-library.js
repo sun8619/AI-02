@@ -480,9 +480,12 @@
       families: ["money", "moneyApplication"],
       match: /1元.*10角|元角分|单位关系|认识元角分/,
       explanation: "元、角、分是不同单位。要先记住1元等于10角，1角等于10分，换算时单位和数字要一起说。",
-      demonstration: "1元不是1角，而是10角；2元就是2个10角，也就是20角。",
-      checks: [["1元等于多少角？", ["10", "十", "10角", "十角"]]],
-      responseInstruction: "只说“10角”。",
+      demonstration: "换算时先数有几个1元，每1元换成10角，再把这些10角合起来。",
+      checks: [
+        ["2元等于多少角？", ["20", "二十", "20角", "二十角"]],
+        ["3元等于多少角？", ["30", "三十", "30角", "三十角"]],
+      ],
+      responseInstruction: "说出数字，带上“角”。",
     }),
     stepRule({
       families: ["money", "moneyApplication"],
@@ -845,10 +848,34 @@
       responseInstruction: "只说观察方向。",
     }),
     stepRule({
+      families: ["composition"],
+      match: /合起来检查/,
+      explanation: "检查分合时，把两部分重新合起来。合起来正好等于总数，说明这一组分法是对的。",
+      demonstration: "8分成3和5，检查时算3加5，正好回到总数8。",
+      checks: [["9分成4和5，4和5合起来等于几？", ["9", "九"]]],
+      responseInstruction: "只说合起来的总数。",
+    }),
+    stepRule({
+      families: ["pattern"],
+      match: /检查前后一致/,
+      explanation: "检查规律时，从第一项开始逐个看，相邻两项的变化要和刚才找到的规律一样。只对最后两项还不够。",
+      demonstration: "2、4、6、8前后每次都加2，所以这条规律前后一致。",
+      checks: [["3、6、9、12前后每次都加几？", ["3", "三", "加3", "加三"]]],
+      responseInstruction: "只说每次增加几。",
+    }),
+    stepRule({
+      families: ["logic"],
+      match: /检查全部条件/,
+      explanation: "推理出答案后，要把它放回每一条条件里检查。每条都符合，答案才稳；只符合一条还不能结束。",
+      demonstration: "小球不在1号，也不在3号，选2号后再检查两句话都没有冲突。",
+      checks: [["小红不在左边，也不在中间。选右边后，两条条件都符合吗？", ["符合", "都符合", "是", "对"]]],
+      responseInstruction: "只说“符合”或“不符合”。",
+    }),
+    stepRule({
       families: [],
       match: /换|再试|举生活例子|自己续|换顺序|换情境|换数字|换一个/,
       explanation: "这一步要换数字、图或情境再试，方法不变。先说出刚才的方法，再把它用到新题里。",
-      demonstration: "刚才用一一配对比较，换成苹果和梨后还是先配对，不靠图摆得长短来猜。",
+      demonstration: "换题只换数字、图或故事，解决当前知识点的方法不变。",
     }),
     stepRule({
       families: ["angle"],
@@ -859,7 +886,22 @@
       responseInstruction: "只说角的名字。",
     }),
     stepRule({
-      families: [],
+      families: [
+        "concreteAddition",
+        "concreteSubtraction",
+        "calculation",
+        "makeTenAdd",
+        "breakTenSubtract",
+        "mixedCalculation",
+        "application",
+        "money",
+        "moneyApplication",
+        "multiplication",
+        "division",
+        "comparisonDifference",
+        "remainderDivision",
+        "remainderApplication",
+      ],
       match: /检查|验证|合起来检查|换回.*检查/,
       explanation: "检查不是重做一遍，而是用相反动作或估一估看看答案是否合理。加法可用减法查，减法可用加法查。",
       demonstration: "7减3等于4，可以用4加3等于7来检查。",
@@ -870,9 +912,7 @@
       families: [],
       match: /说清|解释|为什么|原因|当小老师|讲一遍|复述/,
       explanation: "讲方法时不用背长句，只说“先看什么，再做什么，因为这样能解决什么”。",
-      demonstration: "比如比较大小可以说：先数清两边，再看谁多，所以右边大。",
-      checks: [["跟着说这一句：先看问题，再找条件。老师问：第一步先看什么？", ["问题", "先看问题", "题目问什么"]]],
-      responseInstruction: "只说“先看问题”。",
+      demonstration: "先说第一步看什么，再说下一步做什么，最后用一句话说明原因。",
     }),
   ];
 
@@ -902,6 +942,49 @@
     return stepRules.find((rule) => (!rule.families.length || rule.families.includes(family)) && rule.match.test(text)) || null;
   }
 
+  function hasBalancedChoices(instruction) {
+    const text = String(instruction || "");
+    return [
+      /左边.*右边|右边.*左边/,
+      /[“\"]要[”\"].*[“\"]不要[”\"]|[“\"]不要[”\"].*[“\"]要[”\"]|要或不要/,
+      /[“\"]够[”\"].*[“\"]不够[”\"]|[“\"]不够[”\"].*[“\"]够[”\"]|够或不够/,
+      /加法.*减法|减法.*加法/,
+      /大于号.*小于号|小于号.*大于号/,
+      /数量.*位置|位置.*数量/,
+      /长度.*质量|质量.*长度/,
+      /平移.*旋转|旋转.*平移/,
+      /[“\"]对[”\"].*[“\"]错[”\"]|[“\"]错[”\"].*[“\"]对[”\"]|对或错/,
+    ].some((pattern) => pattern.test(text));
+  }
+
+  function instructionLeaksAnswer(instruction, answerKeywords) {
+    const text = normalize(instruction);
+    if (!text || hasBalancedChoices(instruction)) return false;
+    return (answerKeywords || []).some((keyword) => {
+      const answer = normalize(keyword);
+      if (!answer || /^[<>=+\-×÷]$/.test(answer)) return false;
+      return text.includes(answer);
+    });
+  }
+
+  function safeResponseInstruction(prompt, answerKeywords, instruction) {
+    if (!instructionLeaksAnswer(instruction, answerKeywords)) return instruction || "只说答案就可以。";
+    const text = normalize(prompt);
+    if (/哪边|左边.*右边|右边.*左边/.test(text)) return "只说“左边”或“右边”。";
+    if (/要不要|需要不需要|能不能|是否/.test(text)) return "只说“要”或“不要”。";
+    if (/够不够/.test(text)) return "只说“够”或“不够”。";
+    if (/加法还是减法|什么运算|用什么方法/.test(text)) return "只说运算名称。";
+    if (/判断|对不对|正确吗/.test(text)) return "只说“对”或“错”。";
+    if (/什么图形/.test(text)) return "只说图形名字。";
+    if (/什么角/.test(text)) return "只说角的名字。";
+    if (/什么单位|用厘米还是米|用克还是千克/.test(text)) return "只说合适的单位。";
+    if (/表示什么|是什么/.test(text) && !/多少|几/.test(text)) return "用一个短词回答。";
+    if (/第一步|先算什么/.test(text)) return "只说第一步要做什么。";
+    if (/几元几角/.test(text)) return "说出“几元几角”。";
+    if (/多少|几个|几只|几张|几支|几朵|几时|几分|几厘米|几角|几元/.test(text)) return "只说结果，带上题目里的单位。";
+    return "只说答案就可以。";
+  }
+
   function create(payload) {
     const family = library[payload?.family] ? payload.family : "generic";
     const definition = library[family];
@@ -923,7 +1006,7 @@
       checkPrompt: prompt,
       answerKeywords,
       answer: answerKeywords[0] || "",
-      responseInstruction: effective.responseInstruction,
+      responseInstruction: safeResponseInstruction(prompt, answerKeywords, effective.responseInstruction),
       visualType: effective.visualType || definition.visualType,
       sourceIds: SOURCES.slice(),
       originalQuestion: payload?.question?.prompt || payload?.lesson?.problem || "",

@@ -1062,6 +1062,16 @@ const curriculumBlueprints = mergeCurriculumBlueprints(
 );
 
 const lessons = buildLessonCatalog();
+const DEFAULT_LESSON_SOURCE_ID = "G1V1-U1-KP01";
+const defaultLessonIndex = Math.max(
+  0,
+  lessons.findIndex(
+    (lesson) =>
+      lesson.sourceQuestionBankId === DEFAULT_LESSON_SOURCE_ID ||
+      lesson.id === DEFAULT_LESSON_SOURCE_ID.toLowerCase(),
+  ),
+);
+const defaultLesson = lessons[defaultLessonIndex] || lessons[0];
 
 function buildQuestionBankBlueprints(bank) {
   const points = Array.isArray(bank?.points) ? bank.points : [];
@@ -5567,7 +5577,7 @@ function recordMasteryEvidence(kind) {
 
 let state = {
   view: "child",
-  lessonIndex: 0,
+  lessonIndex: defaultLessonIndex,
   phase: "guiding",
   recording: false,
   voiceStatus: "idle",
@@ -5587,11 +5597,11 @@ let state = {
   todayQuestion: 2,
   transcript: "",
   lastStudentText: "",
-  aiContext: lessons[0].initialContext,
-  aiMessage: lessons[0].initialMessage,
-  currentStep: lessons[0].initialStep,
+  aiContext: defaultLesson.initialContext,
+  aiMessage: defaultLesson.initialMessage,
+  currentStep: defaultLesson.initialStep,
   teachingState: "GUIDED_STEP",
-  currentAtomName: lessons[0].useQuestionBankTutor ? createGuidedStepPlan(lessons[0], 0).label : "",
+  currentAtomName: defaultLesson.useQuestionBankTutor ? createGuidedStepPlan(defaultLesson, 0).label : "",
   engineSession: null,
   masteryEvidence: createEmptyMasteryEvidence(),
   passedQuestionIds: [],
@@ -5604,15 +5614,15 @@ let state = {
   feynmanStatus: "等待老师归纳",
   canExplainWhy: false,
   canUseOwnWords: false,
-  bestStrategy: lessons[0].strategies[0].label,
+  bestStrategy: defaultLesson.strategies[0].label,
   imageJob: {
     status: "idle",
     url: "",
     message: "",
-    lessonId: lessons[0].id,
+    lessonId: defaultLesson.id,
     interactionKey: "",
   },
-  evidence: [createInitialEvidence(lessons[0])],
+  evidence: [createInitialEvidence(defaultLesson)],
 };
 
 let recordingSession = null;
@@ -5672,7 +5682,7 @@ function icon(name) {
 }
 
 function currentLesson() {
-  return lessons[state.lessonIndex] || lessons[0];
+  return lessons[state.lessonIndex] || defaultLesson;
 }
 
 function safeCurrentLesson() {
@@ -6226,8 +6236,9 @@ function renderKidMoneyBoard(lesson) {
   const label = normalizeText(`${plan?.label || ""}${plan?.prompt || ""}${state.currentStep || ""}`);
   const yuanCount = Math.max(1, Math.min(4, money.yuan || 3));
   const extraJiao = Math.max(0, Math.min(9, money.jiao || 0));
-  const showConvertedYuan = /把\s*\d+\s*元换成角|换成几十角|再加|说出结果|说清|为什么|闯关/.test(label);
-  const showExtraJiao = extraJiao > 0 && /再加|说出结果|说清|为什么|闯关/.test(label);
+  const revealAnswer = shouldRevealFinalVisualAnswer(getVisualRevealMode(lesson));
+  const showConvertedYuan = revealAnswer && /把\s*\d+\s*元换成角|换成几十角|再加|说出结果|说清|为什么|闯关/.test(label);
+  const showExtraJiao = revealAnswer && extraJiao > 0 && /再加|说出结果|说清|为什么|闯关/.test(label);
   const jiaoLabel = showConvertedYuan ? `${money.yuan ? money.yuan * 10 : 10}角` : "（  ）角";
   const extraLabel = showExtraJiao ? ` + ${extraJiao}角` : "";
   return `
@@ -6254,6 +6265,7 @@ function renderKidMoneyBoard(lesson) {
               .join("")}
             ${showExtraJiao ? `<span class="kid-coin kid-coin-copper">${extraJiao}角</span>` : ""}
           </div>
+          <small>${money.yuan > 1 ? `每1元换成10个1角，先想${yuanCount}组` : "1元换成10个1角"}</small>
           <strong>${jiaoLabel}${extraLabel}</strong>
         </div>
       </div>
@@ -9620,18 +9632,68 @@ function createMicrostepExplanation(lesson, plan, attempt = 0) {
   };
 
   try {
-    return (
+    const created =
       window.LezhiMicrostepExplanations?.create?.({
         family,
         lesson,
         question: lesson?.activeQuestion || null,
         plan,
         attempt,
-      }) || fallback
-    );
+      }) || fallback;
+    return sanitizeMicrostepExplanation(created, lesson);
   } catch (error) {
-    return fallback;
+    return sanitizeMicrostepExplanation(fallback, lesson);
   }
+}
+
+function sanitizeMicrostepExplanation(remediation, lesson) {
+  const answerKeywords = uniqueKeywords(remediation?.answerKeywords || []);
+  const prompt = String(remediation?.checkPrompt || "").trim();
+  const normalizedAnswers = answerKeywords.map((item) => normalizeText(item)).filter(Boolean);
+  let instruction = String(remediation?.responseInstruction || "只说答案就可以。").trim();
+  const normalizedInstruction = normalizeText(instruction);
+  const balancedChoice = [
+    /左边.*右边|右边.*左边/,
+    /[“\"]要[”\"].*[“\"]不要[”\"]|[“\"]不要[”\"].*[“\"]要[”\"]|要或不要/,
+    /[“\"]够[”\"].*[“\"]不够[”\"]|[“\"]不够[”\"].*[“\"]够[”\"]|够或不够/,
+    /加法.*减法|减法.*加法/,
+    /[“\"]对[”\"].*[“\"]错[”\"]|[“\"]错[”\"].*[“\"]对[”\"]|对或错/,
+  ].some((pattern) => pattern.test(instruction));
+  const leaksAnswer =
+    !balancedChoice &&
+    normalizedAnswers.some(
+      (answer) => answer && !/^[<>=+\-×÷]$/.test(answer) && normalizedInstruction.includes(answer),
+    );
+
+  if (leaksAnswer) {
+    if (/哪边|左边.*右边|右边.*左边/.test(prompt)) instruction = "只说“左边”或“右边”。";
+    else if (/够不够/.test(prompt)) instruction = "只说“够”或“不够”。";
+    else if (/什么运算|加法还是减法/.test(prompt)) instruction = "只说运算名称。";
+    else if (/判断|对不对|正确吗/.test(prompt)) instruction = "只说“对”或“错”。";
+    else if (/多少|几个|几只|几张|几支|几朵|几时|几分|几厘米|几角|几元/.test(prompt)) {
+      instruction = "只说结果，带上题目里的单位。";
+    } else instruction = "只说答案就可以。";
+  }
+
+  const family = String(remediation?.family || getLessonTeachingFamily(lesson) || "generic");
+  let explanation = String(remediation?.explanation || "").trim();
+  let demonstration = String(remediation?.demonstration || "").trim();
+  if (family !== "compare" && family !== "comparisonDifference") {
+    if (/苹果和梨|一一配对比较/.test(explanation)) {
+      explanation = "换题只换数字、图或故事，解决当前知识点的方法不变。";
+    }
+    if (/苹果和梨|一一配对比较/.test(demonstration)) {
+      demonstration = "换题只换数字、图或故事，解决当前知识点的方法不变。";
+    }
+  }
+
+  return {
+    ...remediation,
+    explanation,
+    demonstration,
+    responseInstruction: instruction,
+    answerKeywords,
+  };
 }
 
 function teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal, attempt = null) {

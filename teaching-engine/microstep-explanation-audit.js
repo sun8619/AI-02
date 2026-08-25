@@ -79,6 +79,8 @@ for (const family of requiredFamilies) {
     if (String(entry?.explanation || "").length > 150) {
       failures.push(`${family}[${attempt}] 讲解超过低年级单轮长度上限`);
     }
+    validateNoAnswerLeak(entry, `${family}[${attempt}]`);
+    validateNoForeignStockExample(entry, `${family}[${attempt}]`);
   }
 }
 
@@ -95,6 +97,8 @@ for (const point of context.window.LezhiKnowledgePointOverlays.list()) {
     });
     if (!entry.stepRuleMatched) failures.push(`${point.id} 的小台阶“${label}”没有精确讲法`);
     if (!String(entry.checkPrompt || "").trim()) failures.push(`${point.id} 的小台阶“${label}”没有讲后检测题`);
+    validateNoAnswerLeak(entry, `${point.id} 的小台阶“${label}”`);
+    validateNoForeignStockExample(entry, `${point.id} 的小台阶“${label}”`);
   }
 }
 
@@ -105,6 +109,9 @@ if (compareObserve.checkPrompt === compareSymbol.checkPrompt) failures.push("大
 const moneyRelation = api.create({ family: "money", lesson: { id: "money-a" }, question: { id: "a" }, plan: { label: "知道1元=10角" } });
 const moneyConvert = api.create({ family: "money", lesson: { id: "money-b" }, question: { id: "b" }, plan: { label: "把元换成角" } });
 if (moneyRelation.checkPrompt === moneyConvert.checkPrompt) failures.push("人民币单位关系和单位换算小步仍在使用同一检测题");
+if (/1元等于多少角/.test(moneyRelation.checkPrompt) || /10角/.test(moneyRelation.responseInstruction)) {
+  failures.push("人民币单位关系讲解仍把示范答案带进了下一道检查题或回答指令");
+}
 
 const applicationFirstCondition = api.create({
   family: "application",
@@ -148,3 +155,40 @@ if (failures.length) {
 }
 
 console.log(`讲解库审计通过：${requiredFamilies.length} 类知识，${microstepCount} 个课程小台阶，${checked} 组轮换讲解与近迁移检查。`);
+
+function validateNoAnswerLeak(entry, label) {
+  const instruction = String(entry?.responseInstruction || "");
+  if (!instruction || hasBalancedChoices(instruction)) return;
+  const normalizedInstruction = compact(instruction);
+  const leaked = (entry?.answerKeywords || []).find((keyword) => {
+    const answer = compact(keyword);
+    return answer && !/^[<>=+\-×÷]$/.test(answer) && normalizedInstruction.includes(answer);
+  });
+  if (leaked) failures.push(`${label} 的回答指令直接泄露答案“${leaked}”`);
+}
+
+function validateNoForeignStockExample(entry, label) {
+  const family = String(entry?.family || "");
+  const text = `${entry?.explanation || ""} ${entry?.demonstration || ""}`;
+  if (family !== "compare" && family !== "comparisonDifference" && /苹果和梨|一一配对比较/.test(text)) {
+    failures.push(`${label} 混入了大小比较专属的苹果和梨例子`);
+  }
+}
+
+function hasBalancedChoices(instruction) {
+  return [
+    /左边.*右边|右边.*左边/,
+    /[“\"]要[”\"].*[“\"]不要[”\"]|[“\"]不要[”\"].*[“\"]要[”\"]|要或不要/,
+    /[“\"]够[”\"].*[“\"]不够[”\"]|[“\"]不够[”\"].*[“\"]够[”\"]|够或不够/,
+    /加法.*减法|减法.*加法/,
+    /大于号.*小于号|小于号.*大于号/,
+    /数量.*位置|位置.*数量/,
+    /长度.*质量|质量.*长度/,
+    /平移.*旋转|旋转.*平移/,
+    /[“\"]对[”\"].*[“\"]错[”\"]|[“\"]错[”\"].*[“\"]对[”\"]|对或错/,
+  ].some((pattern) => pattern.test(String(instruction || "")));
+}
+
+function compact(value) {
+  return String(value || "").replace(/\s+/g, "").toLowerCase();
+}

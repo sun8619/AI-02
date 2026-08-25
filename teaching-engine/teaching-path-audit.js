@@ -244,9 +244,16 @@ function scoreMessages(messages) {
     /说一个你记住的词/g,
   ];
   if (countPatternHits(combined, blocked)) failures.push("路径中出现机械模板或直接给答案话术");
-  const tooLong = messages.filter((message) => compact(message).length > 150).length;
-  if (tooLong) failures.push(`有 ${tooLong} 条老师回复过长`);
+  const tooLong = messages.filter((message) => compact(message).length > 150);
+  if (tooLong.length) {
+    failures.push(`有 ${tooLong.length} 条老师回复过长：${shortenMessage(tooLong[0])}`);
+  }
   return failures;
+}
+
+function shortenMessage(message, length = 88) {
+  const text = String(message || "").replace(/\s+/g, " ").trim();
+  return text.length > length ? `${text.slice(0, length)}...` : text;
 }
 
 function getAssessmentPlan(point) {
