@@ -2,9 +2,11 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const source = fs.readFileSync(new URL("./microstep-explanation-library.js", import.meta.url), "utf8");
+const profileSource = fs.readFileSync(new URL("./microstep-quality-profiles.js", import.meta.url), "utf8");
 const overlaySource = fs.readFileSync(new URL("./knowledge-point-teaching-overlays.js", import.meta.url), "utf8");
 const context = { window: {} };
 vm.createContext(context);
+vm.runInContext(profileSource, context, { filename: "microstep-quality-profiles.js" });
 vm.runInContext(source, context, { filename: "microstep-explanation-library.js" });
 vm.runInContext(overlaySource, context, { filename: "knowledge-point-teaching-overlays.js" });
 
@@ -85,6 +87,7 @@ for (const family of requiredFamilies) {
 }
 
 let microstepCount = 0;
+const qualityProfileIds = new Set();
 for (const point of context.window.LezhiKnowledgePointOverlays.list()) {
   for (const label of point.microSteps || []) {
     microstepCount += 1;
@@ -96,10 +99,24 @@ for (const point of context.window.LezhiKnowledgePointOverlays.list()) {
       plan: { label },
     });
     if (!entry.stepRuleMatched) failures.push(`${point.id} 的小台阶“${label}”没有精确讲法`);
+    if (!entry.qualityProfileMatched) failures.push(`${point.id} 的小台阶“${label}”仍在使用旧通用模板`);
+    if (entry.qualityProfileId) qualityProfileIds.add(entry.qualityProfileId);
     if (!String(entry.checkPrompt || "").trim()) failures.push(`${point.id} 的小台阶“${label}”没有讲后检测题`);
+    if (String(entry.explanation || "").length > 80) failures.push(`${point.id} 的小台阶“${label}”讲解过长`);
+    if (String(entry.demonstration || "").length > 50) failures.push(`${point.id} 的小台阶“${label}”示范过长`);
+    if (String(entry.checkPrompt || "").length > 35) failures.push(`${point.id} 的小台阶“${label}”讲后检查题过长`);
+    if (String(entry.responseInstruction || "").length > 40) failures.push(`${point.id} 的小台阶“${label}”回答指令过长`);
+    if (/再想想|认真看|仔细想|换一种方法/.test(String(entry.explanation || ""))) {
+      failures.push(`${point.id} 的小台阶“${label}”仍是空泛提醒，不是实质讲解`);
+    }
     validateNoAnswerLeak(entry, `${point.id} 的小台阶“${label}”`);
     validateNoForeignStockExample(entry, `${point.id} 的小台阶“${label}”`);
+    validateMicrostepAlignment(entry, `${point.id} 的小台阶“${label}”`);
   }
+}
+
+if (qualityProfileIds.size < 100) {
+  failures.push(`课程小台阶只使用了 ${qualityProfileIds.size} 套专属讲解，存在过度复用风险`);
 }
 
 const compareObserve = api.create({ family: "compare", lesson: { id: "compare-a" }, question: { id: "a" }, plan: { label: "先看清两边" } });
@@ -149,12 +166,26 @@ if (!/10和几|拆成/.test(breakTenSplit.checkPrompt)) {
   failures.push("破十法拆数小步没有检查孩子会不会拆成10和几");
 }
 
+const angleVertexAndSides = api.create({
+  family: "angle",
+  lesson: { id: "angle-runtime", problem: "找出角的顶点和两条边。" },
+  question: { id: "angle-runtime-question", prompt: "先找这个角的顶点和两条边。" },
+  plan: { label: "找顶点和边" },
+});
+if (!angleVertexAndSides.qualityProfileMatched) {
+  failures.push("角的运行时小步“找顶点和边”没有命中专属讲法");
+}
+if (!/顶点/.test(angleVertexAndSides.checkPrompt) || !/边/.test(angleVertexAndSides.checkPrompt)) {
+  failures.push("角的运行时小步没有继续检查顶点和边");
+}
+validateMicrostepAlignment(angleVertexAndSides, "角的运行时小步“找顶点和边”");
+
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
 
-console.log(`讲解库审计通过：${requiredFamilies.length} 类知识，${microstepCount} 个课程小台阶，${checked} 组轮换讲解与近迁移检查。`);
+console.log(`讲解库审计通过：${requiredFamilies.length} 类知识，${microstepCount} 个课程小台阶，${qualityProfileIds.size} 套专属讲解，${checked} 组轮换讲解与近迁移检查。`);
 
 function validateNoAnswerLeak(entry, label) {
   const instruction = String(entry?.responseInstruction || "");
@@ -175,6 +206,28 @@ function validateNoForeignStockExample(entry, label) {
   }
 }
 
+function validateMicrostepAlignment(entry, label) {
+  const step = String(entry?.originalStepLabel || "");
+  const check = String(entry?.checkPrompt || "");
+  const instruction = String(entry?.responseInstruction || "");
+  const teachingText = `${entry?.explanation || ""} ${entry?.demonstration || ""} ${check} ${instruction}`;
+  if (/说清|为什么|理由|依据|哪里看出/.test(step) && !/为什么|原因|依据|因为|哪里看出|怎样|如何|顺序|方法/.test(check)) {
+    failures.push(`${label} 讲的是说理，但讲后检测只要求数字或结论`);
+  }
+  if (/带单位回答/.test(step) && !/单位|厘米|米|克|千克|只|辆|本|支|朵/.test(`${check}${instruction}`)) {
+    failures.push(`${label} 没有检查完整的带单位回答`);
+  }
+  if (
+    entry?.family === "measure"
+    && /人民币|(?:\d+|[一二三四五六七八九十百]+)元|(?:\d+|[一二三四五六七八九十百]+)角/.test(`${entry.explanation} ${entry.demonstration} ${check}`)
+  ) {
+    failures.push(`${label} 混入了人民币换算内容`);
+  }
+  if (entry?.family === "angle" && /正方形|三角形是什么图形|有3条边|图形名字/.test(teachingText)) {
+    failures.push(`${label} 用平面图形名称代替了角的教学`);
+  }
+}
+
 function hasBalancedChoices(instruction) {
   return [
     /左边.*右边|右边.*左边/,
@@ -185,6 +238,9 @@ function hasBalancedChoices(instruction) {
     /数量.*位置|位置.*数量/,
     /长度.*质量|质量.*长度/,
     /平移.*旋转|旋转.*平移/,
+    /能.*不能|不能.*能/,
+    /可以.*不可以|不可以.*可以/,
+    /是.*不是|不是.*是/,
     /[“\"]对[”\"].*[“\"]错[”\"]|[“\"]错[”\"].*[“\"]对[”\"]|对或错/,
   ].some((pattern) => pattern.test(String(instruction || "")));
 }

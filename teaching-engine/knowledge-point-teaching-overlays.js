@@ -297,8 +297,8 @@
       variationRules: ["用口诀求商", "乘法验算", "除法填空", "平均分情境"],
     }),
     "G2V2-U3-KP01": overlay({
-      family: "shape",
-      visualType: "shape",
+      family: "motion",
+      visualType: "motion",
       microSteps: ["看是不是左右两边一样", "看是平移还是旋转", "找移动前后形状是否变", "判断现象", "举生活例子"],
       teachingMethods: ["对折看轴对称", "平移不转方向", "旋转绕点转", "生活动作分类"],
       commonGaps: ["平移旋转混淆", "只看移动了就说平移", "轴对称只看好看不好看"],

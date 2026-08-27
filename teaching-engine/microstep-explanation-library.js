@@ -182,6 +182,16 @@
         ["四条边一样长、四个角都是直角，是什么图形？", ["正方形"]],
       ],
     }),
+    motion: item({
+      visualType: "motion",
+      explanation: "看图形运动时，先只看它怎么动。直直地换位置、方向不变是平移；绕着一个固定点转是旋转；沿一条线对折后两边完全重合是轴对称。",
+      demonstration: "推拉抽屉是直直移动，属于平移；钟表指针绕中心转，属于旋转；正方形沿中线对折能重合，是轴对称图形。",
+      checks: [
+        ["电梯门沿直线向两边打开，没有绕点转。它是直直移动、绕点转，还是对折重合？", ["直直移动", "直线移动", "方向不变", "平移"]],
+        ["钟表指针绕着中心转动，这是平移还是旋转？", ["旋转"]],
+      ],
+      responseInstruction: "只说看到的运动方式。",
+    }),
     data: item({
       visualType: "data",
       explanation: "看统计图或表格，先找清楚每一类对应哪一行哪一列，再读数量。问一共就合起来，问相差就用大数减小数。",
@@ -600,7 +610,15 @@
       responseInstruction: "只说长度。",
     }),
     stepRule({
-      families: ["shape", "angle"],
+      families: ["angle"],
+      match: /边|角|顶点|张开|直角|锐角|钝角/,
+      explanation: "认识角时先找一个顶点和从顶点伸出的两条边。比较角的大小只看两条边张开的程度，不看边画得长不长。",
+      demonstration: "把两根小棒的一端碰在一起，就有一个顶点和两条边；把两根小棒张得更开，角就更大。",
+      checks: [["一个角有几个顶点、几条边？", ["1个顶点2条边", "一个顶点两条边", "1个顶点和2条边", "一个顶点和两条边"]]],
+      responseInstruction: "请按“几个顶点、几条边”回答。",
+    }),
+    stepRule({
+      families: ["shape"],
       match: /边|角|顶点|张开|直角|图形名字/,
       explanation: "判断图形要看稳定特征，不看它转了方向。图形看边和角；角的大小看张口，不看边画得长不长。",
       demonstration: "正方形转斜后仍有4条一样长的边和4个直角，所以还是正方形。",
@@ -704,12 +722,36 @@
       responseInstruction: "只说图形名字。",
     }),
     stepRule({
-      families: ["shape"],
-      match: /拼组|平移|旋转|移动前后|现象/,
-      explanation: "平移是整个图形沿一个方向移动，方向没有转；旋转是图形绕一个点转动。移动后图形的形状和大小不变。",
-      demonstration: "推拉抽屉主要是平移，转动风车是旋转。",
-      checks: [["转动钟表指针是平移还是旋转？", ["旋转"]]],
-      responseInstruction: "只说“平移”或“旋转”。",
+      families: ["motion"],
+      match: /看是不是左右两边一样/,
+      explanation: "判断轴对称不能只凭看起来像不像。要先找到中间的折线，想象沿它对折；两边每个部分都能完全重合，才是轴对称。",
+      demonstration: "正方形沿中线对折，左右两边能完全重合，所以它是轴对称图形。",
+      checks: [["正方形沿中线对折，两边能重合吗？", ["能", "可以", "能重合"]]],
+      responseInstruction: "只说“能”或“不能”。",
+    }),
+    stepRule({
+      families: ["motion"],
+      match: /看怎么动|看是平移还是旋转|找移动前后形状是否变/,
+      explanation: "先只看运动过程。沿直线换位置、朝向不变是平移；绕着固定点转动是旋转；沿一条线对折后两边重合是轴对称。",
+      demonstration: "电梯门向两边直直打开，没有绕点转，所以这个过程是平移。",
+      checks: [["推拉抽屉时，它是直直移动、绕点转，还是对折重合？", ["直直移动", "直线移动", "方向不变", "平移"]]],
+      responseInstruction: "只说“直直移动”“绕点转”或“对折重合”。",
+    }),
+    stepRule({
+      families: ["motion"],
+      match: /说运动名称|判断现象|判断说法/,
+      explanation: "把刚才看到的动作和名称对上：直直移动是平移，绕固定点转是旋转，对折能完全重合是轴对称。",
+      demonstration: "钟表指针绕中心转动，所以它是旋转，不是平移。",
+      checks: [["推拉抽屉主要是平移还是旋转？", ["平移"]]],
+      responseInstruction: "只说“平移”“旋转”或“轴对称”。",
+    }),
+    stepRule({
+      families: ["motion"],
+      match: /说一个依据|举生活例子/,
+      explanation: "说理由时只抓动作证据：有没有直直移动、有没有绕固定点转，或者对折后能不能重合。",
+      demonstration: "风车是旋转，因为它绕着中心点转动。",
+      checks: [["电梯门属于平移，依据是它怎样移动？", ["直直移动", "沿直线移动", "方向不变"]]],
+      responseInstruction: "只说一个动作证据。",
     }),
     stepRule({
       families: ["placeValue"],
@@ -928,6 +970,8 @@
   }
 
   function findStepRule(family, payload) {
+    const qualityProfile = window.LezhiMicrostepQualityProfiles?.resolve?.(family, payload?.plan?.label);
+    if (qualityProfile) return qualityProfile;
     const text = normalize(
       [
         payload?.plan?.label,
@@ -953,6 +997,9 @@
       /数量.*位置|位置.*数量/,
       /长度.*质量|质量.*长度/,
       /平移.*旋转|旋转.*平移/,
+      /能.*不能|不能.*能/,
+      /可以.*不可以|不可以.*可以/,
+      /是.*不是|不是.*是/,
       /[“\"]对[”\"].*[“\"]错[”\"]|[“\"]错[”\"].*[“\"]对[”\"]|对或错/,
     ].some((pattern) => pattern.test(text));
   }
@@ -1012,6 +1059,8 @@
       originalQuestion: payload?.question?.prompt || payload?.lesson?.problem || "",
       originalStepLabel: payload?.plan?.label || "",
       stepRuleMatched: Boolean(focusedRule),
+      qualityProfileMatched: Boolean(focusedRule?.qualityProfileMatched),
+      qualityProfileId: focusedRule?.id || "",
       attempt,
     };
   }
