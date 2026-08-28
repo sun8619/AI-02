@@ -65,7 +65,8 @@ check(/function renderApplicationStorySvg\(/.test(appSource), "应用题缺少�
 check(/function findNumericUnitVoiceCorrection\(/.test(appSource), "语音缺少数字和单位的语境纠错");
 check(/function renderVoiceConfirmation\(\)\s*\{\s*return "";\s*\}/.test(appSource), "语音仍会逐次弹出确认框");
 check(!/return\s*\{\s*status:\s*"confirm"/.test(extractFunction(appSource, "assessVoiceTranscript")), "语音评估仍可能进入逐次确认");
-check(/const DEFAULT_LESSON_SOURCE_ID = "G1V1-U1-KP01"/.test(appSource), "默认入口没有固定到打磨最完整的5以内数知识点");
+check(/const DEFAULT_LESSON_SOURCE_ID = "G1V2-U5-KP01"/.test(appSource), "默认入口没有固定到元角分换算");
+check(/detectConcreteOperationFamily/.test(appSource), "应用题没有按当前题干绑定加法或减法故事关系");
 check(/function sanitizeMicrostepExplanation\(/.test(appSource), "讲后检查缺少防泄题和跨知识点内容保护");
 check(
   /const revealAnswer = shouldRevealFinalVisualAnswer\(getVisualRevealMode\(lesson\)\);/.test(appSource),

@@ -53,8 +53,22 @@
     return "";
   }
 
+  function detectConcreteOperationFamily(promptText = "") {
+    const prompt = normalize(promptText);
+    const hasAdditionCue = /又得到|又来|又有|又放|又添|增加|运来|开来|合起来|加起来|现在一共|一共有多少|共(?:有)?多少/.test(prompt);
+    const hasSubtractionCue = /拿走|飞走|用去|卖出|卖掉|开走|吃掉|借出|去掉|少了|还剩|剩下/.test(prompt);
+
+    // A multi-action story needs the general application path. Returning a
+    // concrete family only when one relation is unambiguous keeps hints and
+    // visuals from borrowing the opposite operation.
+    if (hasAdditionCue && !hasSubtractionCue) return "concreteAddition";
+    if (hasSubtractionCue && !hasAdditionCue) return "concreteSubtraction";
+    return "";
+  }
+
   root.LezhiQuestionFamilyGuard = Object.freeze({
     isClockTimeTeachingText,
     detectSpecializedArithmeticFamily,
+    detectConcreteOperationFamily,
   });
 })(globalThis);

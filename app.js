@@ -1062,7 +1062,7 @@ const curriculumBlueprints = mergeCurriculumBlueprints(
 );
 
 const lessons = buildLessonCatalog();
-const DEFAULT_LESSON_SOURCE_ID = "G1V1-U1-KP01";
+const DEFAULT_LESSON_SOURCE_ID = "G1V2-U5-KP01";
 const defaultLessonIndex = Math.max(
   0,
   lessons.findIndex(
@@ -1625,6 +1625,12 @@ function inferQuestionTeachingFamily(point, question) {
   if (/进一法|去尾法|至少需要|最多可以|每条船|每辆车|每盒|每箱/.test(text)) return "remainderApplication";
   if (/搭配|排列|组合|不同搭配|多少种|路线/.test(text)) return "arrangement";
   if (/比.*多多少|比.*少多少|多多少|少多少|相差/.test(text)) return "comparisonDifference";
+  // A knowledge point can mix addition and subtraction story questions. The
+  // current prompt must decide the operation family before the broader point
+  // overlay, otherwise an addition story can inherit subtraction guidance (or
+  // vice versa) from a previous question in the same lesson.
+  const concreteStoryFamily = window.LezhiQuestionFamilyGuard?.detectConcreteOperationFamily?.(questionPromptText);
+  if (concreteStoryFamily) return concreteStoryFamily;
   // A word problem can contain "又来" or "一共", but its first microsteps are
   // often reading the question and locating the two conditions. Keep the
   // knowledge-point family so remediation checks the same reading step instead
@@ -6994,6 +7000,7 @@ function renderChildStepTitle(step) {
 }
 
 function renderDockNote() {
+  if (state.recording || state.voiceStatus === "recording") return "正在听你说。说完后再点一下“说完了”。";
   if (state.isProcessing || state.voiceStatus === "processing") return "老师听到了，马上接着讲。";
   if (state.voiceConfirmation) return "先看看老师有没有听对。听错了就点“我重说”。";
   if (state.assessmentMode && !state.assessmentQuestionInRepair) return "这次不用讲步骤，只说最后答案。答错了老师再拆开讲。";

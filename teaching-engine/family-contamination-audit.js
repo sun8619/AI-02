@@ -15,10 +15,23 @@ const arithmeticGuardCases = [
   ["5分成2和几？", "数的组成。", ""],
 ];
 
+const storyOperationCases = [
+  ["盒子里原来有2个苹果，又得到3个苹果，现在一共有多少个苹果？", "concreteAddition"],
+  ["树上原来有5只小鸟，飞走了3只，还剩多少只？", "concreteSubtraction"],
+  ["先拿走2个，又放回1个，现在有多少个？", ""],
+];
+
 for (const [prompt, detail, expected] of arithmeticGuardCases) {
   const actual = guard?.detectSpecializedArithmeticFamily?.(prompt, detail) || "";
   if (actual !== expected) {
     failures.push(`算式分类 ${prompt}: 期望 ${expected || "通用规则"}，实际 ${actual || "通用规则"}`);
+  }
+}
+
+for (const [prompt, expected] of storyOperationCases) {
+  const actual = guard?.detectConcreteOperationFamily?.(prompt) || "";
+  if (actual !== expected) {
+    failures.push(`故事关系 ${prompt}: 期望 ${expected || "通用应用题"}，实际 ${actual || "通用应用题"}`);
   }
 }
 
@@ -42,7 +55,7 @@ if (failures.length) {
   console.error(`知识类型污染审计失败 ${failures.length} 项：\n- ${failures.join("\n- ")}`);
   process.exitCode = 1;
 } else {
-  console.log(`知识类型污染审计通过：逐题检查 ${checked} 道题，并验证凑十、破十、混合运算不会被“分成”串成数的组成。`);
+  console.log(`知识类型污染审计通过：逐题检查 ${checked} 道题，并验证凑十、破十、混合运算及加减故事关系不会跨知识点串线。`);
 }
 
 function loadBrowserGlobal(relativePath, globalName) {
