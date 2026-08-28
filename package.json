@@ -18,6 +18,7 @@
     "audit:runtime": "node teaching-engine/runtime-integrity-audit.js",
     "audit:microsteps": "node teaching-engine/microstep-explanation-audit.js",
     "audit:routing": "node teaching-engine/guided-step-routing-audit.js",
-    "audit:families": "node teaching-engine/family-contamination-audit.js"
+    "audit:families": "node teaching-engine/family-contamination-audit.js",
+    "audit:speech": "node teaching-engine/spoken-prompt-audit.js"
   }
 }

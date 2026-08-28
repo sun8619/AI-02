@@ -2014,12 +2014,17 @@ function createFocusedStepSentence(starter, family, key = "") {
 }
 
 function cleanPromptForChildContext(prompt) {
-  return String(prompt || "")
+  return naturalizeChildQuestion(String(prompt || ""))
     .replace(/\s+/g, " ")
     .replace(/[？?。！!]+$/g, "")
     .replace(/在口里/g, "在□里")
     .replace(/口/g, "□")
     .trim();
+}
+
+function naturalizeChildQuestion(text, options = {}) {
+  const naturalizer = globalThis.LezhiChildLanguage?.naturalizeQuestion;
+  return typeof naturalizer === "function" ? naturalizer(text, options) : String(text || "");
 }
 
 function extractCompareExpression(text) {
@@ -2041,10 +2046,11 @@ function childFacingPrompt(prompt) {
   if (moneyBlank) return `${moneyBlank[1]}等于多少${moneyBlank[2]}？`;
   const moneyDoubleBlank = text.match(/^(.+?)=_{2,}\s*(角|分)=_{2,}\s*(分)$/);
   if (moneyDoubleBlank) return `${moneyDoubleBlank[1]}等于多少${moneyDoubleBlank[2]}，又等于多少${moneyDoubleBlank[3]}？`;
-  return text
+  const result = text
     .replace(/^填空[:：]\s*/, "")
     .replace(/_{2,}/g, "多少")
     .replace(/。+$/, "") + (/[？?]$/.test(text) ? "" : "？");
+  return naturalizeChildQuestion(result);
 }
 
 function stripExercisePrefix(prompt) {
@@ -6379,7 +6385,9 @@ function renderKidQuestionBubble(lesson) {
     state.phase === "summary"
       ? "这一步学会了。你可以换下一个知识点，也可以再练一题。"
       : `看这题：${problem} ${shortPrompt}`;
-  const message = ensureTeacherMessageHasAnswerTarget(state.aiMessage || fallbackMessage, lesson, plan);
+  const message = naturalizeChildQuestion(
+    ensureTeacherMessageHasAnswerTarget(state.aiMessage || fallbackMessage, lesson, plan),
+  );
   const messageLength = Array.from(message).length;
   const lengthClass = messageLength > 118 ? "is-long" : messageLength > 62 ? "is-medium" : "is-short";
 
@@ -6527,7 +6535,7 @@ function renderKidMoneyBoard(lesson) {
   const revealAnswer = shouldRevealFinalVisualAnswer(getVisualRevealMode(lesson));
   const showConvertedYuan = revealAnswer && /把\s*\d+\s*元换成角|换成几十角|再加|说出结果|说清|为什么|闯关/.test(label);
   const showExtraJiao = revealAnswer && extraJiao > 0 && /再加|说出结果|说清|为什么|闯关/.test(label);
-  const jiaoLabel = showConvertedYuan ? `${money.yuan ? money.yuan * 10 : 10}角` : "（  ）角";
+  const jiaoLabel = showConvertedYuan ? `${money.yuan ? money.yuan * 10 : 10}角` : "几角";
   const extraLabel = showExtraJiao ? ` + ${extraJiao}角` : "";
   return `
     <div class="kid-board-card kid-money-board">
@@ -6547,13 +6555,21 @@ function renderKidMoneyBoard(lesson) {
         </div>
         <div class="kid-money-arrow" aria-hidden="true"></div>
         <div class="kid-money-box kid-money-jiao-box">
-          <div class="kid-coin-grid">
-            ${Array.from({ length: 10 })
-              .map(() => `<span class="kid-coin kid-coin-silver">1角</span>`)
+          <div class="kid-coin-groups" style="--money-group-columns:${Math.min(2, yuanCount)}">
+            ${Array.from({ length: yuanCount })
+              .map(
+                (_, groupIndex) => `
+                  <span class="kid-coin-group" aria-label="第${groupIndex + 1}元换成10个1角">
+                    ${Array.from({ length: 10 })
+                      .map(() => `<i class="kid-coin kid-coin-silver">1角</i>`)
+                      .join("")}
+                  </span>
+                `,
+              )
               .join("")}
-            ${showExtraJiao ? `<span class="kid-coin kid-coin-copper">${extraJiao}角</span>` : ""}
+            ${showExtraJiao ? `<span class="kid-extra-coin"><i class="kid-coin kid-coin-copper">${extraJiao}角</i></span>` : ""}
           </div>
-          <small>${money.yuan > 1 ? `每1元换成10个1角，先想${yuanCount}组` : "1元换成10个1角"}</small>
+          <small>${money.yuan > 1 ? `${yuanCount}元就是${yuanCount}组10角` : "1元换成10个1角"}</small>
           <strong>${jiaoLabel}${extraLabel}</strong>
         </div>
       </div>
@@ -6599,7 +6615,7 @@ function renderKidShoppingBoard(lesson) {
       ${phase === "compute" || phase === "reason"
         ? `
           <div class="kid-shopping-compute is-active">
-            <strong>${story.pay.jiao}角 - ${story.price.jiao}角 = ${phase === "reason" ? formatJiaoAmount(story.answerJiao) : "（  ）角"}</strong>
+            <strong>${story.pay.jiao}角 - ${story.price.jiao}角 = ${phase === "reason" ? formatJiaoAmount(story.answerJiao) : "几角"}</strong>
             <span>现在只算找回的钱</span>
           </div>
         `
@@ -6644,9 +6660,9 @@ function getKidShoppingPrompt(lesson, plan, story) {
     question: "题目要找回多少钱？",
     relation: "先说关系：找回的钱=付的钱-价钱。",
     unit: "元和角不能混着减，先都换成什么单位？",
-    pay: `${story.pay.text} = （  ）角？`,
-    price: `${story.price.text} = （  ）角？`,
-    compute: `${story.pay.jiao}角 - ${story.price.jiao}角 = （  ）角？`,
+    pay: `${story.pay.text}是几角？`,
+    price: `${story.price.text}是几角？`,
+    compute: `${story.pay.jiao}角减${story.price.jiao}角是几角？`,
     reason: "为什么要先换成角，再相减？",
   };
   return prompts[phase] || childFacingPrompt(plan?.prompt || lesson.problem);
@@ -6686,12 +6702,12 @@ function getKidBoardPrompt(lesson) {
     if (lesson.visualType === "money" || lesson.id === "renminbi-conversion") return "为什么要先换成同一种单位？";
     return childFacingPrompt(prompt || lesson.activeQuestion?.prompt || lesson.problem);
   }
-  if (/1元等于几角|1元是几角|1元等于多少角/.test(prompt)) return "1元是（  ）角？";
-  if (/1角等于几分|1角是几分|1角等于多少分/.test(prompt)) return "1角是（  ）分？";
-  if (/再加|一共|最后|合起来/.test(prompt) && money.jiao > 0) return `${money.yuanJiao}角 + ${money.jiao}角 = （  ）角？`;
+  if (/1元等于几角|1元是几角|1元等于多少角/.test(prompt)) return "1元是几角？";
+  if (/1角等于几分|1角是几分|1角等于多少分/.test(prompt)) return "1角是几分？";
+  if (/再加|一共|最后|合起来/.test(prompt) && money.jiao > 0) return `${money.yuanJiao}角加${money.jiao}角是几角？`;
   const yuanQuestion = prompt.match(/(\d+)元(?!\d*角).*?几角/);
-  if (yuanQuestion) return `${yuanQuestion[1]}元是（  ）角？`;
-  if (lesson.visualType === "money" || lesson.id === "renminbi-conversion") return `${money.yuan || 3}元是（  ）角？`;
+  if (yuanQuestion) return `${yuanQuestion[1]}元是几角？`;
+  if (lesson.visualType === "money" || lesson.id === "renminbi-conversion") return `${money.yuan || 3}元是几角？`;
   return childFacingPrompt(prompt || lesson.activeQuestion?.prompt || lesson.problem);
 }
 
@@ -7494,7 +7510,7 @@ function renderMakeTenFrameSvg(lesson, expression, visualMode = getVisualRevealM
   const title = stepIndex <= 0 ? "先看：哪个数快到10？" : "凑十：先补成10";
   const note = stepIndex <= 0
     ? `${expression.left}+${expression.right}，先找最接近10的数`
-    : `${base}还差${revealGap ? gap : "（ ）"}到10，把${addend}拆成${revealGap ? gap : "（ ）"}和${revealRemain ? remain : "（ ）"}`;
+    : `${base}还差${revealGap ? gap : "几"}到10，把${addend}拆成${revealGap ? gap : "几"}和${revealRemain ? remain : "几"}`;
   return `
     <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
       <text x="24" y="30" class="svg-title">${escapeText(title)}</text>
@@ -7516,7 +7532,7 @@ function renderMakeTenFrameSvg(lesson, expression, visualMode = getVisualRevealM
         <text x="58" y="84" class="svg-note">剩下再加</text>
       </g>
       <path d="M292 116c20 0 30-18 44-18" fill="none" stroke="#ffb72b" stroke-width="6" stroke-linecap="round"/>
-      <text x="48" y="196" class="svg-win">${escapeText(revealTotal ? `先算 ${base}+${gap}=10，再算 10+${remain}=${total}` : `${base}+（ ）=10，再把剩下的加回来`)}</text>
+      <text x="48" y="196" class="svg-win">${escapeText(revealTotal ? `先算 ${base}+${gap}=10，再算 10+${remain}=${total}` : `${base}加几等于10，再把剩下的加回来`)}</text>
     </svg>
   `;
 }
@@ -7532,7 +7548,7 @@ function renderBreakTenFrameSvg(lesson, expression, visualMode = getVisualReveal
   return `
     <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
       <text x="24" y="30" class="svg-title">破十：先看个位够不够</text>
-      <text x="48" y="62" class="svg-note">${escapeText(revealSplit ? `${expression.left}拆成10和${ones}，先用10减` : `${expression.left}先拆成10和（ ）`)}</text>
+      <text x="48" y="62" class="svg-note">${escapeText(revealSplit ? `${expression.left}拆成10和${ones}，先用10减` : `${expression.left}先拆成10和几`)}</text>
       <g transform="translate(48 82)">
         ${Array.from({ length: 10 }, (_, index) => {
           const x = (index % 5) * 48;
@@ -7622,13 +7638,12 @@ function getMeasureVisualContext(lesson) {
 
 function createConversionQuestionLabel(text, leftUnit, rightUnit) {
   const clean = childFacingPrompt(String(text || ""))
-    .replace(/多少/g, "□")
     .replace(/[？?。！!]+$/g, "")
     .trim();
-  const direct = clean.match(new RegExp(`([一二两三四五六七八九十百千万\\d]+\\s*${leftUnit}(?:\\s*[一二两三四五六七八九十百千万\\d]+\\s*${rightUnit})?)\\s*(?:等于|=)\\s*□\\s*${rightUnit}`));
-  if (direct) return `${direct[1]} = □${rightUnit}`;
-  const reverse = clean.match(new RegExp(`([一二两三四五六七八九十百千万\\d]+\\s*${rightUnit})\\s*(?:等于|=)\\s*□\\s*${leftUnit}`));
-  if (reverse) return `${reverse[1]} = □${leftUnit}`;
+  const direct = clean.match(new RegExp(`([一二两三四五六七八九十百千万\\d]+\\s*${leftUnit}(?:\\s*[一二两三四五六七八九十百千万\\d]+\\s*${rightUnit})?)\\s*(?:是|等于|=)\\s*(?:几|多少)\\s*${rightUnit}`));
+  if (direct) return `${direct[1]}是几${rightUnit}`;
+  const reverse = clean.match(new RegExp(`([一二两三四五六七八九十百千万\\d]+\\s*${rightUnit})\\s*(?:是|等于|=)\\s*(?:几|多少)\\s*${leftUnit}`));
+  if (reverse) return `${reverse[1]}是几${leftUnit}`;
   return shortSvgText(clean || `${leftUnit}和${rightUnit}怎样换算`, 26);
 }
 
@@ -8034,7 +8049,7 @@ function renderShoppingSvg(lesson, visualMode = getVisualRevealMode(lesson)) {
         <text x="24" y="32" class="svg-label">${revealChange ? `${change}元` : "?元"}</text>
         <text x="9" y="74" class="svg-note">找回</text>
       </g>
-      <text x="126" y="190" class="svg-win">${escapeText(revealChange ? `${paid}元 - ${price}元 = ${change}元` : `${paid}元 - ${price}元 = （ ）元`)}</text>
+      <text x="126" y="190" class="svg-win">${escapeText(revealChange ? `${paid}元 - ${price}元 = ${change}元` : `${paid}元减${price}元是几元`)}</text>
     </svg>
   `;
 }
@@ -10866,7 +10881,8 @@ function pickChineseVoice() {
 }
 
 function toSpokenText(text) {
-  return String(text || "")
+  const shared = globalThis.LezhiChildLanguage?.toSpokenText;
+  const prepared = String(text || "")
     .replace(/2\/3/g, "三分之二")
     .replace(/3\/4/g, "四分之三")
     .replace(/8\/12/g, "十二分之八")
@@ -10877,7 +10893,8 @@ function toSpokenText(text) {
     .replace(/AI/g, "老师")
     .replace(/L2/g, "第二级提示")
     .replace(/[：:]/g, "，")
-    .replace(/[“”"]/g, "")
+    .replace(/[“”"]/g, "");
+  return (typeof shared === "function" ? shared(prepared) : naturalizeChildQuestion(prepared, { forSpeech: true }))
     .replace(/\s+/g, " ")
     .trim();
 }

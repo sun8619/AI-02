@@ -8,6 +8,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { createKnowledgeGraph } from "./teaching-engine/knowledge-model.js";
 import { allKnowledgeModules } from "./teaching-engine/generated-curriculum.js";
 import { runTeachingTurn } from "./teaching-engine/state-machine.js";
+import "./teaching-engine/child-language.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 4173);
@@ -1230,7 +1231,7 @@ function sanitizeMessage(error) {
 }
 
 function naturalizeSpeechText(text) {
-  return String(text || "")
+  const prepared = String(text || "")
     .replace(/2\/3/g, "三分之二")
     .replace(/3\/4/g, "四分之三")
     .replace(/8\/12/g, "十二分之八")
@@ -1241,7 +1242,9 @@ function naturalizeSpeechText(text) {
     .replace(/AI/g, "小学伴")
     .replace(/L2/g, "第二级提示")
     .replace(/[“”"]/g, "")
-    .replace(/[：:]/g, "，")
+    .replace(/[：:]/g, "，");
+  const naturalized = globalThis.LezhiChildLanguage?.toSpokenText?.(prepared) || prepared;
+  return naturalized
     .replace(/。/g, "。 ")
     .replace(/，/g, "， ")
     .replace(/\s+/g, " ")

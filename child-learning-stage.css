@@ -1,5 +1,5 @@
 /*
- * Child learning stage v28
+ * Child learning stage v30
  *
  * This file is loaded after the accumulated prototype stylesheet and owns the
  * final child-facing layout. Keep it small and focused: one tutor, one prompt,
@@ -204,6 +204,187 @@
   max-height: 100% !important;
 }
 
+/* A small, stable type system keeps the teacher and diagram in one visual
+   language. Money labels stay inside their own boxes instead of overlapping
+   the prompt below. */
+.app-shell.is-child {
+  --kid-stage-caption: 13px;
+  --kid-stage-body: 16px;
+  --kid-stage-control: 16px;
+  --kid-stage-heading: 22px;
+}
+
+.app-shell.is-child .kid-brand strong {
+  font-size: var(--kid-stage-heading) !important;
+}
+
+.app-shell.is-child .kid-brand small,
+.app-shell.is-child .kid-progress-step em,
+.app-shell.is-child .kid-day-pill strong,
+.app-shell.is-child .kid-lesson-switch span,
+.app-shell.is-child .kid-board-ribbon,
+.app-shell.is-child .kid-board-head span,
+.app-shell.is-child .kid-board-head strong,
+.app-shell.is-child .kid-current-problem.task-ribbon span,
+.app-shell.is-child .kid-input-panel > p,
+.app-shell.is-child .kid-help-copy small {
+  font-size: var(--kid-stage-caption) !important;
+}
+
+.app-shell.is-child .kid-current-problem.task-ribbon strong,
+.app-shell.is-child .kid-primary-voice span,
+.app-shell.is-child .kid-keyboard-toggle,
+.app-shell.is-child .kid-help-copy strong,
+.app-shell.is-child .kid-think-box strong {
+  font-size: var(--kid-stage-control) !important;
+}
+
+.app-shell.is-child .kid-board-card h2,
+.app-shell.is-child .kid-board-card h3 {
+  margin: 10px 0 !important;
+  font-size: var(--kid-stage-heading) !important;
+  line-height: 1.3 !important;
+}
+
+.app-shell.is-child .kid-board-fallback .svg-title {
+  font-size: 18px !important;
+}
+
+.app-shell.is-child .kid-board-fallback .svg-label,
+.app-shell.is-child .kid-board-fallback .svg-note,
+.app-shell.is-child .kid-board-fallback .svg-win {
+  font-size: 14px !important;
+}
+
+.app-shell.is-child .kid-money-board {
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+}
+
+.app-shell.is-child .kid-money-layout {
+  align-self: center !important;
+  width: min(100%, 820px) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 auto !important;
+  grid-template-columns: minmax(170px, 0.9fr) 52px minmax(260px, 1.15fr) !important;
+  gap: 18px !important;
+}
+
+.app-shell.is-child .kid-money-box {
+  position: relative !important;
+  width: 100% !important;
+  height: min(250px, 31vh) !important;
+  min-height: 0 !important;
+  padding: 16px 18px 52px !important;
+  overflow: hidden !important;
+}
+
+.app-shell.is-child .kid-money-box > strong {
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 12px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 5px 14px !important;
+  font-size: 18px !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  transform: translateX(-50%) !important;
+}
+
+.app-shell.is-child .kid-money-note {
+  width: min(190px, 100%) !important;
+  height: 58px !important;
+  padding-left: 22px !important;
+}
+
+.app-shell.is-child .kid-money-note::before {
+  top: 5px !important;
+  height: 46px !important;
+}
+
+.app-shell.is-child .kid-money-note em {
+  font-size: 25px !important;
+}
+
+.app-shell.is-child .kid-money-note small {
+  font-size: 14px !important;
+}
+
+.app-shell.is-child .kid-money-arrow {
+  width: 50px !important;
+  height: 18px !important;
+}
+
+.app-shell.is-child .kid-money-arrow::after {
+  right: -16px !important;
+  border-top-width: 20px !important;
+  border-bottom-width: 20px !important;
+  border-left-width: 24px !important;
+}
+
+.app-shell.is-child .kid-coin-groups {
+  display: grid !important;
+  grid-template-columns: repeat(var(--money-group-columns, 1), minmax(0, 1fr)) !important;
+  gap: 10px 12px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  place-content: center !important;
+}
+
+.app-shell.is-child .kid-coin-group {
+  display: grid !important;
+  grid-template-columns: repeat(5, 30px) !important;
+  gap: 5px !important;
+  justify-content: center !important;
+  min-width: 0 !important;
+  padding: 7px !important;
+  border: 1px solid #d9e2e8 !important;
+  border-radius: 8px !important;
+  background: #f8fbfd !important;
+}
+
+.app-shell.is-child .kid-coin {
+  display: grid !important;
+  width: 30px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  font-size: 10px !important;
+  place-items: center !important;
+  font-style: normal !important;
+}
+
+.app-shell.is-child .kid-extra-coin {
+  display: grid !important;
+  place-items: center !important;
+}
+
+.app-shell.is-child .kid-money-jiao-box > small {
+  max-width: 100% !important;
+  margin: 7px 0 0 !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+  text-align: center !important;
+}
+
+.app-shell.is-child .kid-think-box {
+  width: min(100%, 680px) !important;
+  min-height: 56px !important;
+  margin: 10px auto 0 !important;
+  padding: 10px 16px !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  gap: 12px !important;
+}
+
+.app-shell.is-child .kid-think-box svg {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.app-shell.is-child .kid-think-box i {
+  display: none !important;
+}
+
 @media (min-width: 1200px) and (orientation: landscape) {
   .app-shell.is-child .kid-workspace.lesson-stage {
     grid-template-columns: minmax(500px, 38%) minmax(0, 62%) !important;
@@ -246,6 +427,37 @@
 
   .app-shell.is-child .kid-board.learning-canvas {
     padding: 12px 15px 14px !important;
+  }
+
+  .app-shell.is-child .kid-money-layout {
+    grid-template-columns: minmax(120px, 0.85fr) 34px minmax(190px, 1.15fr) !important;
+    gap: 10px !important;
+  }
+
+  .app-shell.is-child .kid-money-box {
+    height: min(205px, 29vh) !important;
+    padding: 12px 12px 45px !important;
+  }
+
+  .app-shell.is-child .kid-money-note {
+    width: min(150px, 100%) !important;
+    height: 46px !important;
+  }
+
+  .app-shell.is-child .kid-coin-groups {
+    gap: 6px !important;
+  }
+
+  .app-shell.is-child .kid-coin-group {
+    grid-template-columns: repeat(5, 23px) !important;
+    gap: 4px !important;
+    padding: 5px !important;
+  }
+
+  .app-shell.is-child .kid-coin {
+    width: 23px !important;
+    height: 23px !important;
+    font-size: 8px !important;
   }
 }
 
@@ -293,7 +505,7 @@
     grid-template-columns: 94px minmax(0, 1fr) !important;
     grid-template-rows: minmax(102px, auto) auto auto !important;
     grid-template-areas: "teacher speech" "input input" "help help" !important;
-    align-content: center !important;
+    align-content: start !important;
     padding: 7px 9px !important;
     gap: 6px 8px !important;
   }
@@ -310,12 +522,98 @@
   .app-shell.is-child .kid-speech-bubble.is-medium,
   .app-shell.is-child .kid-speech-bubble.is-long {
     min-height: 102px !important;
-    max-height: 132px !important;
+    max-height: 154px !important;
     padding: 9px 10px !important;
   }
 
   .app-shell.is-child .kid-speech-bubble p {
-    font-size: 13px !important;
+    font-size: 15px !important;
     line-height: 1.4 !important;
+  }
+
+  .app-shell.is-child {
+    --kid-stage-caption: 11px;
+    --kid-stage-body: 15px;
+    --kid-stage-control: 14px;
+    --kid-stage-heading: 18px;
+  }
+
+  .app-shell.is-child .kid-money-layout {
+    grid-template-columns: minmax(90px, 0.8fr) 24px minmax(150px, 1.2fr) !important;
+    gap: 7px !important;
+  }
+
+  .app-shell.is-child .kid-money-box {
+    height: min(130px, 17vh) !important;
+    padding: 8px 8px 34px !important;
+    border-radius: 13px !important;
+  }
+
+  .app-shell.is-child .kid-money-notes {
+    gap: 4px !important;
+  }
+
+  .app-shell.is-child .kid-money-note {
+    height: 30px !important;
+    padding-left: 12px !important;
+  }
+
+  .app-shell.is-child .kid-money-note::before {
+    display: none !important;
+  }
+
+  .app-shell.is-child .kid-money-note em {
+    font-size: 16px !important;
+  }
+
+  .app-shell.is-child .kid-money-note small,
+  .app-shell.is-child .kid-money-jiao-box > small {
+    font-size: 10px !important;
+  }
+
+  .app-shell.is-child .kid-money-arrow {
+    width: 24px !important;
+    height: 10px !important;
+  }
+
+  .app-shell.is-child .kid-money-arrow::after {
+    right: -10px !important;
+    border-top-width: 12px !important;
+    border-bottom-width: 12px !important;
+    border-left-width: 15px !important;
+  }
+
+  .app-shell.is-child .kid-coin-groups {
+    gap: 4px !important;
+  }
+
+  .app-shell.is-child .kid-coin-group {
+    grid-template-columns: repeat(5, 14px) !important;
+    gap: 2px !important;
+    padding: 3px !important;
+  }
+
+  .app-shell.is-child .kid-coin {
+    width: 14px !important;
+    height: 14px !important;
+    font-size: 6px !important;
+  }
+
+  .app-shell.is-child .kid-money-box > strong {
+    bottom: 6px !important;
+    padding: 3px 8px !important;
+    font-size: 13px !important;
+  }
+
+  .app-shell.is-child .kid-think-box {
+    min-height: 40px !important;
+    margin-top: 4px !important;
+    padding: 5px 8px !important;
+    gap: 7px !important;
+  }
+
+  .app-shell.is-child .kid-think-box svg {
+    width: 20px !important;
+    height: 20px !important;
   }
 }
