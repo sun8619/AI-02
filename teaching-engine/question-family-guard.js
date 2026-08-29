@@ -23,13 +23,19 @@
   }
 
   function detectSpecializedArithmeticFamily(promptText = "", detailText = "") {
-    const prompt = normalize(promptText)
+    const rawPrompt = normalize(promptText);
+    const prompt = rawPrompt
       .replace(/[＋﹢]/g, "+")
       .replace(/[－—–−﹣]/g, "-")
       .replace(/[×xX]/g, "*")
       .replace(/[÷]/g, "/");
     const detail = normalize(detailText);
-    const operators = prompt.match(/[+\-*/]/g) || [];
+    // Choice lists also use “/”. It is an arithmetic operator only when it is
+    // between two numbers.
+    const operators = [
+      ...(rawPrompt.match(/[+＋\-－×xX*÷]/g) || []),
+      ...(rawPrompt.match(/(?<=\d)\/(?=\d)/g) || []),
+    ];
 
     if (operators.length >= 2 || /连加|连减|加减混合|混合运算|乘加|乘减|小括号/.test(prompt)) {
       return "mixedCalculation";

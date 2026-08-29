@@ -1078,11 +1078,17 @@ function buildQuestionBankBlueprints(bank) {
   return points.map((point) => {
     const listedQuestions = normalizeLessonQuestions(point.questions || []);
     const typical = normalizeQuestion(point.typicalQuestion) || listedQuestions[0] || null;
-    const questions = uniqueQuestions([typical, ...listedQuestions].filter(Boolean));
-    const primaryQuestion = typical || questions[0] || null;
+    const questions = uniqueQuestions([typical, ...listedQuestions].filter(Boolean)).map((question) => ({
+      ...question,
+      teachingFamily: inferQuestionTeachingFamily(point, question),
+    }));
+    const primaryQuestion =
+      questions.find((question) => question.id === typical?.id) ||
+      questions[0] ||
+      null;
     if (!primaryQuestion) return null;
 
-    const primaryFamily = getKnowledgePointFamily(point) || inferQuestionTeachingFamily(point, primaryQuestion);
+    const primaryFamily = primaryQuestion.teachingFamily || inferQuestionTeachingFamily(point, primaryQuestion);
     const orderedQuestions = orderQuestionsForKnowledgePoint(point, questions, primaryQuestion, primaryFamily);
     return createQuestionBankBlueprint(point, orderedQuestions, primaryQuestion, primaryFamily);
   }).filter(Boolean);
@@ -1092,17 +1098,21 @@ function orderQuestionsForKnowledgePoint(point, questions, primaryQuestion, prim
   const primaryId = primaryQuestion?.id || "";
   const direct = [];
   const sameFamily = [];
+  const otherFamilies = [];
   for (const question of questions || []) {
     if (!question) continue;
     if (question.id === primaryId) {
       direct.push(question);
       continue;
     }
-    const family = inferQuestionTeachingFamily(point, question);
+    const family = question.teachingFamily || inferQuestionTeachingFamily(point, question);
     if (family === primaryFamily) sameFamily.push(question);
+    else otherFamilies.push(question);
   }
-  const scoped = uniqueQuestions([...direct, ...sameFamily]);
-  return scoped.length ? scoped : uniqueQuestions(direct);
+  // A knowledge point can intentionally contain several question forms. Keep
+  // every source question and let each question carry its own teaching family;
+  // filtering here previously reduced some 11-question banks to only 1-3.
+  return uniqueQuestions([...direct, ...sameFamily, ...otherFamilies]);
 }
 
 function createQuestionBankBlueprint(point, questions, originalPrimaryQuestion, primaryFamily) {
@@ -1580,6 +1590,7 @@ function inferTeachingFamily(point, question) {
 }
 
 function inferQuestionTeachingFamily(point, question) {
+  if (question?.teachingFamily) return question.teachingFamily;
   const questionPromptText = normalizeText(`${question?.type || ""} ${question?.prompt || ""}`);
   const questionText = normalizeText(`${questionPromptText} ${question?.explanation || ""} ${question?.answer || ""}`);
   const pointText = normalizeText(`${point?.title || ""} ${point?.node || ""} ${point?.lesson || ""}`);
@@ -1594,37 +1605,51 @@ function inferQuestionTeachingFamily(point, question) {
   const promptChain = parseArithmeticChain(questionPromptText);
   const measureConversionKind = detectMeasureUnitConversion(questionPromptText);
 
-  if (/经过.*时间|从.*开始.*结束|到.*结束|多长时间/.test(text)) return "timeDuration";
+  if (/经过.*时间|从.*开始.*结束|到.*结束|多长时间/.test(questionPromptText)) return "timeDuration";
   if (window.LezhiQuestionFamilyGuard?.isClockTimeTeachingText(questionText, pointText)) return "time";
-  if (/分类|统计|读表|记录表|表格|象形统计图|条形统计|最多|最少/.test(text)) return "data";
-  if (/观察物体|正面|侧面|上面|从.*看|看到的是/.test(text)) return "observation";
-  if (/轴对称|平移|旋转|图形运动|运动方式/.test(text)) return "motion";
-  if (/角的|直角|锐角|钝角|顶点|两条边|张开/.test(text)) return "angle";
-  if (/规律|接着填/.test(text)) return "pattern";
-  if (/图形|长方体|正方体|圆柱|球|长方形|正方形|三角形|圆/.test(text)) return "shape";
-  if (overlayFamily === "logic" || /推理|排除法|根据.*条件|已知.*(?:不是|没有)|分别.*(?:拿|是|在)/.test(text)) return "logic";
   // Unit-conversion expressions must win before generic application wording.
   // For example, "2千克300克=多少克" contains two quantities but is still a
   // mass conversion, not a combine-story problem.
   if (measureConversionKind) return "measure";
+  // Explicit subject-domain words win before arithmetic found in an
+  // explanation. A statistics prompt can contain an addition for the total,
+  // and a geometric angle contains the character “角”; neither should change
+  // the lesson family.
+  if (/经过.*时间|从.*开始.*结束|到.*结束|多长时间/.test(questionPromptText)) return "timeDuration";
+  if (/观察物体|正面|侧面|上面|从.*看|看到的是/.test(questionPromptText)) return "observation";
+  if (/轴对称|平移|旋转|图形运动|运动方式/.test(questionPromptText)) return "motion";
+  if (/角的|直角|锐角|钝角|顶点|两条边|张开/.test(questionPromptText)) return "angle";
+  if (/规律|接着填/.test(questionPromptText)) return "pattern";
+  if (/分类|统计|读表|记录表|表格|象形统计图|条形统计|调查结果|整理后的结果/.test(questionPromptText)) return "data";
+  if (overlayFamily === "logic" || /推理|排除法|根据.*条件|已知.*(?:不是|没有)|分别.*(?:拿|是|在)/.test(questionPromptText)) return "logic";
+  if (/图形|长方体|正方体|圆柱|球体|长方形|正方形|三角形|圆形|认识圆|一个圆|这个圆/.test(questionPromptText)) return "shape";
   // Specialised arithmetic methods must win before generic wording such as
   // "分成". Make-ten and break-ten both split a number, but they are not
   // number-composition lessons.
+  if (promptOperatorCount >= 2 || promptChain || ((/连加|连减|加减混合|混合运算|乘加|乘减|小括号/.test(questionPromptText)) && promptOperatorCount >= 1)) return "mixedCalculation";
   const guardedArithmeticFamily = window.LezhiQuestionFamilyGuard?.detectSpecializedArithmeticFamily?.(questionPromptText, questionText);
   if (guardedArithmeticFamily) return guardedArithmeticFamily;
-  if (promptOperatorCount >= 2 || promptChain || ((/连加|连减|加减混合|混合运算|乘加|乘减|小括号/.test(questionPromptText)) && promptOperatorCount >= 1)) return "mixedCalculation";
-  if (/凑十|进位|9加|8加|7加|6加/.test(text) || isMakeTenAdditionExpression(expression)) return "makeTenAdd";
-  if (/破十|退位|十几减|想加算减|借十/.test(text) || isBreakTenSubtractionExpression(expression)) return "breakTenSubtract";
-  if (/分成|组成|合起来检查/.test(text) && !hasMoneyTerm(text)) return "composition";
-  if (isMoneyApplicationText(text) && !isMoneyUnitConversionText(questionText)) return "moneyApplication";
-  if (/元|角|人民币|钱|纸币|硬币/.test(text)) return "money";
-  if (/有余数|余数|……|\.\.\./.test(text)) {
-    if (/至少|最多|船|车|盒|箱|装|坐|租|买票|够不够|进一|去尾/.test(text)) return "remainderApplication";
+  if (/凑十|进位加法|先凑成10/.test(questionPromptText) || isMakeTenAdditionExpression(expression)) return "makeTenAdd";
+  if (/破十|退位减法|十几减|想加算减|借十/.test(questionPromptText) || isBreakTenSubtractionExpression(expression)) return "breakTenSubtract";
+  if (/除法|平均分|每份|求商|除以|÷/.test(questionPromptText) && (promptOperatorCount <= 1 || /想口诀|判断对错/.test(questionPromptText))) return "division";
+  if (isMoneyApplicationText(questionPromptText) && !isMoneyUnitConversionText(questionPromptText)) return "moneyApplication";
+  if (hasMoneyTerm(questionPromptText)) return "money";
+  if (/有余数|余数|……|\.\.\./.test(questionPromptText)) {
+    if (/至少|最多|船|车|盒|箱|装|坐|租|买票|够不够|进一|去尾/.test(questionPromptText)) return "remainderApplication";
     return "remainderDivision";
   }
-  if (/进一法|去尾法|至少需要|最多可以|每条船|每辆车|每盒|每箱/.test(text)) return "remainderApplication";
-  if (/搭配|排列|组合|不同搭配|多少种|路线/.test(text)) return "arrangement";
-  if (/比.*多多少|比.*少多少|多多少|少多少|相差/.test(text)) return "comparisonDifference";
+  if (/进一法|去尾法|至少需要|最多可以|每条船|每辆车|每盒|每箱/.test(questionPromptText)) return "remainderApplication";
+  if (/观察物体|正面|侧面|上面|从.*看|看到的是/.test(questionPromptText)) return "observation";
+  if (/轴对称|平移|旋转|图形运动|运动方式/.test(questionPromptText)) return "motion";
+  if (/角的|直角|锐角|钝角|顶点|两条边|张开/.test(questionPromptText)) return "angle";
+  if (/规律|接着填/.test(questionPromptText)) return "pattern";
+  if (overlayFamily === "logic" || /推理|排除法|根据.*条件|已知.*(?:不是|没有)|分别.*(?:拿|是|在)/.test(questionPromptText)) return "logic";
+  if (/搭配|排列|组合|不同搭配|多少种|路线/.test(questionPromptText)) return "arrangement";
+  if (/比.*多多少|比.*少多少|多多少|少多少|相差/.test(questionPromptText)) return "comparisonDifference";
+  if (/数位|读作|写作|个千|个百|个十|个位|十位|百位|千位/.test(questionPromptText)) return "placeValue";
+  if (/分类|统计|读表|记录表|表格|象形统计图|条形统计/.test(questionPromptText)) return "data";
+  if (/图形|长方体|正方体|圆柱|球体|长方形|正方形|三角形|圆形|认识圆|一个圆|这个圆/.test(questionPromptText)) return "shape";
+  if (/分成|组成|合起来检查/.test(questionPromptText) && !hasMoneyTerm(questionPromptText)) return "composition";
   // A knowledge point can mix addition and subtraction story questions. The
   // current prompt must decide the operation family before the broader point
   // overlay, otherwise an addition story can inherit subtraction guidance (or
@@ -1635,18 +1660,22 @@ function inferQuestionTeachingFamily(point, question) {
   // often reading the question and locating the two conditions. Keep the
   // knowledge-point family so remediation checks the same reading step instead
   // of jumping ahead to choosing an operation.
-  if (overlayFamily === "application") return "application";
+  if (String(question?.type || "").includes("应用题") || overlayFamily === "application") return "application";
   if (/第几个|第\s*\d+|前面|后面|从左|从右/.test(questionText)) return "ordinal";
-  if (/比较|大小|大于|小于|等于|符号/.test(text) || /[□_]\s*[0-9一二三四五六七八九十百]/.test(questionText) || /[0-9一二三四五六七八九十百]\s*[□_]/.test(questionText)) return "compare";
-  if (/乘法|几个几|同样多|口诀|×/.test(text)) return "multiplication";
-  if (/除法|平均分|每份|求商|÷/.test(text)) return "division";
-  if (/拿走|去掉|还剩|飞走|用去|少了/.test(text) || isConcreteSubtractionExpression(expression, text)) return "concreteSubtraction";
-  if (/合起来|一共|又来|又有|加起来/.test(text) || isConcreteAdditionExpression(expression, text)) return "concreteAddition";
+  if (
+    /比较|比大小|大于|小于|填.*符号/.test(questionPromptText) ||
+    /[0-9一二三四五六七八九十百千万]\s*[□_]\s*[0-9一二三四五六七八九十百千万]/.test(questionPromptText)
+  ) return "compare";
+  // "乘法口诀求商" is a division task even though the explanation mentions
+  // multiplication. Inspect the visible prompt and resolve division first.
+  if (/除法|平均分|每份|求商|÷/.test(questionPromptText)) return "division";
+  if (/乘法|几个几|同样多|口诀|×/.test(questionPromptText)) return "multiplication";
+  if (/拿走|去掉|还剩|飞走|用去|少了/.test(questionPromptText) || isConcreteSubtractionExpression(expression, questionPromptText)) return "concreteSubtraction";
+  if (/合起来|一共|又来|又有|加起来/.test(questionPromptText) || isConcreteAdditionExpression(expression, questionPromptText)) return "concreteAddition";
   if (/数一数|一共有几个|一共有多少个|总数/.test(questionText)) return "count";
-  if (/厘米|米|克|千克|角的|量|长度|质量/.test(text)) return "measure";
-  if (/数位|读作|写作|个千|个百|个十|个位|十位|百位|千位/.test(text)) return "placeValue";
-  if (/一共|还剩|找回|付了|用去|飞走|应用题/.test(text)) return "application";
-  if (/计算|加法|减法|口算|[+＋\-－×xX*÷/]/.test(text)) return "calculation";
+  if (/厘米|米|克|千克|角的|量|长度|质量/.test(questionPromptText)) return "measure";
+  if (/一共|还剩|找回|付了|用去|飞走|应用题/.test(questionPromptText)) return "application";
+  if (/计算|加法|减法|口算|[+＋\-－×xX*÷/]/.test(questionPromptText)) return "calculation";
 
   if (overlayFamily) return overlayFamily;
   if (visualType === "position") return "ordinal";
@@ -1689,7 +1718,11 @@ function parseTeachingArithmeticExpression(question) {
 
 function countQuestionArithmeticOperators(text) {
   const normalized = String(text || "").replace(/[年月日时分秒]/g, "");
-  return (normalized.match(/[+＋\-－×xX*÷/]/g) || []).length;
+  // A slash is also used to separate answer choices (for example
+  // “正面 / 侧面 / 上面”). Count only operators placed between numbers.
+  const unambiguous = normalized.match(/[+＋\-－×xX*÷]/g) || [];
+  const numericSlashes = normalized.match(/(?<=\d)\s*\/\s*(?=\d)/g) || [];
+  return unambiguous.length + numericSlashes.length;
 }
 
 function isMakeTenAdditionExpression(expression) {
@@ -1772,6 +1805,7 @@ function normalizeQuestion(question) {
     prompt,
     answer: String(question.answer || "").trim(),
     explanation: String(question.explanation || "").trim(),
+    teachingFamily: String(question.teachingFamily || "").trim(),
     answerKeywords: normalizeTextList(question.answerKeywords, [question.answer]).filter(Boolean),
     hasVisualMarkup: Boolean(question.hasVisualMarkup && question.visualMarkup),
     visualMarkup: String(question.visualMarkup || "").trim(),
@@ -1976,7 +2010,7 @@ function createVariantOpeningLeads(family) {
 function createFocusedGuidedMessage({ lead, prompt, starter, family, key, mode = "initial" }) {
   const intro = ensureChineseSentence(lead || "");
   const context = createQuestionContextSentence(prompt, starter, family, mode);
-  const step = createFocusedStepSentence(starter, family, key);
+  const step = createFocusedStepSentence(starter, family, key, mode);
   return softenTeacherScaffoldText(`${intro}${context}${step}`.trim());
 }
 
@@ -1992,10 +2026,11 @@ function createQuestionContextSentence(prompt, starter, family, mode = "initial"
   return `看这题：${clean}。不用马上做完整题。`;
 }
 
-function createFocusedStepSentence(starter, family, key = "") {
-  const firstStep = formatChildStepPrompt(starter);
+function createFocusedStepSentence(starter, family, key = "", mode = "initial") {
+  const isFirstAsk = mode === "initial" || mode === "variant";
+  const firstStep = isFirstAsk ? formatNonLeakingFirstAsk(starter) : formatChildStepPrompt(starter);
   if (!firstStep) return "现在只说一个小答案。";
-  if (shouldModelBeforeAsking(starter)) return firstStep;
+  if (!isFirstAsk && shouldModelBeforeAsking(starter)) return firstStep;
   const compact = firstStep
     .replace(/^看这题[:：]\s*/, "")
     .replace(/^题目是[:：]\s*/, "")
@@ -2011,6 +2046,18 @@ function createFocusedStepSentence(starter, family, key = "") {
   };
   const prefix = pickNaturalVariant(openers[family] || ["现在只回答这一小问：", "先看这一小步：", "这一轮只说一个小答案："], `${key}|focused-step`);
   return ensureChineseSentence(`${prefix}${compact}`);
+}
+
+function formatNonLeakingFirstAsk(plan) {
+  const prompt = String(plan?.prompt || "").trim();
+  if (!prompt) return "先看当前题目。请说出你看到的一个数或一个词。";
+
+  // The first ask must not reuse repair-only teaching or answer fields.
+  const instruction = plan?.isReason
+    ? "请用自己的话说一句原因，不用背老师的话"
+    : String(plan?.responseInstruction || "").trim();
+  if (!instruction || normalizeText(prompt).includes(normalizeText(instruction))) return prompt;
+  return `${prompt.replace(/[。！？!?]+$/, "")}。${ensureChineseSentence(instruction)}`;
 }
 
 function cleanPromptForChildContext(prompt) {
@@ -2223,11 +2270,9 @@ function createTeacherHintForStep(lesson, step) {
   }
   const scaffold = createConceptScaffoldHint(lesson, step);
   if (scaffold) return scaffold;
-  const answer = pickChildFollowAnswer(step?.answerKeywords || []);
-  if (answer) return `老师先把这一步讲清楚：先看题里的关键关系，再试着说「${answer}」。`;
   const topic = lesson?.node || lesson?.lesson || "这一小步";
   const prompt = String(step?.prompt || "").replace(/[。！？!?]*$/, "");
-  if (prompt) return `老师把问题缩小一点：${prompt}。先说你看到了什么，再说答案。`;
+  if (prompt) return `老师把问题缩小一点：先找题里和“${step?.label || "这一步"}”有关的数、单位或动作，再回答这个小问题。`;
   return `老师先带你看${topic}，先找题目里的一个线索，再回答。`;
 }
 
@@ -3395,17 +3440,31 @@ function createNonLeakingRepairHint(plan) {
   }
   if (family === "makeTenAdd") return "凑十法先找快到10的数，再把另一个数拆成两部分。";
   if (family === "breakTenSubtract") return "破十法先看个位够不够减，不够就把十几拆成10和几。";
-  if (/加|合起来|一共/.test(text)) return "加法先看两部分，把它们合起来。可以从大数接着数。";
-  if (/减|剩|去掉|拿走|少/.test(text)) return "减法先看原来有多少，再看去掉多少，最后看还剩多少。";
   if (family === "multiplication") return "乘法先找一组有几个，再看一共有几组。";
-  if (family === "division") return "平均分先看总数，再看分成几份或每份几个。";
+  if (["division", "remainderDivision", "remainderApplication"].includes(family)) return "除法先看总数，再分清题目告诉的是每份几个，还是分成几份。";
   if (family === "placeValue") return "数位题先看十位、个位，再把每个数位的意思说清楚。";
-  if (family === "time") return "时间题先看时针，再看分针，不要把两根针混在一起。";
-  if (family === "measure") return "测量题先看单位和起点，再看终点刻度。";
+  if (["time", "timeDuration"].includes(family)) return "钟面先看时针再看分针；经过时间要找开始和结束，不能把两种题混在一起。";
+  if (family === "measure") {
+    const questionText = normalizeText(`${lesson?.activeQuestion?.prompt || ""} ${text}`);
+    if (/千克/.test(questionText) && /克/.test(questionText)) return "质量换算先说单位关系：1千克是1000克。把千克换成克，再和原来的克合起来。";
+    if (/厘米/.test(questionText) && /米/.test(questionText)) return "长度换算先说单位关系：1米是100厘米。把米换成厘米，再继续算。";
+    return "测量题先分清是选单位、读刻度，还是单位换算；换算时先说清两个单位的关系。";
+  }
   if (family === "motion") return "先看图形怎么动：直直移动是平移，绕一个点转是旋转，沿一条线对折后两边重合是轴对称。";
   if (family === "shape") return "图形题先说边、角、面这些特征，再说名字。";
   if (family === "data") return "读表题先找对应的行或列，再读数量。";
   if (family === "logic") return "推理题先找确定的一条线索，再排除不可能的情况。";
+  if (["calculation", "mixedCalculation", "concreteAddition"].includes(family) || /加|合起来|一共/.test(text)) {
+    return family === "mixedCalculation"
+      ? "混合运算先看有没有括号，再看乘除，最后才按顺序算加减。"
+      : "加法先看两部分，把它们合起来；整十数可以先看成几个十来算。";
+  }
+  // Do not treat the character “少” inside “多少” as a subtraction cue.
+  if (["concreteSubtraction", "comparisonDifference"].includes(family) || /减|还剩|去掉|拿走|少了|少掉|比.*少/.test(text)) {
+    return family === "comparisonDifference"
+      ? "求相差多少，要用大数减小数，得到两边相差的部分。"
+      : "减法先看原来有多少，再看去掉多少，最后看还剩多少。";
+  }
 
   const hint = stripAnswerLeakFromRepairHint(plan?.teacherHint || "");
   return hint || "先看图里的关键数，不急着说最后答案。";
@@ -4714,6 +4773,17 @@ function createCalculationGuidedSteps(lesson, question) {
   if ((expression.left >= 100 || expression.right >= 100) && ["+", "-"].includes(expression.operator)) {
     return createChunkCalculationGuidedSteps(lesson, question, expression);
   }
+  if (
+    ["+", "-"].includes(expression.operator) &&
+    expression.left >= 10 &&
+    expression.left < 100 &&
+    expression.right >= 10 &&
+    expression.right < 100 &&
+    (expression.left % 10 === 0 || expression.right % 10 === 0) &&
+    (expression.operator === "+" || expression.right % 10 === 0)
+  ) {
+    return createTensUnitCalculationGuidedSteps(lesson, question, expression);
+  }
   if (expression.operator === "+" && expression.left < 100 && expression.right < 100 && (expression.left >= 10 || expression.right >= 10)) {
     return createPlaceValueAdditionGuidedSteps(lesson, question, expression);
   }
@@ -4771,6 +4841,49 @@ function createCalculationGuidedSteps(lesson, question) {
     }),
     guidedStep("算出结果", "算完结果是多少？", answerKeywords.concat(answerKeywordsForNumber(expression.result))),
     guidedStep("说清怎么算", "你是怎么算出来的？", ["先", "再", "数", "合起来", "去掉", "口诀", formatExpression(expression)], { isReason: true, isFinal: true }),
+  ];
+}
+
+function createTensUnitCalculationGuidedSteps(lesson, question, expression) {
+  const answerKeywords = expandedQuestionAnswerKeywords(question, lesson);
+  const isAddition = expression.operator === "+";
+  const roundOperand = expression.right % 10 === 0 ? expression.right : expression.left;
+  const base = expression.right % 10 === 0 ? expression.left : expression.right;
+  const roundTens = roundOperand / 10;
+  const baseTens = Math.floor(base / 10);
+  const baseOnes = base % 10;
+  const resultTens = Math.floor(expression.result / 10);
+  const resultOnes = expression.result % 10;
+  const action = isAddition ? "加" : "减";
+  const displayExpression = `${expression.left}${expression.operator}${expression.right}`;
+  const bothRound = expression.left % 10 === 0 && expression.right % 10 === 0;
+
+  return [
+    guidedStep("看成几个十", `${roundOperand}里面有几个十？`, answerKeywordsForNumber(roundTens).concat([String(roundTens), `${roundTens}个十`]), {
+      teacherHint: `${roundOperand}就是${roundTens}个十。先把整十数看成几个十，会更好算。`,
+      bridgeMessage: "整十数已经看成几个十了。",
+      responseInstruction: "这次只说有几个十",
+    }),
+    guidedStep("几个十相加减", `${baseTens}个十${action}${roundTens}个十，得到几个十？`, answerKeywordsForNumber(resultTens).concat([String(resultTens), `${resultTens}个十`]), {
+      teacherHint: `只算十的个数：${baseTens}${expression.operator}${roundTens}=${resultTens}，所以得到${resultTens}个十。`,
+      bridgeMessage: bothRound ? "几个十算好了，再换回完整的数。" : `十位算好了，个位上的${baseOnes}不变。`,
+      responseInstruction: "这次只说得到几个十",
+    }),
+    guidedStep("合成完整结果", bothRound ? `${resultTens}个十是多少？` : `${resultTens}个十和${resultOnes}个一，合起来是多少？`, answerKeywords.concat(answerKeywordsForNumber(expression.result)), {
+      teacherHint: bothRound
+        ? `${resultTens}个十就是${expression.result}。`
+        : `${resultTens}个十和${resultOnes}个一合起来就是${expression.result}。`,
+      bridgeMessage: "结果出来了，最后检查十位和个位。",
+      responseInstruction: "只说最后结果",
+    }),
+    guidedStep("说清整十数口算", "这类题先算哪一位，哪一位保持不变？", ["十位", "个位不变", "几个十", "先算十位", String(expression.result)], {
+      isReason: true,
+      isFinal: true,
+      repeatSentence: bothRound
+        ? `${displayExpression}先看成几个十${action}几个十，再换回完整的数，所以等于${expression.result}。`
+        : `${displayExpression}先算十位，个位上的${baseOnes}不变，所以等于${expression.result}。`,
+      responseInstruction: "只说先算哪一位，以及哪一位不变",
+    }),
   ];
 }
 
@@ -5068,15 +5181,41 @@ function createMeasureGuidedSteps(lesson, question) {
   const isMassConversion = conversionKind === "mass";
 
   if (isLengthConversion) {
+    const prompt = normalizeText(question?.prompt || "");
+    const largeMatch = prompt.match(/(\d+)米(?:\s*(\d+)厘米)?/);
+    const reverseMatch = !largeMatch ? prompt.match(/(\d+)厘米/) : null;
+    const meterCount = Number(largeMatch?.[1]);
+    const looseCentimeters = Number(largeMatch?.[2] || 0);
+    const convertedCentimeters = Number.isFinite(meterCount) ? meterCount * 100 : null;
+    if (reverseMatch) {
+      const totalCentimeters = Number(reverseMatch[1]);
+      const fullMeters = Math.floor(totalCentimeters / 100);
+      const remainingCentimeters = totalCentimeters % 100;
+      return [
+        guidedStep("记住1米=100厘米", "先只想单位关系：多少厘米正好是1米？", ["100", "一百", "100厘米", "一百厘米"], {
+          teacherHint: "每100厘米可以换成1米。把厘米换成米时，要看里面有几个完整的100厘米。",
+        }),
+        guidedStep("找完整的米", `${totalCentimeters}厘米里有几个完整的100厘米，也就是几米？`, answerKeywordsForNumber(fullMeters, "米"), {
+          teacherHint: `${totalCentimeters}里面有${fullMeters}个完整的100，所以先换成${fullMeters}米。`,
+        }),
+        guidedStep("看还剩几厘米", `换出${fullMeters}米后，还剩几厘米？`, answerKeywordsForNumber(remainingCentimeters, "厘米"), {
+          teacherHint: `完整的100厘米换成米，剩下不满100的部分仍然用厘米表示。`,
+        }),
+        guidedStep("带单位回答", "最后把几米几厘米说完整。", answerKeywords.concat(["米", "厘米"]), { isFinal: true }),
+      ];
+    }
     return [
       guidedStep("记住1米=100厘米", "先只想单位关系：1米等于多少厘米？", ["100", "一百", "100厘米", "一百厘米"], {
         teacherHint: "1米正好等于100厘米。把米换成厘米时，每1米都要换成100厘米。",
       }),
-      guidedStep("换成同一单位", "现在把题里的米换成厘米，一共是多少厘米？", answerKeywords.concat(["厘米"]), {
+      guidedStep("先把米换成厘米", Number.isFinite(convertedCentimeters) ? `${meterCount}米先换成多少厘米？` : "现在把题里的米换成厘米，是多少厘米？", Number.isFinite(convertedCentimeters) ? answerKeywordsForNumber(convertedCentimeters, "厘米") : answerKeywords.concat(["厘米"]), {
         teacherHint: "数一数题里有几个1米，就有几个100厘米；把这些100厘米合起来。",
         bridgeMessage: "单位关系记住了，现在只换单位。",
       }),
-      guidedStep("带单位回答", "把换算结果带上“厘米”说完整。", answerKeywords.concat(["厘米"]), {
+      ...(looseCentimeters > 0 ? [guidedStep("再加原来的厘米", `${convertedCentimeters}厘米再加${looseCentimeters}厘米，一共是几厘米？`, answerKeywords.concat(["厘米"]), {
+        teacherHint: "米已经换成厘米了，现在单位一样，可以把原来的厘米加上。",
+      })] : []),
+      guidedStep("带单位回答", "最后把换算结果带上“厘米”说完整。", answerKeywords.concat(["厘米"]), {
         teacherHint: "数字说对以后，再检查答案后面有没有“厘米”。",
         isFinal: true,
       }),
@@ -5084,15 +5223,41 @@ function createMeasureGuidedSteps(lesson, question) {
   }
 
   if (isMassConversion) {
+    const prompt = normalizeText(question?.prompt || "");
+    const largeMatch = prompt.match(/(\d+)千克(?:\s*(\d+)克)?/);
+    const reverseMatch = !largeMatch ? prompt.match(/(\d+)克/) : null;
+    const kilogramCount = Number(largeMatch?.[1]);
+    const looseGrams = Number(largeMatch?.[2] || 0);
+    const convertedGrams = Number.isFinite(kilogramCount) ? kilogramCount * 1000 : null;
+    if (reverseMatch) {
+      const totalGrams = Number(reverseMatch[1]);
+      const fullKilograms = Math.floor(totalGrams / 1000);
+      const remainingGrams = totalGrams % 1000;
+      return [
+        guidedStep("记住1千克=1000克", "先只想单位关系：多少克正好是1千克？", ["1000", "一千", "1000克"], {
+          teacherHint: "每1000克可以换成1千克。把克换成千克时，要看里面有几个完整的1000克。",
+        }),
+        guidedStep("找完整的千克", `${totalGrams}克里有几个完整的1000克，也就是几千克？`, answerKeywordsForNumber(fullKilograms, "千克"), {
+          teacherHint: `${totalGrams}里面有${fullKilograms}个完整的1000，所以先换成${fullKilograms}千克。`,
+        }),
+        guidedStep("看还剩几克", `换出${fullKilograms}千克后，还剩几克？`, answerKeywordsForNumber(remainingGrams, "克"), {
+          teacherHint: "完整的1000克换成千克，剩下不满1000的部分仍然用克表示。",
+        }),
+        guidedStep("带单位回答", "最后把几千克几克说完整。", answerKeywords.concat(["千克", "克"]), { isFinal: true }),
+      ];
+    }
     return [
       guidedStep("记住1千克=1000克", "先只想单位关系：1千克等于多少克？", ["1000", "一千", "1000克"], {
         teacherHint: "1千克正好等于1000克。把千克换成克时，每1千克都要换成1000克。",
       }),
-      guidedStep("先换成克", "现在把题里的千克换成克，一共是多少克？", answerKeywords.concat(["克"]), {
-        teacherHint: "数一数题里有几个1千克，就有几个1000克；如果还有零散的克，再加上。",
+      guidedStep("先把千克换成克", Number.isFinite(convertedGrams) ? `${kilogramCount}千克先换成多少克？` : "现在把题里的千克换成克，是多少克？", Number.isFinite(convertedGrams) ? answerKeywordsForNumber(convertedGrams, "克") : answerKeywords.concat(["克"]), {
+        teacherHint: "数一数题里有几个1千克，就有几个1000克。这一步先不加零散的克。",
         bridgeMessage: "单位关系记住了，现在只换单位。",
       }),
-      guidedStep("带单位回答", "把换算结果带上“克”说完整。", answerKeywords.concat(["克"]), {
+      ...(looseGrams > 0 ? [guidedStep("再加原来的克", `${convertedGrams}克再加${looseGrams}克，一共是几克？`, answerKeywords.concat(["克"]), {
+        teacherHint: "千克已经换成克了，现在单位一样，可以把原来的克加上。",
+      })] : []),
+      guidedStep("带单位回答", "最后把换算结果带上“克”说完整。", answerKeywords.concat(["克"]), {
         teacherHint: "数字说对以后，再检查答案后面有没有“克”。",
         isFinal: true,
       }),
@@ -5265,9 +5430,14 @@ function createPlaceValueGuidedSteps(lesson, question) {
 
 function createShapeGuidedSteps(lesson, question) {
   const answerKeywords = expandedQuestionAnswerKeywords(question, lesson);
+  const text = normalizeText(`${question?.prompt || ""} ${question?.answer || ""} ${lesson?.node || ""}`);
+  const isSolid = /长方体|正方体|圆柱|球|立体|面/.test(text) && !/长方形|正方形|平面图形/.test(text);
   return [
-    guidedStep("看图形特征", "先说它最明显的样子：平平的、方方的、圆圆的，还是会滚动？", ["平", "方", "圆", "滚", "面", "边", "角", "对称", "平移", "旋转"], {
-      teacherHint: "认图形不靠猜名字，先看特征：有没有平平的面、直直的边、尖尖的角，或者能不能滚动。",
+    guidedStep("看图形特征", isSolid ? "这是立体图形。先看它有怎样的面，能不能平放或滚动。" : "这是平面图形。先看它有几条边、几个角，边是不是直的。", isSolid ? ["面", "平放", "滚动", "曲面", "平面"] : ["边", "角", "直边", "曲边", "圆"], {
+      teacherHint: isSolid
+        ? "立体图形要看面：平平的面可以放稳，弯曲的面可能滚动。"
+        : "平面图形只看轮廓的边和角，不用判断它会不会滚。",
+      responseInstruction: isSolid ? "请只说一种面的特征，或能不能滚动" : "请只说有几条边、几个角，或边是直的还是弯的",
     }),
     guidedStep("说出名称或判断", "根据这个特征，答案是什么？", answerKeywords.concat(["长方体", "正方体", "圆柱", "球", "长方形", "正方形", "三角形", "圆", "对", "错"]), {
       teacherHint: "把刚才看到的特征和图形名字配起来，再说答案。",
@@ -5276,7 +5446,7 @@ function createShapeGuidedSteps(lesson, question) {
     guidedStep("说清理由", "你为什么这样认？说一个最明显的特征。", ["因为", "所以", "特征", "面", "边", "角", "对称", "平移", "旋转", "会滚"], {
       isReason: true,
       isFinal: true,
-      repeatSentence: "我先看图形的特征，再根据特征说出它的名字。",
+      repeatSentence: isSolid ? "我先看立体图形的面和能不能滚，再说出它的名字。" : "我先看平面图形的边和角，再说出它的名字。",
     }),
   ];
 }
@@ -5880,8 +6050,10 @@ let state = {
   isProcessing: false,
   teacherReaction: "guiding",
   showLessonPicker: false,
+  lessonPickerGrade: defaultLesson.grade,
   showKeyboard: false,
   showVisual: true,
+  visualHelpActive: false,
   strategyIndex: 0,
   mastery: 64,
   completedSteps: 0,
@@ -6067,6 +6239,7 @@ function advanceLessonQuestion(reason = "换一道同类题") {
   state.completedSteps = starter.index;
   state.mastery = Math.max(58, Math.min(state.mastery, 70));
   state.strategyIndex = 0;
+  state.visualHelpActive = false;
   state.showVisual = true;
   state.showLessonPicker = false;
   state.lastStudentText = "";
@@ -6269,6 +6442,7 @@ function renderChildView() {
 
   return `
     <main class="child-stage kid-classroom lesson-shell">
+      <h1 class="kid-sr-only">${escapeText(lesson.node)}数学语音陪练</h1>
       ${renderKidTopbar(lesson)}
       <section class="kid-workspace lesson-stage" aria-label="孩子学习区">
         <aside class="kid-coach teacher-cove" aria-label="老师引导区">
@@ -6326,7 +6500,7 @@ function renderKidProgressDots(lesson) {
       : 0;
   const steps = ["先学会", "做整题", "已掌握"];
   return `
-    <div class="kid-progress" aria-label="本轮学习进度">
+    <nav class="kid-progress" aria-label="本轮学习进度">
       ${steps
         .map(
           (label, index) => `
@@ -6337,7 +6511,7 @@ function renderKidProgressDots(lesson) {
           `,
         )
         .join("")}
-    </div>
+    </nav>
   `;
 }
 
@@ -6392,7 +6566,7 @@ function renderKidQuestionBubble(lesson) {
   const lengthClass = messageLength > 118 ? "is-long" : messageLength > 62 ? "is-medium" : "is-short";
 
   return `
-    <section class="kid-speech-bubble ${lengthClass}" aria-label="老师提问">
+    <section class="kid-speech-bubble ${lengthClass}" aria-label="老师提问" aria-live="polite" aria-atomic="true">
       <span class="kid-speaker-label">乐之老师</span>
       <p>${escapeText(message)}</p>
       ${state.lastStudentText ? `<div class="kid-last-answer"><span>刚才你说</span><strong>${escapeText(state.lastStudentText)}</strong></div>` : ""}
@@ -6510,7 +6684,7 @@ function renderKidBoardVisual(lesson) {
     return renderKidMoneyBoard(visualLesson);
   }
   return `
-    <div class="kid-board-card kid-board-card-generic">
+    <div class="kid-board-card kid-board-card-generic visual-mode-${getVisualRevealMode(visualLesson)}">
       <div class="kid-board-head">
         <span>${icon("image")}看图想一想</span>
         <strong>${getKidBoardStageLabel()}</strong>
@@ -6538,7 +6712,7 @@ function renderKidMoneyBoard(lesson) {
   const jiaoLabel = showConvertedYuan ? `${money.yuan ? money.yuan * 10 : 10}角` : "几角";
   const extraLabel = showExtraJiao ? ` + ${extraJiao}角` : "";
   return `
-    <div class="kid-board-card kid-money-board">
+    <div class="kid-board-card kid-money-board visual-mode-${getVisualRevealMode(lesson)}">
       <div class="kid-board-head">
         <span>${icon("image")}看图想一想</span>
         <strong>${getKidBoardStageLabel()}</strong>
@@ -6738,21 +6912,34 @@ function renderKnowledgeSelector() {
 
 function renderLessonPicker() {
   const groups = groupLessonsByGrade();
+  const availableGrades = groups.map((group) => group.grade);
+  const selectedGrade = availableGrades.includes(state.lessonPickerGrade)
+    ? state.lessonPickerGrade
+    : currentLesson().grade;
+  const visibleGroups = groups.filter((group) => group.grade === selectedGrade);
   return `
-    <div class="lesson-picker" role="listbox" aria-label="选择知识点">
-      ${groups
+    <div class="lesson-picker" role="dialog" aria-label="选择知识点">
+      <div class="lesson-picker-tabs" role="tablist" aria-label="按年级和学期筛选">
+        ${availableGrades.map((grade) => `
+          <button role="tab" aria-selected="${grade === selectedGrade ? "true" : "false"}" class="lesson-picker-tab ${grade === selectedGrade ? "is-current" : ""}" data-action="filter-lessons" data-grade="${escapeAttr(grade)}">
+            ${escapeText(grade.replace("年级", "年级 "))}
+          </button>
+        `).join("")}
+      </div>
+      <div class="lesson-picker-list" role="listbox" aria-label="${escapeAttr(selectedGrade)}知识点">
+      ${visibleGroups
         .map(
           (group) => `
             <section class="lesson-picker-group">
-              <h3>${escapeText(group.grade)}</h3>
+              <h3>${escapeText(group.grade)} · 选择今天要学的一小步</h3>
               <div>
                 ${group.items
                   .map(
                     ({ lesson, index }) => `
-                      <button class="lesson-option ${index === state.lessonIndex ? "is-current" : ""}" data-action="select-lesson" data-lesson-index="${index}">
+                      <button role="option" aria-selected="${index === state.lessonIndex ? "true" : "false"}" class="lesson-option ${index === state.lessonIndex ? "is-current" : ""}" data-action="select-lesson" data-lesson-index="${index}">
                         <span>${escapeText(lesson.unit)}</span>
                         <strong>${escapeText(lesson.node)}</strong>
-                        <small>${escapeText(lesson.problem)}</small>
+                        <small>${escapeText(childFacingPrompt(lesson.problem))}</small>
                       </button>
                     `,
                   )
@@ -6762,6 +6949,7 @@ function renderLessonPicker() {
           `,
         )
         .join("")}
+      </div>
     </div>
   `;
 }
@@ -7068,6 +7256,7 @@ function getVisualRevealMode(lesson = currentLesson()) {
   const text = normalizeText(`${plan?.label || ""}${plan?.prompt || ""}${state.currentStep || ""}${state.currentAtomName || ""}`);
   if (state.phase === "summary" || state.phase === "teachback") return "solution";
   if (/说清|原因|为什么|方法|复述|讲给老师/.test(text)) return "solution";
+  if (state.visualHelpActive) return "hint";
   if (state.phase === "repair") return "hint";
   if ((state.completedSteps || 0) > 0) return "step";
   return "question";
@@ -7226,7 +7415,7 @@ function renderLessonSvg(lesson, visualMode = getVisualRevealMode(lesson)) {
   if (visualLesson.visualType === "clock") return renderClockSvg(visualLesson);
   if (visualLesson.visualType === "ten-frame") return renderTenFrameSvg(visualLesson, visualMode);
   if (visualLesson.visualType === "number-line") return renderNumberLineSvg(visualLesson);
-  if (visualLesson.visualType === "place-value") return renderPlaceValueSvg(visualLesson);
+  if (visualLesson.visualType === "place-value") return renderPlaceValueSvg(visualLesson, visualMode);
   if (visualLesson.visualType === "shape") return renderShapeSvg(visualLesson);
   if (visualLesson.visualType === "ruler") return renderRulerSvg(visualLesson);
   if (visualLesson.visualType === "angle") return renderAngleSvg(visualLesson);
@@ -7587,24 +7776,41 @@ function renderNumberLineSvg(lesson) {
   `;
 }
 
-function renderPlaceValueSvg(lesson) {
+function renderPlaceValueSvg(lesson, visualMode = "question") {
+  const question = lesson?.activeQuestion || {};
+  const prompt = normalizeText(question.prompt || lesson?.problem || "");
+  const promptNumber = extractNumbers(prompt).find((value) => Number.isInteger(value) && value >= 0 && value <= 9999);
+  const answerNumber = /^\d{1,4}$/.test(normalizeText(question.answer || "")) ? Number(normalizeText(question.answer)) : null;
+  const number = Number.isFinite(promptNumber) ? promptNumber : answerNumber;
+  const asksWrite = /写作/.test(prompt);
+  const revealDigits = !asksWrite || visualMode !== "question";
+  const padded = Number.isFinite(number) ? String(number).padStart(number >= 1000 ? 4 : number >= 100 ? 3 : number >= 10 ? 2 : 1, "0") : "";
+  const allColumns = [
+    { label: "千位", color: "#d9ecff" },
+    { label: "百位", color: "#eaf8f1" },
+    { label: "十位", color: "#fff4d8" },
+    { label: "个位", color: "#ffe8e3" },
+  ];
+  const columns = allColumns.slice(Math.max(0, 4 - Math.max(2, padded.length || 2)));
+  const digits = padded.padStart(columns.length, "0").split("");
+  const columnWidth = 84;
+  const gap = 18;
+  const totalWidth = columns.length * columnWidth + (columns.length - 1) * gap;
+  const startX = (520 - totalWidth) / 2;
   return `
     <svg class="lesson-svg" viewBox="0 0 520 214" role="img" aria-label="${escapeAttr(lesson.node)}">
       <text x="26" y="30" class="svg-title">${escapeText(lesson.visualTitle)}</text>
-      ${placeValueColumn(78, "千位", "#d9ecff")}
-      ${placeValueColumn(174, "百位", "#eaf8f1")}
-      ${placeValueColumn(270, "十位", "#fff4d8")}
-      ${placeValueColumn(366, "个位", "#ffe8e3")}
-      <text x="72" y="184" class="svg-win">${escapeText(shortSvgText(lesson.microSteps.join("，"), 28))}</text>
+      ${columns.map((column, index) => placeValueColumn(startX + index * (columnWidth + gap), column.label, column.color, revealDigits ? digits[index] : "?", columnWidth)).join("")}
+      <text x="260" y="188" text-anchor="middle" class="svg-win">${escapeText(Number.isFinite(number) ? `${number} 要按数位看` : "从高位到低位，一个数位一个数位看")}</text>
     </svg>
   `;
 }
 
-function placeValueColumn(x, label, color) {
+function placeValueColumn(x, label, color, digit = "?", width = 84) {
   return `
-    <rect x="${x}" y="64" width="78" height="90" rx="12" fill="${color}" stroke="#244056" stroke-width="3"/>
-    <text x="${x + 16}" y="102" class="svg-label">${label}</text>
-    <circle cx="${x + 39}" cy="130" r="10" fill="#65d6ad" stroke="#244056" stroke-width="2"/>
+    <rect x="${x}" y="58" width="${width}" height="102" rx="12" fill="${color}" stroke="#244056" stroke-width="3"/>
+    <text x="${x + width / 2}" y="91" text-anchor="middle" class="svg-label">${label}</text>
+    <text x="${x + width / 2}" y="139" text-anchor="middle" class="svg-win">${digit}</text>
   `;
 }
 
@@ -8097,15 +8303,17 @@ function moneyCoin(x, y = 0) {
 }
 
 function renderPracticePanel() {
+  const summary = getMasteryEvidenceSummary();
+  const passed = new Set(state.passedQuestionIds || []).size;
   return `
     <div class="practice-panel">
       <div>
         <span>今天第 ${state.todayQuestion} 题</span>
-        <strong>${state.phase === "summary" ? "已通过 1 个知识点" : `掌握度 ${state.mastery}%`}</strong>
+        <strong>${escapeText(summary.label)}</strong>
       </div>
-      <div class="mastery-ring" style="--value: ${state.mastery}%">
-        <b>${state.mastery}%</b>
-        <small>掌握</small>
+      <div class="mastery-ring" style="--value: ${Math.min(100, passed * 34)}%">
+        <b>${passed}</b>
+        <small>整题</small>
       </div>
     </div>
   `;
@@ -8168,8 +8376,38 @@ function fractionBar(x, y, denominator, numerator, color, label) {
   `;
 }
 
+function getMasteryEvidenceSummary() {
+  const passed = new Set(state.passedQuestionIds || []).size;
+  const direct = Number(state.masteryEvidence?.direct) || 0;
+  const variant = Number(state.masteryEvidence?.variant) || 0;
+  const reasoning = Number(state.masteryEvidence?.reasoning) || 0;
+  if (state.phase === "summary" && passed >= 3 && variant >= 1) {
+    return {
+      label: "本轮已掌握",
+      detail: `独立通过${passed}道整题，其中包含${Math.max(1, variant)}道变式；老师已完成归纳。`,
+    };
+  }
+  if (passed >= 2) {
+    return {
+      label: "基本掌握",
+      detail: `已独立通过${passed}道整题${variant ? `，其中${variant}道为变式题` : ""}；还需再验一道不同问法。`,
+    };
+  }
+  if (passed === 1 || direct > 0) {
+    return {
+      label: "正在形成",
+      detail: `目前有${Math.max(passed, direct)}次独立正确证据${reasoning ? `，并有${reasoning}次方法表达` : ""}；证据还不足以判定掌握。`,
+    };
+  }
+  return {
+    label: "证据不足",
+    detail: "尚无独立整题通过记录，不显示容易误导的百分比。",
+  };
+}
+
 function renderParentView() {
   const lesson = currentLesson();
+  const masterySummary = getMasteryEvidenceSummary();
   return `
     <main class="parent-page">
       <section class="parent-hero">
@@ -8215,9 +8453,9 @@ function renderParentView() {
 
         <article class="parent-card">
           <div class="metric-large">
-            <span>掌握度</span>
-            <strong>${state.mastery}%</strong>
-            <p>${(state.passedQuestionIds || []).length ? `已独立通过 ${(state.passedQuestionIds || []).length} 道整题。` : "等待老师归纳后进行整题检验。"}</p>
+            <span>掌握证据</span>
+            <strong>${escapeText(masterySummary.label)}</strong>
+            <p>${escapeText(masterySummary.detail)}</p>
           </div>
         </article>
 
@@ -8417,6 +8655,7 @@ function showCurrentStepVisual() {
   const visualLesson = createActiveVisualLesson(lesson);
   const boardQuestion = getKidBoardPrompt(visualLesson);
   state.showVisual = true;
+  state.visualHelpActive = true;
   state.strategyIndex = Math.max(state.strategyIndex, 1);
   state.teacherReaction = "guiding";
   state.aiContext = "老师不重复口头提示，改为引导孩子观察当前图示。";
@@ -8456,6 +8695,14 @@ async function handleAction(event) {
 
   if (action === "toggle-lesson-picker") {
     state.showLessonPicker = !state.showLessonPicker;
+    if (state.showLessonPicker) state.lessonPickerGrade = currentLesson().grade;
+    render();
+    return;
+  }
+
+  if (action === "filter-lessons") {
+    state.lessonPickerGrade = String(event.currentTarget.dataset.grade || currentLesson().grade);
+    state.showLessonPicker = true;
     render();
     return;
   }
@@ -8570,6 +8817,7 @@ function changeLesson(reason, targetIndex = null) {
   state.showLessonPicker = false;
   state.showKeyboard = false;
   state.strategyIndex = 0;
+  state.visualHelpActive = false;
   state.mastery = 60;
   state.completedSteps = 0;
   clearGuidedRepairAttempts();
@@ -9717,6 +9965,7 @@ function handleChildInput(text, inputType) {
   }
 
   cancelSupersededInteraction();
+  state.visualHelpActive = false;
   state.teacherReaction = "responding";
   state.voiceConfirmation = null;
   state.transcript = "";
@@ -10021,9 +10270,9 @@ function createMicrostepExplanation(lesson, plan, attempt = 0) {
 }
 
 function sanitizeMicrostepExplanation(remediation, lesson) {
-  const answerKeywords = uniqueKeywords(remediation?.answerKeywords || []);
-  const prompt = String(remediation?.checkPrompt || "").trim();
-  const normalizedAnswers = answerKeywords.map((item) => normalizeText(item)).filter(Boolean);
+  let answerKeywords = uniqueKeywords(remediation?.answerKeywords || []);
+  let prompt = String(remediation?.checkPrompt || "").trim();
+  let normalizedAnswers = answerKeywords.map((item) => normalizeText(item)).filter(Boolean);
   let instruction = String(remediation?.responseInstruction || "只说答案就可以。").trim();
   const normalizedInstruction = normalizeText(instruction);
   const balancedChoice = [
@@ -10052,6 +10301,25 @@ function sanitizeMicrostepExplanation(remediation, lesson) {
   const family = String(remediation?.family || getLessonTeachingFamily(lesson) || "generic");
   let explanation = String(remediation?.explanation || "").trim();
   let demonstration = String(remediation?.demonstration || "").trim();
+  const originalStepLabel = String(remediation?.originalStepLabel || "");
+  const currentExpression = parseTeachingArithmeticExpression(lesson?.activeQuestion || {}) || parseArithmeticExpression(lesson?.problem || "");
+  if (
+    family === "calculation" &&
+    /几个十|整十|十位.*算|个位不变/.test(originalStepLabel) &&
+    ["+", "-"].includes(currentExpression?.operator)
+  ) {
+    if (currentExpression.operator === "+") {
+      demonstration = "40加30是4个十加3个十，得到7个十，也就是70。";
+      prompt = "50加20等于几个十？";
+      answerKeywords = ["7", "七", "7个十", "七个十"];
+    } else if (currentExpression.operator === "-") {
+      demonstration = "60减20是6个十减2个十，剩4个十，也就是40。";
+      prompt = "70减20剩几个十？";
+      answerKeywords = ["5", "五", "5个十", "五个十"];
+    }
+    normalizedAnswers = answerKeywords.map((item) => normalizeText(item)).filter(Boolean);
+    instruction = "只说几个十。";
+  }
   if (family !== "compare" && family !== "comparisonDifference") {
     if (/苹果和梨|一一配对比较/.test(explanation)) {
       explanation = "换题只换数字、图或故事，解决当前知识点的方法不变。";
@@ -11053,5 +11321,37 @@ function escapeText(value) {
 function escapeAttr(value) {
   return escapeText(value).replace(/"/g, "&quot;");
 }
+
+window.LezhiDiagnostics = {
+  getLessonRoutingSnapshot() {
+    return lessons.map((lesson, lessonIndex) => ({
+      lessonIndex,
+      id: lesson.id,
+      sourceId: lesson.sourceQuestionBankId,
+      grade: lesson.grade,
+      node: lesson.node,
+      sourceQuestionCount: Number(lesson.questionBankStats?.sourceQuestionCount) || 0,
+      runtimeQuestionCount: getLessonQuestionBank(lesson).length,
+      questions: getLessonQuestionBank(lesson).map((question) => ({
+        id: question.id,
+        prompt: childFacingPrompt(question.prompt),
+        family: inferQuestionTeachingFamily(lesson, question),
+      })),
+    }));
+  },
+  classifyQuestion(point, question) {
+    return inferQuestionTeachingFamily(point || {}, question || {});
+  },
+  getStateSnapshot() {
+    return {
+      lessonIndex: state.lessonIndex,
+      lessonId: currentLesson()?.id || "",
+      questionId: currentLesson()?.activeQuestion?.id || "",
+      family: inferActiveQuestionFamily(currentLesson()),
+      phase: state.phase,
+      teachingState: state.teachingState,
+    };
+  },
+};
 
 render();

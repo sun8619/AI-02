@@ -33,8 +33,13 @@ const typedRoutingSource = functionSource("createTypedGuidedSteps");
 const motionSource = functionSource("createMotionGuidedSteps");
 const logicSource = functionSource("createLogicGuidedSteps");
 const mixedSource = functionSource("createMixedCalculationGuidedSteps");
+const tensCalculationSource = functionSource("createTensUnitCalculationGuidedSteps");
 const arithmeticChainSource = functionSource("parseArithmeticChain");
 const thinHintSource = functionSource("isThinTeacherHint");
+const remediationSanitizerSource = functionSource("sanitizeMicrostepExplanation");
+const focusedMessageSource = functionSource("createFocusedGuidedMessage");
+const focusedStepSource = functionSource("createFocusedStepSentence");
+const nonLeakingFirstAskSource = functionSource("formatNonLeakingFirstAsk");
 
 assert(measureStart >= 0, "缺少测量题的小步路由");
 assert(/isLengthConversion/.test(measureSource), "长度单位换算没有独立路由");
@@ -54,10 +59,14 @@ assert(!/"三千克"/.test(profileSource), "把“三千克”误当成3000克�
 assert(/function renderUnitConversionSvg/.test(appSource), "缺少单位换算专用图示");
 assert(/function detectMeasureUnitConversion/.test(appSource), "缺少统一的单位换算题型判断");
 assert(/measureConversionKind/.test(familySource), "题型分类没有优先识别单位换算");
+const applicationRoutingIndex = familySource.indexOf('overlayFamily === "application"');
 assert(
-  familySource.indexOf("if (measureConversionKind)") < familySource.indexOf('if (overlayFamily === "application")'),
+  applicationRoutingIndex >= 0 && familySource.indexOf("if (measureConversionKind)") < applicationRoutingIndex,
   "单位换算仍可能先落入应用题分类",
 );
+assert(!/\/[少]\//.test(familySource), "题型分类仍可能把“多少”里的“少”误判成减法");
+assert(/numericSlashes/.test(functionSource("countQuestionArithmeticOperators")), "选项分隔斜杠仍可能被误当成除法运算符");
+assert(/otherFamilies/.test(functionSource("orderQuestionsForKnowledgePoint")), "运行时题库仍可能丢掉同知识点中的其他题型");
 assert(/2千克300克/.test(appSource), "缺少复合质量单位换算回归样例");
 assert(/isLengthConversion[\s\S]{0,240}renderUnitConversionSvg/.test(appSource), "长度换算仍可能显示普通尺子");
 assert(/largeUnit:\s*"米"[\s\S]{0,160}relationCount:\s*100/.test(appSource), "长度换算图没有绑定1米=100厘米");
@@ -95,6 +104,8 @@ assert(!/text\.includes\("不是"\)/.test(functionSource("isLogicQuestion")), "�
 assert(/family === "motion"[\s\S]{0,100}createMotionGuidedSteps/.test(typedRoutingSource), "图形运动没有走专属小台阶");
 assert(/family === "pattern"[\s\S]{0,100}createPatternGuidedSteps/.test(typedRoutingSource), "找规律没有走专属小台阶");
 assert(/family === "shape"[\s\S]{0,100}createShapeGuidedSteps/.test(typedRoutingSource), "普通图形没有走专属小台阶");
+assert(/const isSolid =/.test(functionSource("createShapeGuidedSteps")), "平面图形和立体图形仍共用同一观察标准");
+assert(/const columns = allColumns\.slice/.test(functionSource("renderPlaceValueSvg")), "位值图仍是固定列，不能按当前数字生成");
 assert(/family === "logic"[\s\S]{0,100}createLogicGuidedSteps/.test(typedRoutingSource), "推理题没有走专属小台阶");
 assert(/直直地移动[\s\S]{0,120}平移/.test(motionSource), "平移讲解没有说明直直移动且朝向不变");
 assert(/绕着一个固定点转动[\s\S]{0,80}旋转/.test(motionSource), "旋转讲解没有说明绕固定点转动");
@@ -112,8 +123,16 @@ assert(/rule\("motion", "motion-reason"/.test(profileSource), "图形运动说�
 assert(/请只说最后剩下的人、物品或选项/.test(logicSource), "推理题最后一步没有说清回答对象");
 assert(/createArithmeticExpressionScaffold\(chain\.first/.test(mixedSource), "混合运算第一步仍只报等式，没有讲计算方法");
 assert(/createArithmeticExpressionScaffold\(chain\.second/.test(mixedSource), "混合运算第二步仍只报等式，没有讲计算方法");
+assert(/看成几个十/.test(tensCalculationSource), "整十数加减仍没有先看成几个十");
+assert(/个位上的\$\{baseOnes\}不变/.test(tensCalculationSource), "两位数加减整十数没有说明个位不变");
 assert(/firstPriority === secondPriority \? "同级运算从左往右"/.test(arithmeticChainSource), "同级运算和不同级运算仍共用错误顺序话术");
 assert(/你可以先说[^\n]*\$/.test(thinHintSource) || /replace\(\/你可以先说/.test(thinHintSource), "教师提示判薄规则没有保留去掉回答模板后的具体讲解");
+assert(/currentExpression\.operator === "\+"/.test(remediationSanitizerSource), "加法讲解后的近迁移题仍可能突然换成减法");
+assert(/currentExpression\.operator === "-"/.test(remediationSanitizerSource), "减法讲解后的近迁移题仍可能突然换成加法");
+assert(/createFocusedStepSentence\(starter, family, key, mode\)/.test(focusedMessageSource), "开场与答错后的提问模式没有分开");
+assert(/mode === "initial" \|\| mode === "variant"/.test(focusedStepSource), "首次题和变式题仍可能提前示范答案");
+assert(/formatNonLeakingFirstAsk/.test(focusedStepSource), "首次提问没有使用防答案泄漏格式");
+assert(!/teacherHint|repeatSentence|answerKeywords/.test(nonLeakingFirstAskSource), "首次提问仍读取了讲解、复述句或标准答案");
 
 if (failures.length) {
   console.error(failures.join("\n"));

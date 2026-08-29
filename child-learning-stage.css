@@ -8,7 +8,7 @@
 
 .app-shell.is-child .kid-workspace.lesson-stage {
   display: grid !important;
-  grid-template-columns: minmax(440px, 38%) minmax(0, 62%) !important;
+  grid-template-columns: minmax(440px, 40%) minmax(0, 60%) !important;
   grid-template-rows: minmax(0, 1fr) !important;
   grid-template-areas: "coach board" !important;
   height: calc(100dvh - 70px) !important;
@@ -20,7 +20,7 @@
   grid-area: coach !important;
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) !important;
-  grid-template-rows: minmax(185px, 28vh) minmax(126px, auto) auto auto !important;
+  grid-template-rows: minmax(190px, 30vh) minmax(126px, auto) auto auto !important;
   grid-template-areas: "teacher" "speech" "input" "help" !important;
   align-content: center !important;
   align-items: stretch !important;
@@ -38,8 +38,8 @@
   inset: auto !important;
   display: block !important;
   justify-self: center !important;
-  width: min(100%, 380px) !important;
-  max-width: 380px !important;
+  width: min(100%, 430px) !important;
+  max-width: 430px !important;
   height: 100% !important;
   min-height: 185px !important;
   margin: 0 !important;
@@ -180,7 +180,7 @@
   align-self: stretch !important;
   justify-self: center !important;
   display: grid !important;
-  grid-template-rows: auto minmax(0, 1fr) auto !important;
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
   width: min(100%, 1060px) !important;
   height: 100% !important;
   min-width: 0 !important;
@@ -200,8 +200,25 @@
 .app-shell.is-child .kid-board-fallback,
 .app-shell.is-child .kid-board-card svg,
 .app-shell.is-child .kid-board-card img {
+  min-width: 0 !important;
+  min-height: 0 !important;
   max-width: 100% !important;
   max-height: 100% !important;
+}
+
+.app-shell.is-child .kid-board-fallback {
+  display: grid !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  place-items: center !important;
+}
+
+.app-shell.is-child .kid-board-fallback > svg,
+.app-shell.is-child .kid-board-fallback > img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
 }
 
 /* A small, stable type system keeps the teacher and diagram in one visual
@@ -387,12 +404,12 @@
 
 @media (min-width: 1200px) and (orientation: landscape) {
   .app-shell.is-child .kid-workspace.lesson-stage {
-    grid-template-columns: minmax(500px, 38%) minmax(0, 62%) !important;
+    grid-template-columns: minmax(500px, 40%) minmax(0, 60%) !important;
   }
 
   .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
-    width: min(100%, 410px) !important;
-    max-width: 410px !important;
+    width: min(100%, 460px) !important;
+    max-width: 460px !important;
     min-height: 220px !important;
   }
 
@@ -403,7 +420,7 @@
 
 @media (min-width: 700px) and (max-width: 1199px) and (orientation: landscape) {
   .app-shell.is-child .kid-workspace.lesson-stage {
-    grid-template-columns: minmax(370px, 42%) minmax(0, 58%) !important;
+    grid-template-columns: minmax(370px, 43%) minmax(0, 57%) !important;
   }
 
   .app-shell.is-child .kid-coach.teacher-cove {
@@ -487,13 +504,22 @@
 
   .app-shell.is-child .kid-current-problem.task-ribbon {
     grid-template-columns: minmax(0, 1fr) 36px !important;
-    min-height: 46px !important;
-    max-height: 54px !important;
+    min-height: 48px !important;
+    max-height: 60px !important;
     padding: 5px 8px 5px 11px !important;
   }
 
+  .app-shell.is-child .kid-current-problem.task-ribbon .kid-task-main > span,
   .app-shell.is-child .kid-current-problem.task-ribbon .kid-task-step {
     display: none !important;
+  }
+
+  .app-shell.is-child .kid-current-problem.task-ribbon .kid-task-main {
+    gap: 0 !important;
+  }
+
+  .app-shell.is-child .kid-current-problem.task-ribbon .kid-task-main > strong {
+    line-height: 1.25 !important;
   }
 
   .app-shell.is-child .kid-board-card {
@@ -615,5 +641,533 @@
   .app-shell.is-child .kid-think-box svg {
     width: 20px !important;
     height: 20px !important;
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1199px) and (orientation: portrait) {
+  .app-shell.is-child .kid-coach.teacher-cove {
+    grid-template-columns: 150px minmax(0, 1fr) !important;
+    grid-template-rows: minmax(148px, auto) auto auto !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: 150px !important;
+    min-height: 148px !important;
+    max-height: 178px !important;
+    border-radius: 72px 72px 16px 16px !important;
+  }
+
+  .app-shell.is-child .kid-speech-bubble,
+  .app-shell.is-child .kid-speech-bubble.is-short,
+  .app-shell.is-child .kid-speech-bubble.is-medium,
+  .app-shell.is-child .kid-speech-bubble.is-long {
+    min-height: 148px !important;
+    max-height: 178px !important;
+  }
+}
+
+/* v31: stable product layout across desktop, tablet and phone. */
+.app-shell.is-child {
+  --kid-ink: #20384c;
+  --kid-muted: #60798b;
+  --kid-line: #cfe0e8;
+  --kid-blue: #3389d9;
+  --kid-green: #159d74;
+  --kid-amber: #e6a01b;
+  color: var(--kid-ink) !important;
+}
+
+.app-shell.is-child .kid-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.app-shell.is-child .child-stage.kid-classroom.lesson-shell {
+  display: grid !important;
+  grid-template-rows: 70px minmax(0, 1fr) !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.app-shell.is-child .kid-topbar {
+  display: grid !important;
+  grid-template-columns: minmax(230px, 1fr) auto minmax(230px, 1fr) !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  height: 70px !important;
+  padding: 0 22px !important;
+  gap: 18px !important;
+  border-bottom: 1px solid var(--kid-line) !important;
+  background: rgba(255, 255, 255, 0.97) !important;
+}
+
+.app-shell.is-child .kid-brand,
+.app-shell.is-child .kid-top-actions,
+.app-shell.is-child .kid-progress {
+  min-width: 0 !important;
+}
+
+.app-shell.is-child .kid-top-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+}
+
+.app-shell.is-child .kid-lesson-switch,
+.app-shell.is-child .kid-primary-voice,
+.app-shell.is-child .kid-type-trigger,
+.app-shell.is-child .kid-help-button,
+.app-shell.is-child .lesson-picker-tab,
+.app-shell.is-child .lesson-option {
+  min-height: 44px !important;
+}
+
+.app-shell.is-child .kid-progress {
+  display: flex !important;
+  justify-content: center !important;
+  gap: 12px !important;
+}
+
+.app-shell.is-child .kid-progress-step {
+  min-width: 76px !important;
+}
+
+.app-shell.is-child .kid-board.learning-canvas {
+  position: relative !important;
+  background-color: #f8fbfd !important;
+}
+
+.app-shell.is-child .kid-coach.teacher-cove {
+  background: #eef8f6 !important;
+  border-right: 1px solid var(--kid-line) !important;
+}
+
+.app-shell.is-child .kid-teacher-avatar.kid-teacher-large {
+  border: 1px solid #cae0e5 !important;
+  background: #e7f3f5 !important;
+  box-shadow: 0 12px 28px rgba(32, 56, 76, 0.1) !important;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-listening img {
+  transform: translateY(-2px) scale(1.015) !important;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-speaking img,
+.app-shell.is-child .kid-teacher-avatar.is-responding img {
+  animation: kid-teacher-speak 1.25s ease-in-out infinite alternate !important;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-celebrating img {
+  animation: kid-teacher-celebrate 0.5s ease-out both !important;
+}
+
+@keyframes kid-teacher-speak {
+  from { transform: translateY(0) scale(1); }
+  to { transform: translateY(-3px) scale(1.012); }
+}
+
+@keyframes kid-teacher-celebrate {
+  0% { transform: scale(0.985); }
+  60% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.app-shell.is-child .kid-speech-bubble {
+  border: 1px solid var(--kid-line) !important;
+  border-left: 5px solid var(--kid-blue) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: 0 8px 22px rgba(32, 56, 76, 0.07) !important;
+  scrollbar-gutter: stable !important;
+}
+
+.app-shell.is-child .kid-speech-bubble p {
+  color: var(--kid-ink) !important;
+  letter-spacing: 0 !important;
+}
+
+.app-shell.is-child .kid-answer-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 2fr) minmax(118px, 1fr) !important;
+  gap: 9px !important;
+}
+
+.app-shell.is-child .kid-primary-voice {
+  background: var(--kid-green) !important;
+}
+
+.app-shell.is-child .kid-help-row {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 9px !important;
+}
+
+.app-shell.is-child .kid-help-secondary {
+  display: none !important;
+}
+
+.app-shell.is-child .kid-help-button {
+  padding: 8px 11px !important;
+  border-radius: 8px !important;
+}
+
+.app-shell.is-child .kid-board-card {
+  border: 1px solid var(--kid-line) !important;
+  border-top: 4px solid var(--kid-blue) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: 0 10px 28px rgba(32, 56, 76, 0.08) !important;
+}
+
+.app-shell.is-child .kid-board-head,
+.app-shell.is-child .kid-board-card h2,
+.app-shell.is-child .kid-board-fallback,
+.app-shell.is-child .kid-money-layout,
+.app-shell.is-child .kid-shopping-layout,
+.app-shell.is-child .kid-think-box {
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+.app-shell.is-child .kid-board-head {
+  align-self: start !important;
+}
+
+.app-shell.is-child .kid-board-card h2 {
+  align-self: start !important;
+  text-align: center !important;
+}
+
+.app-shell.is-child .kid-think-box {
+  position: relative !important;
+  inset: auto !important;
+  align-self: end !important;
+  border: 1px solid #efc56e !important;
+  border-left: 5px solid var(--kid-amber) !important;
+  border-radius: 8px !important;
+  background: #fff9ec !important;
+  overflow: hidden !important;
+}
+
+.app-shell.is-child .kid-think-box strong {
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.app-shell.is-child .kid-current-problem.task-ribbon .kid-task-main > strong,
+.app-shell.is-child .kid-current-problem.task-ribbon .kid-task-step > strong {
+  white-space: normal !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+}
+
+.app-shell.is-child .visual-mode-hint .kid-board-fallback,
+.app-shell.is-child .visual-mode-hint .kid-money-layout,
+.app-shell.is-child .visual-mode-hint .kid-shopping-layout {
+  outline: 3px solid rgba(51, 137, 217, 0.2) !important;
+  outline-offset: 3px !important;
+  animation: kid-visual-focus 0.55s ease-out both !important;
+}
+
+@keyframes kid-visual-focus {
+  from { opacity: 0.72; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.app-shell.is-child .lesson-picker {
+  position: absolute !important;
+  z-index: 30 !important;
+  inset: 62px 18px 18px !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 12px !important;
+  width: auto !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 16px !important;
+  overflow: hidden !important;
+  border: 1px solid #bcd4df !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: 0 18px 50px rgba(32, 56, 76, 0.18) !important;
+}
+
+.app-shell.is-child .lesson-picker-tabs {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.app-shell.is-child .lesson-picker-tab {
+  padding: 8px !important;
+  border: 1px solid var(--kid-line) !important;
+  border-radius: 7px !important;
+  color: var(--kid-muted) !important;
+  background: #f7fafc !important;
+}
+
+.app-shell.is-child .lesson-picker-tab.is-current {
+  color: #fff !important;
+  border-color: var(--kid-blue) !important;
+  background: var(--kid-blue) !important;
+}
+
+.app-shell.is-child .lesson-picker-list {
+  min-height: 0 !important;
+  overflow: auto !important;
+}
+
+.app-shell.is-child .lesson-picker-group > div {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 9px !important;
+}
+
+.app-shell.is-child .lesson-option {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-content: center !important;
+  min-width: 0 !important;
+  padding: 10px 12px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--kid-line) !important;
+  border-radius: 7px !important;
+  text-align: left !important;
+  background: #fff !important;
+}
+
+.app-shell.is-child .lesson-option small,
+.app-shell.is-child .lesson-option strong {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+@media (max-height: 760px) and (min-width: 700px) {
+  .app-shell.is-child .kid-coach.teacher-cove {
+    grid-template-rows: minmax(140px, 25vh) minmax(108px, auto) auto auto !important;
+    gap: 7px !important;
+    padding-top: 9px !important;
+    padding-bottom: 9px !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    min-height: 140px !important;
+  }
+
+  .app-shell.is-child .kid-speech-bubble,
+  .app-shell.is-child .kid-speech-bubble.is-short,
+  .app-shell.is-child .kid-speech-bubble.is-medium,
+  .app-shell.is-child .kid-speech-bubble.is-long {
+    min-height: 108px !important;
+    max-height: 170px !important;
+  }
+
+  .app-shell.is-child .kid-board.learning-canvas {
+    gap: 7px !important;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+}
+
+@media (max-width: 699px), (orientation: portrait) and (max-width: 1199px) {
+  .app-shell.is-child .child-stage.kid-classroom.lesson-shell {
+    grid-template-rows: 58px minmax(0, 1fr) !important;
+  }
+
+  .app-shell.is-child .kid-topbar {
+    grid-template-columns: minmax(112px, 1fr) auto auto !important;
+    height: 58px !important;
+    padding: 0 9px !important;
+    gap: 7px !important;
+  }
+
+  .app-shell.is-child .kid-brand small,
+  .app-shell.is-child .kid-day-pill,
+  .app-shell.is-child .kid-progress-step em,
+  .app-shell.is-child .kid-input-panel > p {
+    display: none !important;
+  }
+
+  .app-shell.is-child .kid-brand strong {
+    font-size: 17px !important;
+  }
+
+  .app-shell.is-child .kid-progress {
+    gap: 5px !important;
+  }
+
+  .app-shell.is-child .kid-progress-step {
+    min-width: auto !important;
+  }
+
+  .app-shell.is-child .kid-lesson-switch {
+    min-width: 44px !important;
+    padding: 7px !important;
+  }
+
+  .app-shell.is-child .kid-lesson-switch span {
+    display: none !important;
+  }
+
+  .app-shell.is-child .kid-board-card h2 {
+    margin: 3px 0 !important;
+  }
+
+  .app-shell.is-child .kid-board-fallback .svg-title,
+  .app-shell.is-child .kid-board-fallback .svg-label,
+  .app-shell.is-child .kid-board-fallback .svg-note,
+  .app-shell.is-child .kid-board-fallback .svg-win {
+    font-size: 13px !important;
+  }
+
+  .app-shell.is-child .kid-answer-actions {
+    grid-template-columns: minmax(0, 1.8fr) minmax(102px, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .app-shell.is-child .kid-help-button {
+    min-height: 46px !important;
+    padding: 5px 7px !important;
+  }
+
+  .app-shell.is-child .kid-help-copy small {
+    display: none !important;
+  }
+
+  .app-shell.is-child .lesson-picker {
+    inset: 42px 7px 7px !important;
+    padding: 9px !important;
+    gap: 8px !important;
+  }
+
+  .app-shell.is-child .lesson-picker-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+  }
+
+  .app-shell.is-child .lesson-picker-tab {
+    min-height: 38px !important;
+  }
+
+  .app-shell.is-child .lesson-picker-group > div {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 6px !important;
+  }
+}
+
+@media (max-width: 699px) and (orientation: landscape) {
+  .app-shell.is-child .child-stage.kid-classroom.lesson-shell {
+    grid-template-rows: 52px minmax(0, 1fr) !important;
+  }
+
+  .app-shell.is-child .kid-topbar {
+    grid-template-columns: minmax(120px, 1fr) auto auto !important;
+    height: 52px !important;
+    padding: 0 8px !important;
+    gap: 6px !important;
+  }
+
+  .app-shell.is-child .kid-brand small,
+  .app-shell.is-child .kid-day-pill,
+  .app-shell.is-child .kid-progress-step em,
+  .app-shell.is-child .kid-lesson-switch span,
+  .app-shell.is-child .kid-input-panel > p,
+  .app-shell.is-child .kid-help-copy small {
+    display: none !important;
+  }
+
+  .app-shell.is-child .kid-workspace.lesson-stage {
+    grid-template-columns: minmax(250px, 42%) minmax(0, 58%) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    grid-template-areas: "coach board" !important;
+    height: calc(100dvh - 52px) !important;
+  }
+
+  .app-shell.is-child .kid-coach.teacher-cove {
+    grid-template-columns: 78px minmax(0, 1fr) !important;
+    grid-template-rows: minmax(86px, auto) auto auto !important;
+    grid-template-areas: "teacher speech" "input input" "help help" !important;
+    align-content: center !important;
+    padding: 6px 8px !important;
+    gap: 5px 7px !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: 78px !important;
+    min-height: 86px !important;
+    max-height: 112px !important;
+    border-radius: 38px 38px 10px 10px !important;
+  }
+
+  .app-shell.is-child .kid-speech-bubble,
+  .app-shell.is-child .kid-speech-bubble.is-short,
+  .app-shell.is-child .kid-speech-bubble.is-medium,
+  .app-shell.is-child .kid-speech-bubble.is-long {
+    min-height: 86px !important;
+    max-height: 124px !important;
+    padding: 7px 8px !important;
+  }
+
+  .app-shell.is-child .kid-speech-bubble p {
+    font-size: 13px !important;
+  }
+
+  .app-shell.is-child .kid-board.learning-canvas {
+    gap: 4px !important;
+    padding: 5px 7px !important;
+  }
+
+  .app-shell.is-child .kid-board-ribbon {
+    min-height: 28px !important;
+  }
+
+  .app-shell.is-child .kid-current-problem.task-ribbon {
+    min-height: 40px !important;
+    max-height: 50px !important;
+  }
+
+  .app-shell.is-child .kid-current-problem.task-ribbon .kid-task-main > span,
+  .app-shell.is-child .kid-current-problem.task-ribbon .kid-task-step {
+    display: none !important;
+  }
+
+  .app-shell.is-child .kid-board-card {
+    padding: 6px 8px !important;
+  }
+
+  .app-shell.is-child .kid-board-card h2 {
+    margin: 2px 0 !important;
+    font-size: 16px !important;
+  }
+
+  .app-shell.is-child .kid-think-box {
+    min-height: 36px !important;
+    margin-top: 2px !important;
+    padding: 4px 7px !important;
+  }
+
+  .app-shell.is-child .kid-money-jiao-box > small {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.is-child .kid-teacher-avatar img,
+  .app-shell.is-child .visual-mode-hint .kid-board-fallback,
+  .app-shell.is-child .visual-mode-hint .kid-money-layout,
+  .app-shell.is-child .visual-mode-hint .kid-shopping-layout {
+    animation: none !important;
+    transform: none !important;
   }
 }
