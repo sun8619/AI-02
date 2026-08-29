@@ -13,6 +13,7 @@ const icons = {
 };
 
 const TEACHER_AVATAR_SRC = "./assets/lezhi-teacher-v2.png?v=1";
+const TEACHER_STAGE_SRC = "./assets/lezhi-teacher-coach-v3.png?v=1";
 
 const USE_BROWSER_SPEECH_RECOGNITION = false;
 const USE_REALTIME_ASR = true;
@@ -6887,9 +6888,10 @@ function getKidBoardPrompt(lesson) {
 
 function renderKidTeacherAvatar(size = "large") {
   const mood = getKidTeacherMood();
+  const imageSource = size === "large" ? TEACHER_STAGE_SRC : TEACHER_AVATAR_SRC;
   return `
     <div class="kid-teacher-avatar kid-teacher-${size} is-${mood}" aria-hidden="true">
-      <img src="${TEACHER_AVATAR_SRC}" alt="" />
+      <img src="${imageSource}" alt="" />
       ${size === "large" ? `<span class="kid-teacher-status">${getKidTeacherMoodLabel(mood)}</span>` : ""}
     </div>
   `;

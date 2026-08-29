@@ -1171,3 +1171,148 @@
     transform: none !important;
   }
 }
+
+/* v33: selected energetic teacher, framed as a responsive half-body stage. */
+.app-shell.is-child .kid-coach.teacher-cove {
+  grid-template-rows: minmax(230px, 36vh) minmax(126px, auto) auto auto !important;
+}
+
+.app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+  width: 100% !important;
+  max-width: 560px !important;
+  min-height: 230px !important;
+  border-radius: 26px !important;
+  transform-origin: 50% 80% !important;
+}
+
+.app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large img {
+  object-position: 50% 50% !important;
+  transition: transform 240ms ease, filter 240ms ease !important;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-listening img {
+  transform: translateY(-3px) scale(1.018) !important;
+  filter: saturate(1.04) brightness(1.015) !important;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-thinking img {
+  animation: kid-teacher-think 1.8s ease-in-out infinite alternate !important;
+}
+
+.app-shell.is-child .kid-teacher-avatar.is-encouraging img,
+.app-shell.is-child .kid-teacher-avatar.is-guiding img {
+  animation: kid-teacher-guide 2.2s ease-in-out infinite alternate !important;
+}
+
+@keyframes kid-teacher-think {
+  from { transform: translateX(-2px) rotate(-0.25deg); }
+  to { transform: translateX(2px) rotate(0.25deg); }
+}
+
+@keyframes kid-teacher-guide {
+  from { transform: translateY(0) scale(1); }
+  to { transform: translateY(-2px) scale(1.006); }
+}
+
+@media (min-width: 1200px) and (orientation: landscape) {
+  .app-shell.is-child .kid-coach.teacher-cove {
+    grid-template-rows: minmax(260px, 37vh) minmax(126px, auto) auto auto !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    max-width: 590px !important;
+    min-height: 260px !important;
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1199px) and (orientation: landscape) {
+  .app-shell.is-child .kid-coach.teacher-cove {
+    grid-template-rows: minmax(180px, 30vh) minmax(112px, auto) auto auto !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    max-width: 440px !important;
+    min-height: 180px !important;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 700px) {
+  .app-shell.is-child .kid-coach.teacher-cove {
+    grid-template-rows: minmax(150px, 25vh) minmax(108px, auto) auto auto !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    min-height: 150px !important;
+  }
+}
+
+@media (max-width: 699px), (orientation: portrait) and (max-width: 1199px) {
+  .app-shell.is-child .kid-workspace.lesson-stage {
+    grid-template-rows: minmax(0, 46%) minmax(0, 54%) !important;
+  }
+
+  .app-shell.is-child .kid-coach.teacher-cove {
+    grid-template-rows: minmax(102px, 154px) 60px 50px !important;
+    align-content: center !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    max-width: 150px !important;
+    min-height: 102px !important;
+    border-radius: 18px !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large img {
+    object-position: 50% 36% !important;
+  }
+
+  .app-shell.is-child .kid-input-panel,
+  .app-shell.is-child .kid-answer-actions,
+  .app-shell.is-child .kid-primary-voice,
+  .app-shell.is-child .kid-type-trigger,
+  .app-shell.is-child .kid-help-row,
+  .app-shell.is-child .kid-help-button {
+    min-height: 0 !important;
+    height: 100% !important;
+  }
+}
+
+@media (max-width: 699px) and (orientation: landscape) {
+  .app-shell.is-child .kid-workspace.lesson-stage {
+    grid-template-columns: minmax(250px, 42%) minmax(0, 58%) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    grid-template-areas: "coach board" !important;
+  }
+
+  .app-shell.is-child .kid-coach.teacher-cove {
+    grid-template-rows: 112px 52px 46px !important;
+    align-content: center !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    width: 78px !important;
+    min-height: 86px !important;
+    max-height: 112px !important;
+    border-radius: 14px !important;
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1199px) and (orientation: portrait) {
+  .app-shell.is-child .kid-workspace.lesson-stage {
+    grid-template-rows: minmax(0, 52%) minmax(0, 48%) !important;
+  }
+
+  .app-shell.is-child .kid-coach.teacher-cove {
+    grid-template-rows: 178px 64px 52px !important;
+    align-content: center !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.is-child .kid-teacher-avatar.is-thinking img,
+  .app-shell.is-child .kid-teacher-avatar.is-encouraging img,
+  .app-shell.is-child .kid-teacher-avatar.is-guiding img {
+    animation: none !important;
+    transform: none !important;
+  }
+}
