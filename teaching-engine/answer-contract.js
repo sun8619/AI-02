@@ -27,12 +27,17 @@
     const synonyms = { 正确: "对", 是的: "对", 没错: "对", 不对: "错", 错误: "错", 不正确: "错", 错了: "错", 不够减: "不够", 不能直接减: "不够", 够减: "够", 可以直接减: "够", 圆形: "圆", 正方形的: "正方形", 三角形的: "三角形", 左: "左边", 右: "右边", 左边大: "左边", 右边大: "右边", 左边多: "左边", 右边多: "右边" };
     return synonyms[text] || text;
   }
-  function choices(prompt) {
-    const text = String(prompt || "");
-    const labeled = [...text.matchAll(/(?:^|\s)([A-D])[.．、]\s*(.*?)(?=\s+[A-D][.．、]|$)/gs)];
+  function choices(question) {
+    if (Array.isArray(question?.choices)) return question.choices.map(({label,text}) => ({label:String(label),text:String(text)}));
+    const text = String(question?.prompt ?? question ?? "");
+    // Legacy/generated prompts only. Authored questions store choices explicitly.
+    const labeled = [...text.matchAll(/([A-D])[.．、]\s*(.*?)(?=[A-D][.．、]|$)/gs)];
     if (labeled.length) return labeled.map(m => ({ label: m[1], text: m[2].trim().replace(/[。；]$/, "") }));
     const list = text.match(/(?:可填：|请在[“"])(.*?)(?:[”"]中|。|$)/);
     return list?.[1].includes("/") ? list[1].split("/").map((text, i) => ({ label: String.fromCharCode(65 + i), text: text.trim() })) : [];
+  }
+  function choicePrompt(stem, options) {
+    return `${String(stem || "").trim()}${options.map(x => `${x.label}. ${x.text}`).join(" ")}`;
   }
   function equalAnswer(input, expected) {
     const text = canonical(String(input).replace(/^[A-D][.．、]\s*/i, "")), target = canonical(expected).replace(/^[a-d][.．、]/, "");
@@ -64,14 +69,17 @@
     return candidates.some(answer => equalAnswer(input, answer));
   }
   function whole(input, question) {
-    const options = choices(question?.prompt);
-    let expected = String(question?.answer || "").replace(/^[A-D][.．、]\s*/, "");
+    const options = choices(question);
+    const rawExpected = String(question?.answer || "");
+    let expected = options.find(x=>x.label.toLowerCase()===rawExpected.toLowerCase())?.text || rawExpected.replace(/^[A-D][.．、]\s*/, "");
     if(/^\d+$/.test(expected)) {
       const unit=[...String(question?.prompt || "").matchAll(/(?:_{2,}|多少|几|\(\s*\)|（\s*）)\s*(千克|厘米|分钟|元|角|分|米|克|个|支|本|人|辆|棵)/g)].at(-1)?.[1];
       if(unit) expected+=unit;
     }
     const option = options.find(x => canonical(x.text) === canonical(expected));
     if (option && clean(input) === option.label.toLowerCase()) return true;
+    const labeledInput=String(input).trim().match(/^(?:我选|选)?\s*([A-D])(?:[.．、\s]+)(.+)$/i);
+    if(labeledInput && options.length) return Boolean(option && labeledInput[1].toUpperCase()===option.label && canonical(labeledInput[2])===canonical(option.text));
     const text = canonical(input), target = canonical(expected);
     if(/(?:列|写出|填写|乘法).*算式/.test(question?.prompt||"")) {
       if(target.split("或").some(equation=>equation.includes("=") && text===equation.split("=")[0])) return true;
@@ -112,5 +120,5 @@
     }
     return false;
   }
-  root.LezhiAnswers = { number, clean, choices, matches, whole };
+  root.LezhiAnswers = { number, clean, choices, choicePrompt, matches, whole };
 })(window);

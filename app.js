@@ -1810,7 +1810,8 @@ function normalizeLessonQuestions(questions) {
 
 function normalizeQuestion(question) {
   if (!question || typeof question !== "object") return null;
-  const prompt = String(question.prompt || "").trim();
+  const choices = window.LezhiAnswers?.choices(question) || [];
+  const prompt = question.stem && choices.length ? window.LezhiAnswers.choicePrompt(question.stem, choices) : String(question.prompt || "").trim();
   if (!prompt) return null;
   return {
     id: String(question.id || prompt).trim(),
@@ -1818,6 +1819,8 @@ function normalizeQuestion(question) {
     title: question.title || "",
     type: question.type || "",
     prompt,
+    stem: question.stem || "",
+    choices,
     answer: String(question.answer || "").trim(),
     explanation: String(question.explanation || "").trim(),
     teachingFamily: String(question.teachingFamily || "").trim(),
@@ -2662,7 +2665,8 @@ function createMoneyGuidedSteps(lesson) {
       }));
     }
     const total = info.yuan * 100 + info.jiao * 10 + info.fen;
-    steps.push(guidedStep("合起来算总分", `最后合起来，一共是几分？`, answerKeywordsForNumber(total, "分").concat(question.answerKeywords || []), {
+    const parts=[info.yuan*100,info.jiao*10,info.fen].filter(n=>n>0);
+    steps.push(guidedStep("合起来算总分", `${parts.map(n=>`${n}分`).join("加")}，一共是几分？`, answerKeywordsForNumber(total, "分").concat(question.answerKeywords || []), {
       teacherHint: `前面都换成分以后，再合起来就是${total}分。先说：${total}分。`,
     }));
     steps.push(
@@ -2684,7 +2688,7 @@ function createMoneyGuidedSteps(lesson) {
       }),
     ];
     if (info.jiao > 0) {
-      steps.push(guidedStep(`再加原来的 ${info.jiao} 角`, `再加原来的${info.jiao}角，一共是几角？`, answerKeywordsForNumber(total, "角").concat(question.answerKeywords || []), {
+      steps.push(guidedStep(`再加原来的 ${info.jiao} 角`, `${yuanAsJiao}角加原来的${info.jiao}角，一共是几角？`, answerKeywordsForNumber(total, "角").concat(question.answerKeywords || []), {
         teacherHint: `先把元换成${yuanAsJiao}角，再加原来的${info.jiao}角，一共是${total}角。`,
       }));
     } else {
@@ -3957,6 +3961,8 @@ function createTaskBoundGuidedSteps(lesson, question, family) {
   }
   if (family === "placeValue") {
     const source = String(question.prompt), n = source.match(/^(\d+)(?:里面|是由)/)?.[1];
+    const writing=source.match(/写作[:：]\s*([零一二两三四五六七八九十百千万]+)/);
+    if(writing) return [exact("把汉字写成数",`${writing[1]}，用数字怎么写？`,question.answer,"先找到最高数位，再依次写各个数位。没有的数位要用0占位。")];
     if (n) {
       const places = [...source.matchAll(/个(千|百|十|一)/g)].map(m=>m[1]);
       const scales = { 千:1000, 百:100, 十:10, 一:1 };
@@ -3997,7 +4003,7 @@ function createTaskBoundGuidedSteps(lesson, question, family) {
   if (family === "ordinal") return [exact("找到这个位置",prompt,question.answer,`${question.explanation} 从题目指定的方向数，数到这个位置时，不把他自己算在前面的人里面。`)];
   if (["money","moneyApplication","measure"].includes(family)) {
     const raw = family === "money" ? createMoneyGuidedSteps(lesson) : family === "moneyApplication" ? createMoneyApplicationGuidedSteps(lesson,question) : createMeasureGuidedSteps(lesson,question);
-    const kept = raw.filter(p=>!p.isReason && !/带单位回答|记住1|找付钱和价钱|看问题/.test(p.label));
+    const kept = raw.filter(p=>!p.isReason && !/带单位回答|记住1|找付钱和价钱|看问题|找关系|先统一单位/.test(p.label));
     return (kept.length ? kept : raw.slice(0,1)).map(p=>exact(p.label,p.prompt,p.answerKeywords?.[0] || question.answer,p.teacherHint || question.explanation));
   }
   const expression = parseTeachingArithmeticExpression(question);
@@ -6734,7 +6740,7 @@ function setTeacherLiveMood(mood) {
     moods.forEach((name) => node.classList.remove(`is-${name}`));
     node.classList.add(`is-${mood}`);
     const label = node.querySelector(".kid-teacher-status");
-    if (label) label.textContent = getKidTeacherMoodLabel(mood);
+    if (label) {label.textContent = getKidTeacherMoodLabel(mood);node.setAttribute("aria-label",`乐之老师，${getKidTeacherMoodLabel(mood)}`);}
   });
 }
 
@@ -6775,7 +6781,7 @@ function ensureTeacherMessageHasAnswerTarget(message, lesson, plan) {
 }
 
 function renderKidCurrentProblem(lesson) {
-  const question = childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || "");
+  const question = childFacingPrompt(lesson?.activeQuestion?.stem || lesson?.activeQuestion?.prompt || lesson?.problem || "");
   if (!question) return "";
   const plan = getCurrentVisualPlan(lesson);
   const ladder = getLessonLadderSteps(lesson);
@@ -6800,7 +6806,7 @@ function renderKidCurrentProblem(lesson) {
         <strong>${escapeText(question)}</strong>
       </div>
       <div class="kid-task-step">
-        <span>${wholeQuestionMode ? "整题检验" : state.remediationCheck ? "讲完马上试" : "这一小步"}</span>
+        <span>${wholeQuestionMode ? state.initialWholeQuestion ? "先试一题" : "整题检验" : state.remediationCheck ? "讲完马上试" : "这一小步"}</span>
         <strong>${escapeText(currentLabel)}</strong>
       </div>
       <div class="kid-task-count" aria-label="第 ${currentNumber} ${countUnit}，共 ${totalSteps} ${countUnit}">
@@ -6837,10 +6843,10 @@ function renderAnswerChoices() {
   if (state.phase === "summary") return "";
   const question = state.remediationCheck?.answerQuestion || (isWholeQuestionTurn() ? currentLesson().activeQuestion : getCurrentVisualPlan()?.answerQuestion);
   if (!question) return "";
-  let choices = window.LezhiAnswers?.choices(question.prompt) || [];
+  let choices = window.LezhiAnswers?.choices(question) || [];
   if (!choices.length && /^(对|错)$/.test(question.answer)) choices = [{text:"对"}, {text:"错"}];
   if (!choices.length) return "";
-  return `<div class="kid-answer-choices">${choices.map(choice=>`<button data-action="answer-choice" data-answer="${escapeText(choice.text)}">${escapeText(choice.text)}</button>`).join("")}</div>`;
+  return `<div class="kid-answer-choices" role="group" aria-label="本题选项">${choices.map(choice=>`<button data-action="answer-choice" data-choice-label="${escapeText(choice.label || "")}" data-answer="${escapeText(choice.text)}">${choice.label ? `<b>${escapeText(choice.label)}</b> ` : ""}${escapeText(choice.text)}</button>`).join("")}</div>`;
 }
 
 function renderVoiceConfirmation() {
@@ -6852,16 +6858,18 @@ function renderVoiceConfirmation() {
 function renderKidHelpButtons() {
   if (state.phase === "summary") return `<div class="kid-help-row"><button class="kid-help-button" data-action="next-lesson">${icon("book")}选下一个知识点</button><button class="kid-help-button" data-action="change-lesson">${icon("repeat")}换个知识点</button></div>`;
   const explainAction = state.phase === "repair" ? "cant-explain" : "dont-understand";
+  const visualLesson = createActiveVisualLesson(currentLesson());
+  const help = window.LezhiQuestionVisuals?.help({question:visualLesson.activeQuestion,family:inferActiveQuestionFamily(visualLesson)});
   return `
     <div class="kid-help-row" aria-label="求助按钮">
       <button class="kid-help-button" data-action="${explainAction}" aria-label="老师把当前问题再拆小一步">
         ${icon("light")}
         <span class="kid-help-copy"><strong>我没听懂</strong></span>
       </button>
-      <button class="kid-help-button" data-action="show-visual" aria-label="把当前这一步换成图来讲">
+      ${help ? `<button class="kid-help-button" data-action="show-visual" aria-label="${state.visualHelpActive ? "收起图中提示" : escapeText(help.label)}">
         ${icon("image")}
-        <span class="kid-help-copy"><strong>圈出图中线索</strong></span>
-      </button>
+        <span class="kid-help-copy"><strong>${state.visualHelpActive ? "收起图中提示" : escapeText(help.label)}</strong></span>
+      </button>` : ""}
       <button class="kid-help-button kid-help-secondary" data-action="change-lesson">
         ${icon("book")}
         <strong>换知识点</strong>
@@ -6886,7 +6894,7 @@ function renderKidBoardVisual(lesson) {
     return renderKidMoneyBoard(visualLesson);
   }
   return `
-    <div class="kid-board-card kid-board-card-generic visual-mode-${getVisualRevealMode(visualLesson)}">
+    <div class="kid-board-card kid-board-card-generic ${visualLesson.activeQuestion?.choices?.length && isWholeQuestionTurn() ? "has-choice-stem" : ""} visual-mode-${getVisualRevealMode(visualLesson)}">
       <div class="kid-board-head">
         <span>${icon("image")}看图想一想</span>
         <strong>${getKidBoardStageLabel()}</strong>
@@ -7063,6 +7071,7 @@ function renderShoppingAmountBox(label, amount, active) {
 }
 
 function getKidBoardPrompt(lesson) {
+  if(lesson?.useQuestionBankTutor) return childFacingPrompt(lesson.activeQuestion?.stem || lesson.activeQuestion?.prompt || lesson.problem || "");
   if (state.remediationCheck?.checkPrompt) return state.remediationCheck.checkPrompt;
   if (isWholeQuestionTurn()) {
     return childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || "");
@@ -7091,7 +7100,7 @@ function renderKidTeacherAvatar(size = "large") {
   const mood = getKidTeacherMood();
   const imageSource = size === "large" ? TEACHER_STAGE_SRC : TEACHER_AVATAR_SRC;
   return `
-    <div class="kid-teacher-avatar kid-teacher-${size} is-${mood}" aria-hidden="true">
+    <div class="kid-teacher-avatar kid-teacher-${size} is-${mood}" ${size === "large" ? `role="img" aria-label="乐之老师，${getKidTeacherMoodLabel(mood)}"` : 'aria-hidden="true"'}>
       <img src="${imageSource}" alt="" />
       ${size === "large" ? `<span class="kid-teacher-status">${getKidTeacherMoodLabel(mood)}</span>` : ""}
     </div>
@@ -7455,6 +7464,7 @@ function renderLearningVisual() {
 function getVisualRevealMode(lesson = currentLesson()) {
   if (!lesson) return "question";
   if (state.visualHelpActive) return "hint";
+  if (lesson.useQuestionBankTutor) return state.phase === "summary" ? "solution" : "question";
   if (state.remediationCheck) return "question";
   if (isWholeQuestionTurn()) return "question";
   const plan = createGuidedStepPlan(lesson, state.completedSteps || 0);
@@ -8697,7 +8707,7 @@ function renderParentView() {
                 (strategy) => `
                   <div class="strategy-row ${strategy.label === state.bestStrategy ? "is-best" : ""}">
                     <strong>${escapeText(strategy.label)}</strong>
-                    <span>${strategy.label === state.bestStrategy ? "目前最有效" : "已尝试"}</span>
+                    <span>${strategy.label === state.bestStrategy ? "当前使用" : "已尝试"}</span>
                   </div>
                 `,
               )
@@ -8738,8 +8748,9 @@ function renderParentView() {
 function saveLearningSession() {
   if(state.historyRecorded) return;
   const lesson=currentLesson();
+  if(!state.assessmentMode && !state.lastStudentText && !(state.assistedQuestionIds?.length) && !(state.passedQuestionIds?.length)) return;
   state.historyRecorded=true;
-  window.LezhiHistory?.record({topic:lesson.sourceQuestionBankId,title:lesson.node,passed:state.teachingState==="MASTERED",independent:state.passedQuestionIds?.length,assisted:state.assistedQuestionIds?.length,seconds:Math.round((Date.now()-(state.sessionStartedAt||Date.now()))/1000),voice:state.voiceCounts});
+  window.LezhiHistory?.record({topic:lesson.sourceQuestionBankId,title:lesson.node,volume:lesson.grade,completed:state.phase==="summary",passed:state.teachingState==="MASTERED",independent:state.passedQuestionIds?.length,assisted:state.assistedQuestionIds?.length,seconds:Math.round((Date.now()-(state.sessionStartedAt||Date.now()))/1000),voice:state.voiceCounts});
 }
 
 function advanceToReviewQuestion() {
@@ -8752,8 +8763,19 @@ function advanceToReviewQuestion() {
 
 function renderLearningHistory() {
   if(!window.LezhiHistory) return "";
-  const rows=LezhiHistory.read(),due=LezhiHistory.due();
-  return `<section class="learning-history"><h2>学习记录</h2><div class="history-periods">${[7,30].map(days=>{const s=LezhiHistory.summary(days);return `<div><h3>最近${days}天</h3><p>${s.sessions}次学习 · ${s.minutes}分钟</p><p>独立答对${s.independent}题 · 求助过${s.assisted}题</p></div>`;}).join("")}</div><p>单次通过不代表长期掌握。记录只保存在这台设备，不保存录音或原始回答。</p><h3>复习安排</h3>${due.length ? due.map(r=>`<p>${escapeText(r.title)} <button data-action="review-topic" data-topic="${escapeText(r.topic)}">${r.outcome==="review" ? "再学一遍" : "隔日检验"}</button></p>`).join("") : "<p>暂时没有到期的复习。</p>"}<details><summary>最近学习明细（${rows.length}次）</summary>${rows.slice(-20).reverse().map(r=>`<p>${new Date(r.at).toLocaleDateString("zh-CN")} · ${escapeText(r.title)} · ${r.outcome==="passed" ? "本次通过" : "待复习"} · 独立${r.independent}题 / 求助${r.assisted}题 · 语音清晰${r.voice?.accepted||0}次 / 待确认${r.voice?.uncertain||0}次</p>`).join("")}</details><button data-action="clear-history">清除本机学习记录</button></section>`;
+  const rows=LezhiHistory.read(),due=LezhiHistory.due(),filters=state.historyFilters || {};
+  const volume=r=>r.volume || lessons.find(l=>l.sourceQuestionBankId===r.topic)?.grade || "";
+  const filtered=rows.filter(r=>(!filters.volume || volume(r)===filters.volume) && (!filters.topic || r.topic===filters.topic) && (!filters.outcome || r.outcome===filters.outcome));
+  const options=(values,selected)=>values.map(([value,label])=>`<option value="${escapeText(value)}" ${value===selected ? "selected" : ""}>${escapeText(label)}</option>`).join("");
+  const outcomes={passed:"本次通过",review:"待复习",incomplete:"未完成"};
+  const showRate=value=>value===null ? "证据不足" : `${value}%`;
+  return `<section class="learning-history"><h2>学习记录</h2>
+    <div class="history-periods">${[7,30].map(days=>{const s=LezhiHistory.summary(days);return `<div><h3>最近${days}天</h3><p>${s.sessions}次学习 · ${s.minutes}分钟</p><p>独立答对${s.independent}题 · 求助过${s.assisted}题</p></div>`;}).join("")}</div>
+    <p>单次通过不代表长期掌握。记录只保存在这台设备，不保存录音或原始回答。语音直接采用率不代表识别准确率。</p>
+    <div class="history-filters"><label>册别<select data-history-filter="volume"><option value="">全部册别</option>${options([...new Set(rows.map(volume))].filter(Boolean).map(v=>[v,v]),filters.volume)}</select></label><label>知识点<select data-history-filter="topic"><option value="">全部知识点</option>${options([...new Map(rows.filter(r=>!filters.volume || volume(r)===filters.volume).map(r=>[r.topic,r.title]))],filters.topic)}</select></label><label>结果<select data-history-filter="outcome"><option value="">全部结果</option>${options(Object.entries(outcomes),filters.outcome)}</select></label></div>
+    <h3>跨日学习证据</h3><div class="history-trends">${LezhiHistory.trends(rows).filter(t=>filtered.some(r=>r.topic===t.topic)).map(t=>`<details><summary>${escapeText(t.title)} · ${t.status}</summary><p>隔日复测通过 ${t.delayedPassed} / ${t.delayedCount} 次</p><p>求助题占比：前7天 ${showRate(t.previous.help)} → 最近7天 ${showRate(t.current.help)}</p><p>语音直接采用率：前7天 ${showRate(t.previous.voice)} → 最近7天 ${showRate(t.current.voice)}</p><ol class="history-timeline">${t.history.map(r=>`<li>${new Date(r.at).toLocaleDateString("zh-CN")} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</li>`).join("")}</ol></details>`).join("") || "<p>还没有符合条件的学习记录。</p>"}</div>
+    <h3>复习安排</h3>${due.filter(r=>filtered.some(f=>f.topic===r.topic)).map(r=>`<p>${escapeText(r.title)} <button data-action="review-topic" data-topic="${escapeText(r.topic)}">${r.outcome==="review" ? "再学一遍" : r.outcome==="incomplete" ? "接着练" : "隔日检验"}</button></p>`).join("") || "<p>当前筛选下没有到期的复习。</p>"}
+    <details><summary>最近学习明细（${filtered.length}次）</summary>${filtered.slice(-20).reverse().map(r=>`<p>${new Date(r.at).toLocaleDateString("zh-CN")} · ${escapeText(r.title)} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</p>`).join("")}${filtered.length>20 ? "<p>这里显示最近20次；按知识点展开上方时间线可查看该点保留的记录。</p>" : ""}</details><button data-action="clear-history">清除本机学习记录</button></section>`;
 }
 
 function renderParentSignals() {
@@ -8840,6 +8862,11 @@ function renderMascotFace() {
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-history-filter]").forEach(node=>node.addEventListener("change",()=>{
+    state.historyFilters={...state.historyFilters,[node.dataset.historyFilter]:node.value};
+    if(node.dataset.historyFilter==="volume") state.historyFilters.topic="";
+    render();
+  }));
   document.querySelectorAll("[data-action]").forEach((node) => {
     if (node.dataset.action === "voice") return;
     node.addEventListener("click", handleAction);
@@ -8883,9 +8910,12 @@ function scheduleLatestHelpAction(kind) {
 
 function showCurrentStepVisual() {
   const lesson = currentLesson();
-  state.assistedQuestionIds = uniqueKeywords([...(state.assistedQuestionIds || []), lesson.activeQuestion?.id]);
   const plan = getCurrentVisualPlan(lesson);
   const visualLesson = createActiveVisualLesson(lesson);
+  const help=window.LezhiQuestionVisuals?.help({question:visualLesson.activeQuestion,family:inferActiveQuestionFamily(visualLesson)});
+  if(!help) return;
+  if(state.visualHelpActive) {state.visualHelpActive=false;render();return;}
+  state.assistedQuestionIds = uniqueKeywords([...(state.assistedQuestionIds || []), lesson.activeQuestion?.id]);
   const boardQuestion = getKidBoardPrompt(visualLesson);
   state.showVisual = true;
   state.visualHelpActive = true;
@@ -8894,8 +8924,7 @@ function showCurrentStepVisual() {
   state.aiContext = "老师不重复口头提示，改为引导孩子观察当前图示。";
   state.currentAtomName = plan.label;
   state.currentStep = `小台阶 ${plan.index + 1}：${plan.label}`;
-  const cues = {money:"先看每一份钱的单位，不把元和角直接相加。",data:"沿着同一行找名称和数字，不串行。",compare:"把两边从同一个起点排齐，再比较。",measure:"看两个端点中间的间隔。",shape:"沿着边看一圈，圆弧和直边要分开。",division:"试着按题目规定的份数分一分。",multiplication:"看每一组有几个，再数有几组。",pattern:"圈出重复的一组，或者比较相邻两个数的变化。"};
-  state.aiMessage = `${cues[inferActiveQuestionFamily(visualLesson)] || "看图中标出的已知条件。"} ${boardQuestion}`;
+  state.aiMessage = `${help.cue} ${boardQuestion}`;
   state.bestStrategy = "画图";
   addEvidence("看图辅助", `孩子改用图观察「${plan.label}」，老师只追问图下方问题。`, "画图");
   resetGeneratedVisualForTurn();
@@ -9598,7 +9627,8 @@ async function handleVoiceButton() {
       await startRealtimeVoiceInput();
       return;
     } catch (error) {
-      console.warn("Realtime speech recognition did not start.", error);
+      if(["NotAllowedError","PermissionDeniedError"].includes(error.name)) {showMicrophoneFailure();return;}
+      console.warn("Realtime speech recognition did not start.", error.name);
       toastMessage("实时语音没有接通，改用短录音识别。");
     }
   }
@@ -9620,12 +9650,8 @@ async function handleVoiceButton() {
     try {
       await startRecording();
       return;
-    } catch {
-      state.showKeyboard = true;
-      state.transcript = "";
-      state.lastStudentText = "";
-      render();
-      toastMessage("没有拿到麦克风权限，可以再试一次或用键盘输入。");
+    } catch (error) {
+      showMicrophoneFailure(error.name);
       return;
     }
   }
@@ -9636,6 +9662,20 @@ async function handleVoiceButton() {
   render();
   toastMessage("语音没有启动成功，可以再试一次或用键盘输入。");
 }
+
+function showMicrophoneFailure(kind="NotAllowedError") {
+  cancelSupersededInteraction();
+  state.showKeyboard=true;
+  render();
+  toastMessage(kind==="NotAllowedError" || kind==="PermissionDeniedError" ? "麦克风未允许。请在浏览器网站权限中允许麦克风，再点开始说；也可以打字回答。" : "麦克风没有接通。检查设备后再点开始说，也可以打字回答。");
+}
+
+function suspendVoiceInteraction() {
+  cancelSupersededInteraction();
+  render();
+}
+document.addEventListener("visibilitychange",()=>{if(document.hidden) suspendVoiceInteraction();});
+window.addEventListener("pagehide",suspendVoiceInteraction);
 
 function stopVoiceInput() {
   if (realtimeVoiceSession) {
@@ -11436,6 +11476,7 @@ async function speakCurrentMessage() {
     const requestController = new AbortController();
     currentTtsRequest = requestController;
     let timedOut = false;
+    const slowNotice = window.setTimeout(()=>{if(playbackGeneration===ttsGeneration) toastMessage("声音还在准备，你可以先看文字回答，或点重听重新播放。");},5000);
     const timeout = window.setTimeout(() => { timedOut = true; requestController.abort(); }, 20000);
     try {
       const response = await fetch("/api/speech/synthesis", {
@@ -11458,10 +11499,12 @@ async function speakCurrentMessage() {
           if (playbackGeneration === ttsGeneration) setTeacherLiveMood("speaking");
         };
         audio.onended = () => {
+          audio.removeAttribute("src");audio.load();
           if (currentAudio === audio) currentAudio = null;
           if (playbackGeneration === ttsGeneration) setTeacherLiveMood(getKidTeacherMood());
         };
         audio.onerror = () => {
+          audio.onended=null;audio.onerror=null;audio.removeAttribute("src");audio.load();
           if (currentAudio === audio) currentAudio = null;
           if (playbackGeneration === ttsGeneration) setTeacherLiveMood(getKidTeacherMood());
           if (playbackGeneration === ttsGeneration) notifyTtsProblem({kind:"playback"});
@@ -11469,13 +11512,14 @@ async function speakCurrentMessage() {
         await audio.play();
         return;
       }
-      notifyTtsProblem({kind:response.status === 429 ? "rate-limit" : "service",status:response.status});
+      notifyTtsProblem({kind:response.status === 429 ? "rate-limit" : response.status===504 ? "timeout" : "service",status:response.status});
     } catch (error) {
       if (playbackGeneration !== ttsGeneration) return;
       if (error?.name === "AbortError" && !timedOut) return;
       notifyTtsProblem({kind:timedOut ? "timeout" : error?.name === "NotAllowedError" ? "autoplay" : "network"});
     } finally {
       window.clearTimeout(timeout);
+      window.clearTimeout(slowNotice);
       if (playbackGeneration === ttsGeneration) currentTtsRequest = null;
     }
   }

@@ -1,6 +1,13 @@
-/* v91: one owner for child layout, including all three device classes. */
+/* One owner for child layout, including all three device classes. */
 .learning-history { padding:24px 0; border-bottom:1px solid #cfdee4; }
 .history-periods { display:flex; flex-wrap:wrap; gap:32px; }
+.history-filters { display:flex;flex-wrap:wrap;gap:12px;margin:16px 0; }
+.history-filters label { display:grid;gap:4px;min-width:0;max-width:100%;flex:1 1 180px; }
+.history-filters select { width:100%;max-width:100%;min-height:44px;font:inherit;border:1px solid #adc4d0;border-radius:6px;background:white;color:#254451;padding:8px; }
+.history-trends details { border-bottom:1px solid #cfdee4;padding:8px 0; }
+.history-trends summary { overflow-wrap:anywhere; }
+.history-timeline { padding-left:20px;max-height:320px;overflow:auto; }
+.history-timeline li { padding:8px 0;border-left:3px solid #93bdac;padding-left:10px;overflow-wrap:anywhere; }
 .learning-history button, .is-parent button, .learning-history summary { min-height:44px; padding:8px 12px; font:inherit; cursor:pointer; }
 .learning-history h2 { font-size:22px; }.learning-history h3 { font-size:18px; }.learning-history p { overflow-wrap:anywhere; }
 #app .app-shell.is-child .math-cost-bar { height:24px; border:1px solid #4e8c80; background:#b9dfd2; }
@@ -94,6 +101,7 @@
 #app .app-shell.is-child .kid-task-main, #app .app-shell.is-child .kid-task-step { min-width:0;padding:0!important;border:0!important; }
 #app .app-shell.is-child .kid-task-main span, #app .app-shell.is-child .kid-task-step span { display:block;font-size:16px!important;line-height:1.4!important;color:var(--muted); }
 #app .app-shell.is-child .kid-task-main strong, #app .app-shell.is-child .kid-task-step strong { display:block;font-size:18px!important;line-height:1.55!important;color:var(--ink)!important;font-weight:600!important;white-space:pre-line;overflow-wrap:anywhere; }
+#app .app-shell.is-child .kid-current-problem .kid-task-main strong, #app .app-shell.is-child .kid-current-problem .kid-task-step strong { display:block!important;-webkit-line-clamp:unset!important;line-clamp:unset!important;max-height:none!important;overflow:visible!important;text-overflow:clip!important;white-space:pre-line!important; }
 #app .app-shell.is-child .kid-task-count { display:none!important; }
 #app .app-shell.is-child .kid-board-card { grid-row:3!important;order:initial!important;display:grid!important;grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto minmax(0,1fr) auto!important;gap:12px!important;width:100%!important;height:100%!important;min-height:0!important;margin:0!important;padding:18px!important;overflow:hidden!important;align-content:stretch!important;background:#fff!important;border:1px solid var(--line)!important;border-radius:8px!important;box-shadow:none!important; }
 #app .app-shell.is-child .kid-board-card > h2 { display:none!important; }
@@ -136,6 +144,16 @@
 #app .app-shell.is-child .math-coin { display:grid;place-items:center;width:36px;height:36px;border:2px solid #8b9ba4;background:#f0f3f5;color:#4a5960;border-radius:50%;font-size:16px; }
 #app .app-shell.is-child .math-conditions { padding-left:28px;margin:8px 0; }
 #app .app-shell.is-child .math-conditions li { margin-bottom:10px; }
+#app .app-shell.is-child .math-choice-figures { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px; }
+#app .app-shell.is-child .math-choice-figures figure { margin:0;min-width:0;padding:8px;border-bottom:1px solid #cfdee4;text-align:center; }
+#app .app-shell.is-child .math-choice-figures figcaption { font-size:18px; }
+#app .app-shell.is-child .math-choice-figures p { text-align:left;font-size:16px;line-height:1.5;margin:8px 0 0; }
+#app .app-shell.is-child .question-model-visual .math-shape-tile { display:block!important;width:100%!important;max-width:100px!important;height:auto!important;min-height:0!important;aspect-ratio:150/135;margin:auto!important; }
+#app .app-shell.is-child .kid-board-card.has-choice-stem { grid-template-rows:auto minmax(0,1fr)!important; }
+#app .app-shell.is-child .kid-board-card.has-choice-stem .kid-think-box { display:none!important; }
+#app .app-shell.is-child .question-model-visual mark { color:#674916;background:#ffedb1;border-bottom:2px solid #b78224;padding:0 2px;border-radius:2px; }
+#app .app-shell.is-child .math-dot.is-empty { background:transparent;border-style:dashed; }
+#app .app-shell.is-child .kid-answer-choices b { color:#315e83;margin-right:4px; }
 #app .app-shell.is-child .is-emphasized, #app .app-shell.is-child .math-sequence-hint span { outline:2px solid #bd9142;outline-offset:3px; }
 #app .app-shell.is-child .lesson-picker { position:absolute!important;inset:10px!important;width:auto!important;max-width:none!important;height:auto!important;max-height:none!important;margin:0!important;padding:16px!important;background:#fff!important;border:2px solid #adc4d0;border-radius:8px;z-index:10;display:flex!important;flex-direction:column;overflow:auto!important;box-shadow:0 8px 24px #25445120; }
 #app .app-shell.is-child .lesson-picker-list { overflow:auto;min-height:0; }
@@ -163,6 +181,14 @@
 }
 @media (max-width:600px) and (orientation:portrait) {
 #app .app-shell.is-child .kid-workspace.lesson-stage:has(.voice-confirmation) { grid-template-rows:minmax(0,38%) minmax(0,62%)!important; }
+#app .app-shell.is-child .kid-workspace.lesson-stage:has(.kid-answer-choices) { grid-template-rows:minmax(0,42%) minmax(0,58%)!important; }
+#app .app-shell.is-child .kid-workspace.lesson-stage:has(.kid-answer-choices):has(.kid-keyboard-wrap) { grid-template-rows:minmax(0,36%) minmax(0,64%)!important; }
+#app .app-shell.is-child .kid-answer-actions { grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)!important; }
+#app .app-shell.is-child .kid-board-card.has-choice-stem { grid-template-rows:minmax(0,1fr)!important; }
+#app .app-shell.is-child .kid-board:has(.has-choice-stem) .kid-current-problem { max-height:14dvh!important; }
+#app .app-shell.is-child .math-choice-figures { gap:4px; }
+#app .app-shell.is-child .math-choice-figures figure { padding:2px; }
+#app .app-shell.is-child .math-choice-figures figcaption { font-size:16px; }
 #app .app-shell.is-child .kid-classroom { grid-template-rows:56px minmax(0,1fr)!important; }
 #app .app-shell.is-child .kid-topbar { height:56px!important;padding:6px 10px!important;gap:8px!important; }
 #app .app-shell.is-child .kid-brand strong { font-size:18px!important; }

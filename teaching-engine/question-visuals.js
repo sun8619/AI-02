@@ -4,7 +4,7 @@
   const dots = count => Array.from({ length: Math.max(0, Math.min(100, count)) }, () => '<i class="math-dot"></i>').join("");
   const text = (x, y, value, attrs = "") => `<text x="${x}" y="${y}" ${attrs}>${escape(value)}</text>`;
   const placeTable = (values) => `<table class="math-place-table"><thead><tr><th>数</th>${["千位","百位","十位","个位"].map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${values.map(n=>`<tr><th>${n}</th>${[1000,100,10,1].map(scale=>`<td>${n>=scale ? Math.floor(n/scale)%10 : ""}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  const shape = (name, x, hint) => {
+  const shape = (name, x, hint, label = true) => {
     const style = `fill="#dcf3e9" stroke="${hint ? "#157860" : "#345768"}" stroke-width="3"`;
     let drawing = "";
     if (name === "三角形") drawing = `<path d="M${x} 52l42 84h-84Z" ${style}/>`;
@@ -17,12 +17,30 @@
     }
     else if (name === "平行四边形") drawing = `<path d="M${x-25} 64h68l-18 70h-68Z" ${style}/>`;
     else drawing = `<rect x="${x-42}" y="62" width="84" height="${name === "正方形" ? 84 : 62}" ${style}/>`;
-    return drawing + text(x, 190, name, 'text-anchor="middle"');
+    return drawing + (label ? text(x, 190, name, 'text-anchor="middle"') : "");
   };
+  const shapeTile = name => `<svg class="math-shape-tile" viewBox="185 30 150 135" role="img" aria-label="${escape(name)}">${shape(name,260,false,false)}</svg>`;
+  const features = {
+    长方体:"看平平的面，相对的面一样。",正方体:"看六个面，都是一样大的正方形。",圆柱:"看两端的圆面，再看中间弯曲的面。",球:"转着看：整个表面弯曲，没有平平的面。",
+    三角形:"沿边走一圈，数直边和拐角。",圆:"沿轮廓走一圈，观察有没有拐角。",圆形:"沿轮廓走一圈，观察有没有拐角。",正方形:"比较四条边，再看四个角。",长方形:"比较相对的两条边，再看四个角。",平行四边形:"看相对的两条边是否一直一样远。",
+  };
+  const marked = value => escape(value).replace(/\d+(?:元|角|分|克|千克|厘米|米|个|人|份)?|[零一二两三四五六七八九]+[十百千万][零一二两三四五六七八九十百千万]*|[一二两三四五六七八九十]+(?=个|条|面|位)|不是|没有|不拿|不扫|相同|不同|最多|最少|每|平均|分别|正面|侧面|上面|左面|右面|前面|后面|平平的面|弯曲|圆面/g,word=>`<mark>${word}</mark>`);
+  function contextFamily(question, family) {
+    const prompt=String(question?.prompt || "");
+    if(/^(对|错)$/.test(question?.answer || "")) return family;
+    if(/(?:\d+)\s*(?:元|角|分)?\s*(?:再加|加|减|乘|除以|[+\-×÷])(?:原来的)?\s*\d+.*?(?:等于|还剩|是|找回|几|多少)/.test(prompt) && !/\d+元.*\d+角/.test(prompt)) return "calculation";
+    if(/\d+\s*(元|角|分).*?(几|多少|__+)\s*(元|角|分)/.test(prompt) && !/找回|付|价钱|便宜|贵/.test(prompt)) return "money";
+    return family;
+  }
   function diagram({ question, family, mode }) {
     const prompt = String(question?.visualPrompt || question?.prompt || "");
     const hint = mode === "hint" || mode === "step" || mode === "solution";
     const numbers = [...prompt.matchAll(/\d+/g)].map(m => Number(m[0]));
+    if (question.choices?.length && family === "shape") {
+      return `<div class="math-choice-figures">${question.choices.map(choice=>`<figure data-visual-choice="${escape(choice.label)}">${shapeTile(choice.text)}<figcaption><b>${escape(choice.label)}</b> ${escape(choice.text)}</figcaption>${hint ? `<p>${escape(features[choice.text] || "沿着轮廓看一圈，比较题目说的特征。")}</p>` : ""}</figure>`).join("")}</div>`;
+    }
+    const toTen=prompt.match(/(\d+)再加几就是10/);
+    if(toTen) return `<div class="math-quantity"><strong>${toTen[1]} + ? = 10</strong><div class="math-ten-frame">${Array.from({length:10},(_,i)=>`<i class="math-dot ${i>=+toTen[1] ? `is-empty ${hint ? "is-emphasized" : ""}` : ""}"></i>`).join("")}</div>${hint ? "<p>一个空格放一个，数数还空着几格。</p>" : ""}</div>`;
     if (family === "placeValue" && numbers.length && !/^(对|错)$/.test(question.answer || "")) {
       const pieces=[...prompt.matchAll(/(\d+)个([一十百千])/g)];
       if(pieces.length) return `<div class="math-groups">${pieces.map(m=>`<div class="math-group"><strong>${m[1]}个${m[2]}</strong></div>`).join("")}${hint ? '<p>把每一部分放在它自己的数位，没有的数位写0。</p>' : ""}</div>`;
@@ -33,7 +51,7 @@
       const row=prompt.match(/一排有(\d+).*?第(\d+)/);
       if(row && +row[1]<=10) return `<div class="math-ordinal"><p>从左边开始看 →</p><div class="math-groups">${Array.from({length:+row[1]},(_,i)=>`<div class="math-position">${i+1===+row[2] ? '<strong>小明</strong>' : '<span aria-hidden="true">·</span>'}<i class="math-dot"></i></div>`).join("")}</div>${hint ? '<p>找“前面有几个”时，不把小明自己算进去。</p>' : ""}</div>`;
       const after=prompt.match(/(\d+)后面/);
-      if(after) return `<div class="math-sequence"><span>${+after[1]-1}</span><span>${after[1]}</span><span>?</span></div>`;
+      if(after) return `<div class="math-sequence ${hint ? "math-sequence-hint" : ""}"><span>${+after[1]-1}</span><span>${after[1]}</span><span>?</span>${hint ? "<p>从已知的数往后数一个。</p>" : ""}</div>`;
     }
     if (family === "count" || question.visualCount) {
       const count=question.visualCount || Number.parseInt(question.answer,10);
@@ -47,18 +65,21 @@
       }
       return `<div class="math-compare">${numbers.slice(0,2).map((n,i)=>`<div><span>${i ? "右边" : "左边"}</span><strong>${n}</strong>${n<=10 ? `<div class="math-count-set">${dots(n)}</div>` : ""}</div>`).join("")}</div>`;
     }
-    if (family === "composition" && /分成/.test(prompt) && numbers.length >= 2 && numbers[0]<=20) {
+    if (family === "composition" && /分成|总数/.test(prompt) && numbers.length >= 2 && numbers[0]<=20) {
       if (hint) return `<div class="math-composition"><strong>总数 ${numbers[0]}</strong><div class="math-groups"><div class="math-group is-emphasized">${dots(numbers[1])}<span>已分出 ${numbers[1]}</span></div><div class="math-group">${dots(numbers[0]-numbers[1])}<span>还剩几个？</span></div></div><p>两部分合起来，仍然是原来的总数。</p></div>`;
       return `<div class="math-composition"><strong>总数 ${numbers[0]}</strong><div class="math-count-set">${dots(numbers[0])}</div><div class="math-parts"><span>一部分 ${numbers[1]}</span><span>另一部分 ?</span></div></div>`;
     }
     if (["calculation","mixedCalculation","concreteAddition","concreteSubtraction","makeTenAdd","breakTenSubtract","application","comparisonDifference"].includes(family)) {
-      const arithmetic=(prompt.match(/[（(]?\d+[\d\s+＋\-－×÷*()（）]+\d+[）)]?/) || [])[0];
+      const symbolic=prompt.replace(/再加|加/g,"+").replace(/减/g,"-").replace(/乘以|乘/g,"×").replace(/除以/g,"÷").replace(/原来的/g,"").replace(/(\d+)(元|角|分)/g,"$1");
+      const arithmetic=(symbolic.match(/[（(]?\d+[\d\s+＋\-－×÷*()（）]+\d+[）)]?/) || [])[0];
       const example = arithmetic || (String(question.explanation || "").match(/\d+\s*[+\-×÷]\s*\d+/) || [])[0];
       if (example) {
         const values=[...example.matchAll(/\d+/g)].map(m=>+m[0]);
         const op=(example.match(/[+\-×÷]/)||[])[0];
         if(hint && values.length===2) {
           const [a,b]=values;
+          if(op==="×" && a<=10 && b<=10) return `<div class="math-calculation"><strong>${a} × ${b} = ?</strong><div class="math-groups">${Array.from({length:a},()=>`<div class="math-group">${dots(b)}</div>`).join("")}</div><p>每组${b}个，一共有${a}组。把这些一样多的组加起来。</p></div>`;
+          if(op==="÷" && a<=100 && b>0 && b<=10) return diagram({question:{...question,prompt:`${a}个，每${b}个一组，能分几组？`,visualPrompt:""},family:"division",mode:"hint"});
           if(op==="+" && a<10 && b<10 && a+b>10) {
             const need=10-a;
             return `<div class="math-calculation"><strong>${a} + ${b} = ?</strong><div class="math-ten-frame">${Array.from({length:10},(_,i)=>`<i class="math-dot ${i>=a ? "from-other" : ""}"></i>`).join("")}</div><p>从${b}里面拿${need}个，先和${a}凑成10。</p><div class="math-count-set">${dots(b-need)}</div><p>再把剩下的加上。</p></div>`;
@@ -71,13 +92,17 @@
             return `<div class="math-calculation"><strong>${a} ${op} ${b} = ?</strong>${placeTable([a,b])}<p>相同数位对齐，先算个位。</p>${regroup ? `<p>${op==="+" ? "个位满10，向十位进1。" : "个位不够减，从十位退1，换成10个一。"}</p>` : '<p>再算十位。</p>'}</div>`;
           }
         }
+        if(hint && values.length>2) {
+          const first=example.match(/[（(][^()（）]+[）)]/) || example.match(/\d+\s*[×÷]\s*\d+/) || example.match(/\d+\s*[+\-]\s*\d+/);
+          if(first) return `<div class="math-calculation"><strong>${escape(example.slice(0,first.index))}<mark>${escape(first[0])}</mark>${escape(example.slice(first.index+first[0].length))} = ?</strong><p>先算标出的这一段，把结果放回原来的位置，再继续。</p></div>`;
+        }
         const drawing = values.length===2 && values.every(n=>n<=20) && /[+\-]/.test(op || "") ? `<div class="math-groups"><div class="math-group">${dots(values[0])}</div><span class="math-join">${op}</span><div class="math-group">${dots(values[1])}</div></div>` : "";
         return `<div class="math-calculation"><strong>${escape(example)} = ?</strong>${drawing}${hint ? '<p>先算当前这一步，再把结果放回原题。</p>' : ""}</div>`;
       }
     }
     if (family === "shape") {
-      const names = [...new Set(prompt.match(/长方体|正方体|圆柱|球(?=体|[，。\sD]|$)|平行四边形|三角形|长方形|正方形|圆形|圆(?!柱|面|圆)/g) || [])].slice(0, 4);
-      if (names.length) return svg(names.map((name, i) => shape(name, (i + .5) * 500 / names.length + 10, hint)).join(""), prompt);
+      const names = [...new Set(prompt.match(/长方体|正方体|圆柱|球|平行四边形|三角形|长方形|正方形|圆形|圆(?!柱|面|圆)/g) || [])];
+      if (names.length) return `<div class="math-choice-figures">${names.map(name=>`<figure>${shapeTile(name)}<figcaption>${escape(name)}</figcaption>${hint ? `<p>${escape(features[name])}</p>` : ""}</figure>`).join("")}</div>`;
     }
     if (family === "pattern") {
       const sequence = prompt.replace(/^.*?[:：]/, "").match(/\d+|[△○■●□☆]|_{2,}/g) || [];
@@ -98,7 +123,8 @@
       const rows = [...prompt.matchAll(/\|\s*([^|\n]+)\s*\|\s*(\d+)\s*\|/g)].map(m => ({label:m[1].trim(),value:+m[2]}));
       if (rows.length) {
         const max = Math.max(...rows.map(x=>x.value),1);
-        return `<div class="math-data">${rows.map(row => `<div class="math-data-row"><span>${escape(row.label)}</span><div><i style="width:${row.value / max * 100}%"></i></div><strong>${row.value}</strong></div>`).join("")}${hint ? `<p>${/对应的数量/.test(prompt) ? '找到问题中的类别，沿着这一行看右边的数，不要看成上下另一行。' : /多多少/.test(prompt) ? '先把每一类的名字和数量对应好。较多数减较少数，才能知道多几个。' : '把各项人数合起来，求总人数；再比较每项数字，找出最多的一项。'}</p>` : ""}</div>`;
+        const focus=String(question.prompt||"").match(/([^\n。？]+)对应的数量/)?.[1];
+        return `<div class="math-data">${rows.map(row => `<div class="math-data-row ${hint && focus?.endsWith(row.label) ? "is-emphasized" : ""}"><span>${escape(row.label)}</span><div><i style="width:${row.value / max * 100}%"></i></div><strong>${row.value}</strong></div>`).join("")}${hint ? `<p>${focus ? '找到问题中的类别，沿着这一行看右边的数，不要看成上下另一行。' : /多多少/.test(prompt) ? '先把每一类的名字和数量对应好。较多数减较少数，才能知道多几个。' : '先对准问题中的类别，再读同一行的数量。求总数就合起来，比较多少就比各项数量。'}</p>` : ""}</div>`;
       }
     }
     if (["time", "timeDuration"].includes(family)) {
@@ -159,15 +185,26 @@
     }
     if (family === "logic" || family === "observation" || family === "motion" || /^(对|错)$/.test(question?.answer || "")) {
       const clauses=prompt.replace(/^判断对错[:：]/,"").split(/[。；]|已知[:：]/).filter(Boolean);
-      return `<ol class="math-conditions ${hint ? "is-emphasized" : ""}">${clauses.map(clause=>`<li>${escape(clause)}</li>`).join("")}</ol>`;
+      return `<ol class="math-conditions">${clauses.map(clause=>`<li>${hint ? marked(clause) : escape(clause)}</li>`).join("")}</ol>${hint && family==="logic" ? '<p>先找确定的条件，再圈出“不是”的条件。只能排除条件说不可能的，其他的先留着。</p>' : hint && family==="observation" ? '<p>先找到人站的位置，只看朝向他的一面；被挡住的部分不拿来猜。</p>' : ""}`;
     }
     // An unsupported picture must not silently become a fixed, unrelated diagram.
     const written=escape(prompt).replace(/\n/g,"<br>");
-    return `<div class="math-givens">${hint ? written.replace(/\d+|[一二三四五六七八九十百千零]{2,}|多得多|多一些/g,word=>`<mark>${word}</mark>`) : written}</div>`;
+    return `<div class="math-givens">${hint ? marked(prompt).replace(/\n/g,"<br>") : written}</div>`;
+  }
+  const helpLabels={shape:"比较图形特征",logic:"找排除的线索",observation:"找观察的位置",placeValue:"把数位摆出来",time:"看长针和短针",timeDuration:"在钟面上数",money:"把钱换一换",moneyApplication:"画出钱的关系",measure:"标出单位和刻度",data:"对着表找一行",arrangement:"连一连试试",pattern:"找重复和变化",compare:"把两边对一对",division:"分一分看看",remainderDivision:"分一分看看",remainderApplication:"看分完剩多少",calculation:"把计算画出来",makeTenAdd:"用十格框看看",breakTenSubtract:"把十拆开看看",multiplication:"看看每组几个",motion:"看它怎样动"};
+  function help(payload) {
+    const family=contextFamily(payload.question,payload.family);
+    const normal=diagram({...payload,family,mode:"question"});
+    const hinted=diagram({...payload,family,mode:"hint"});
+    // No decorative state-only change counts as a useful teaching action.
+    if(normal===hinted || normal.replace(/ (?:is-emphasized|math-sequence-hint)/g,"")===hinted.replace(/ (?:is-emphasized|math-sequence-hint)/g,"")) return null;
+    const cues={shape:"把每个图都留下来，照着图旁的特征比较。",logic:"标出的都是题目给的条件，先排除不可能的。",observation:"先找题目说的观察位置，再看朝着这一边的特征。",time:"短针看几时，长针看几分。",money:"看每部分钱的单位，再按图中关系换一换。",data:"对照标出的名称和同一行的数字。"};
+    return {label:helpLabels[family] || "标出题目线索",cue:cues[family] || "看图里新标出的部分，再试试当前这个问题。",family};
   }
   function render(payload) {
-    const body=diagram(payload);
-    return body ? `<div class="question-model-visual" data-question-id="${escape(payload.question?.id)}" data-family="${escape(payload.family)}" data-mode="${escape(payload.mode)}">${body}</div>` : "";
+    const family=contextFamily(payload.question,payload.family);
+    const body=diagram({...payload,family});
+    return body ? `<div class="question-model-visual" data-question-id="${escape(payload.question?.id)}" data-family="${escape(family)}" data-mode="${escape(payload.mode)}">${body}</div>` : "";
   }
-  root.LezhiQuestionVisuals = { render };
+  root.LezhiQuestionVisuals = { render, help };
 })(window);

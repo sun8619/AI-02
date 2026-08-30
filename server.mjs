@@ -9,6 +9,7 @@ import { createKnowledgeGraph } from "./teaching-engine/knowledge-model.js";
 import { allKnowledgeModules } from "./teaching-engine/generated-curriculum.js";
 import { runTeachingTurn } from "./teaching-engine/state-machine.js";
 import "./teaching-engine/child-language.js";
+import {readSpeechResponse} from "./teaching-engine/speech-request-lifecycle.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const release = JSON.parse(await readFile(join(root, "release.json"), "utf8"));
@@ -84,7 +85,8 @@ const server = createServer(async (request, response) => {
 
     await serveStatic(url.pathname, response, request.method === "HEAD");
   } catch (error) {
-    sendJson(response, 500, { error: "Local server error", detail: sanitizeMessage(error) });
+    if(response.destroyed || response.writableEnded) return;
+    sendJson(response, error.code==="SPEECH_TIMEOUT" ? 504 : 500, { error: "Local server error", detail: sanitizeMessage(error) });
   }
 });
 
@@ -696,13 +698,11 @@ async function handleSpeechSynthesis(request, response) {
     },
   };
 
-  const upstream = await fetch(process.env.ARK_TTS_URL || "https://openspeech.bytedance.com/api/v3/tts/unidirectional", {
+  const {upstream,raw} = await readSpeechResponse(process.env.ARK_TTS_URL || "https://openspeech.bytedance.com/api/v3/tts/unidirectional", {
     method: "POST",
     headers: buildSpeechHeaders("TTS", apiKey),
     body: JSON.stringify(payload),
-  });
-
-  const raw = await upstream.text();
+  }, response);
   if (!upstream.ok) {
     const hint = createTtsErrorHint(raw);
     sendJson(response, 502, {

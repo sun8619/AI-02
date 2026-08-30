@@ -7,8 +7,8 @@ class TestAudio {
   constructor(url) { this.url = url; this.paused = false; }
   async play() { played.push(this); this.onplay?.(); }
   pause() { this.paused = true; }
-  removeAttribute() {}
-  load() {}
+  removeAttribute() { this.released = true; }
+  load() { this.unloaded = true; }
 }
 const r = loadChildRuntime({audio:true,overrides:{
   Audio: TestAudio,
@@ -50,4 +50,16 @@ assert.equal(played.length,2,"replay can recover after autoplay denial");
 
 r.evaluate('scheduleLatestHelpAction("hint"); scheduleLatestHelpAction("hint"); scheduleLatestHelpAction("visual");');
 assert.equal([...timers.values()].filter(t=>t.ms===220).length,1,"only final help click survives debounce");
-console.log("PASS voice lifecycle: stale synthesis, active audio, cancellation, timeout, rate limit, autoplay recovery, latest help");
+r.evaluate('cancelSupersededInteraction()');
+for(let i=0;i<10;i++) {
+  const turn=r.evaluate('state.aiMessage="这一轮的讲解"; speakCurrentMessage()');resolve(pending.at(-1));await turn;
+  const audio=played.at(-1);audio.onended();
+  assert.equal(audio.released,true,"completed audio releases its source");
+  assert.equal(audio.unloaded,true,"completed audio unloads playback resources");
+}
+const hidden=r.evaluate('state.aiMessage="保留文字内容"; speakCurrentMessage()');
+r.evaluate('suspendVoiceInteraction()');
+assert.equal(pending.at(-1).options.signal.aborted,true,"backgrounding aborts pending synthesis");
+resolve(pending.at(-1));await hidden;
+assert.equal(r.evaluate('state.aiMessage'),"保留文字内容");
+console.log("PASS voice lifecycle: stale synthesis, active audio, cancellation, timeout, rate limit, autoplay recovery, latest help, ten-turn cleanup and background suspension");
