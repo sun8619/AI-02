@@ -1,5 +1,5 @@
 /*
- * Child learning stage v30
+ * Child learning stage v34
  *
  * This file is loaded after the accumulated prototype stylesheet and owns the
  * final child-facing layout. Keep it small and focused: one tutor, one prompt,
@@ -478,7 +478,7 @@
   }
 }
 
-@media (max-width: 699px), (orientation: portrait) and (max-width: 1199px) {
+@media (max-width: 699px), (orientation: portrait) and (max-width: 1199px), (orientation: landscape) and (max-height: 520px) {
   .app-shell.is-child .child-stage.kid-classroom.lesson-shell {
     grid-template-rows: 58px minmax(0, 1fr) !important;
   }
@@ -1066,7 +1066,7 @@
   }
 }
 
-@media (max-width: 699px) and (orientation: landscape) {
+@media (orientation: landscape) and (max-width: 699px), (orientation: landscape) and (max-height: 520px) {
   .app-shell.is-child .child-stage.kid-classroom.lesson-shell {
     grid-template-rows: 52px minmax(0, 1fr) !important;
   }
@@ -1160,6 +1160,10 @@
   .app-shell.is-child .kid-money-jiao-box > small {
     display: none !important;
   }
+
+  .app-shell.is-child .kid-money-box {
+    height: min(112px, 30vh) !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1172,11 +1176,7 @@
   }
 }
 
-/* v33: selected energetic teacher, framed as a responsive half-body stage. */
-.app-shell.is-child .kid-coach.teacher-cove {
-  grid-template-rows: minmax(230px, 36vh) minmax(126px, auto) auto auto !important;
-}
-
+/* The wide source includes background around a centered half-body teacher. */
 .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
   width: 100% !important;
   max-width: 560px !important;
@@ -1214,35 +1214,30 @@
   to { transform: translateY(-2px) scale(1.006); }
 }
 
-@media (min-width: 1200px) and (orientation: landscape) {
+@media (min-width: 700px) and (orientation: landscape) {
   .app-shell.is-child .kid-coach.teacher-cove {
-    grid-template-rows: minmax(260px, 37vh) minmax(126px, auto) auto auto !important;
+    grid-template-rows: minmax(0, 1fr) auto auto auto !important;
+    align-content: stretch !important;
   }
 
   .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
-    max-width: 590px !important;
-    min-height: 260px !important;
-  }
-}
-
-@media (min-width: 700px) and (max-width: 1199px) and (orientation: landscape) {
-  .app-shell.is-child .kid-coach.teacher-cove {
-    grid-template-rows: minmax(180px, 30vh) minmax(112px, auto) auto auto !important;
-  }
-
-  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
-    max-width: 440px !important;
-    min-height: 180px !important;
-  }
-}
-
-@media (max-height: 760px) and (min-width: 700px) {
-  .app-shell.is-child .kid-coach.teacher-cove {
-    grid-template-rows: minmax(150px, 25vh) minmax(108px, auto) auto auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    align-self: stretch !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    max-height: none !important;
   }
 
-  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
-    min-height: 150px !important;
+  /* Scale to height; only the source's side background may leave the frame. */
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large img {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    height: 100% !important;
+    aspect-ratio: 1619 / 972 !important;
+    object-fit: contain !important;
+    border-radius: 0 !important;
   }
 }
 
@@ -1277,7 +1272,7 @@
   }
 }
 
-@media (max-width: 699px) and (orientation: landscape) {
+@media (orientation: landscape) and (max-width: 699px), (orientation: landscape) and (max-height: 520px) {
   .app-shell.is-child .kid-workspace.lesson-stage {
     grid-template-columns: minmax(250px, 42%) minmax(0, 58%) !important;
     grid-template-rows: minmax(0, 1fr) !important;
@@ -1290,10 +1285,27 @@
   }
 
   .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large {
+    display: block !important;
+    align-self: center !important;
     width: 78px !important;
     min-height: 86px !important;
     max-height: 112px !important;
     border-radius: 14px !important;
+  }
+
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large img {
+    width: 100% !important;
+    object-fit: cover !important;
+  }
+
+  .app-shell.is-child .kid-input-panel,
+  .app-shell.is-child .kid-answer-actions,
+  .app-shell.is-child .kid-primary-voice,
+  .app-shell.is-child .kid-type-trigger,
+  .app-shell.is-child .kid-help-row,
+  .app-shell.is-child .kid-help-button {
+    min-height: 0 !important;
+    height: 100% !important;
   }
 }
 
@@ -1308,11 +1320,17 @@
   }
 }
 
+@media (max-width: 1199px) {
+  .app-shell.is-child .kid-input-panel:has(.kid-keyboard-wrap) .kid-answer-actions {
+    display: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .app-shell.is-child .kid-teacher-avatar.is-thinking img,
-  .app-shell.is-child .kid-teacher-avatar.is-encouraging img,
-  .app-shell.is-child .kid-teacher-avatar.is-guiding img {
+  .app-shell.is-child .kid-coach > .kid-teacher-avatar.kid-teacher-large img,
+  .app-shell.is-child .kid-teacher-avatar.kid-teacher-mini img {
     animation: none !important;
     transform: none !important;
+    transition: none !important;
   }
 }
