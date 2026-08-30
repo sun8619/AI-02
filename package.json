@@ -10,6 +10,7 @@
     "ws": "^8.18.0"
   },
   "scripts": {
+    "test": "node teaching-engine/product-regression-audit.js && node teaching-engine/voice-lifecycle-audit.js && node teaching-engine/source-math-audit.js && node teaching-engine/runtime-integrity-audit.js && node teaching-engine/spoken-prompt-audit.js",
     "start": "node server.mjs",
     "audit:teaching": "node teaching-engine/teaching-quality-audit.js",
     "audit:scenarios": "node teaching-engine/teaching-scenario-audit.js",

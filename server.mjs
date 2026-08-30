@@ -11,6 +11,7 @@ import { runTeachingTurn } from "./teaching-engine/state-machine.js";
 import "./teaching-engine/child-language.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
+const release = JSON.parse(await readFile(join(root, "release.json"), "utf8"));
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "0.0.0.0";
 const teachingGraph = createKnowledgeGraph(allKnowledgeModules);
@@ -64,6 +65,7 @@ const server = createServer(async (request, response) => {
       sendJson(response, 200, {
         ok: true,
         app: "qibu-ai-learning-companion",
+        release: release.id,
         ...getPublicModelConfig(),
         hasApiKey: Boolean(process.env.ARK_API_KEY),
       });

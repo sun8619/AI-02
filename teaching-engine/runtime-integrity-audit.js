@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { loadChildRuntime } from "./runtime-test-harness.js";
 
 const rootUrl = new URL("./", import.meta.url);
 const bank = loadBrowserGlobal("./grade1-2-question-bank.js", "gradeOneTwoQuestionBank");
@@ -63,8 +64,9 @@ check(/visualContextKey/.test(appSource), "图示没有绑定当前题目上下�
 check(/function inferActiveQuestionFamily[\s\S]*?inferQuestionTeachingFamily[\s\S]*?return knownFamily/.test(appSource), "当前题目的知识类型没有优先于知识点大类");
 check(/function renderApplicationStorySvg\(/.test(appSource), "应用题缺少按当前数字绘图的图示");
 check(/function findNumericUnitVoiceCorrection\(/.test(appSource), "语音缺少数字和单位的语境纠错");
-check(/function renderVoiceConfirmation\(\)\s*\{\s*return "";\s*\}/.test(appSource), "语音仍会逐次弹出确认框");
-check(!/return\s*\{\s*status:\s*"confirm"/.test(extractFunction(appSource, "assessVoiceTranscript")), "语音评估仍可能进入逐次确认");
+const runtime = loadChildRuntime();
+check(runtime.evaluate('assessVoiceTranscript("二十角", {confidence:.95}, {expectedType:"number",prompt:"2元是几角？"}).status') === "accept", "清晰语音不应逐次确认");
+check(runtime.evaluate('assessVoiceTranscript("二十角", {confidence:.25}, {expectedType:"number",prompt:"2元是几角？"}).status') === "confirm", "低置信语音不得直接判题");
 check(/const DEFAULT_LESSON_SOURCE_ID = "G1V2-U5-KP01"/.test(appSource), "默认入口没有固定到元角分换算");
 check(/detectConcreteOperationFamily/.test(appSource), "应用题没有按当前题干绑定加法或减法故事关系");
 check(/function sanitizeMicrostepExplanation\(/.test(appSource), "讲后检查缺少防泄题和跨知识点内容保护");
