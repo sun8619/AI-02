@@ -40,3 +40,10 @@
 - GitHub发布之后仍须更新服务器，再核对 `/api/health` 返回 `v92-20260830`；本轮未直接登录服务器执行更新。
 
 工程修复、发布与真人试用分开计数，不沿用历史“99分”或“100%商业成熟”的说法。
+
+## 发布证据
+
+- 应用提交：`4710916854fe2d6b78af0ff8364b6a15c034136f`，已推送到GitHub main。
+- [GitHub自动回归通过](https://github.com/sun8619/AI-02/actions/runs/33318613656)，包含新增的真实浏览器回归与截图产物。
+- 从GitHub codeload重新下载该固定提交，48项SHA256清单验证通过；生产依赖模式验收通过。
+- 服务器更新步骤见 [v92-server-update.md](v92-server-update.md)。人工证据模板见 [v92-manual-acceptance.md](v92-manual-acceptance.md)。
