@@ -27,7 +27,7 @@ async (page) => {
   await page.getByRole("combobox",{name:"结果",exact:true}).selectOption("review");
   if(!await page.getByText("最近学习明细（1次）",{exact:true}).isVisible())errors.push("result filter did not narrow sessions");
   await page.locator(".history-trends summary").click();
-  if(!await page.getByText("隔日复测通过 1 / 2 次",{exact:true}).isVisible())errors.push("delayed evidence missing");
+  if(!await page.getByText("隔日复测通过 1 / 2 次，通过率 50%",{exact:true}).isVisible())errors.push("delayed evidence missing");
   await page.setViewportSize({width:375,height:667});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))errors.push("parent history horizontal overflow");
   await page.screenshot({path:"output/playwright/v92-parent-history.png",fullPage:true});

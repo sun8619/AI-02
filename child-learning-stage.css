@@ -136,6 +136,7 @@
 #app .app-shell.is-child .math-data-row { display:grid;grid-template-columns:80px minmax(0,1fr) 40px;gap:12px;align-items:center;margin:12px 0; }
 #app .app-shell.is-child .math-data-row > div { background:#edf4f1; }
 #app .app-shell.is-child .math-data-row i { display:block;height:20px;background:#72b79e; }
+#app .app-shell.is-child .math-sum-row { display:flex;flex-wrap:wrap;gap:8px;justify-content:center;border-top:1px solid #b8d2c6;padding-top:12px;font-size:16px; }
 #app .app-shell.is-child .math-clocks { display:flex;gap:8px;justify-content:center; }
 #app .app-shell.is-child .math-clocks svg { width:100%;max-width:210px;min-width:0;height:auto; }
 #app .app-shell.is-child .math-money-amount { display:grid;justify-items:center;gap:12px;padding:16px;min-width:110px;background:#edf5ed;border-bottom:2px solid #91b9a5;border-radius:8px; }
@@ -145,6 +146,15 @@
 #app .app-shell.is-child .math-conditions { padding-left:28px;margin:8px 0; }
 #app .app-shell.is-child .math-conditions li { margin-bottom:10px; }
 #app .app-shell.is-child .math-choice-figures { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px; }
+#app .app-shell.is-child .math-choice-figures.has-three { grid-template-columns:repeat(3,minmax(0,1fr)); }
+#app .app-shell.is-child .math-reference-task { width:100%;max-width:620px;margin:auto; }
+#app .app-shell.is-child .math-reference-task figure { margin:0;min-width:0;text-align:center; }
+#app .app-shell.is-child .math-reference-task figcaption { font-size:16px;line-height:1.5; }
+#app .app-shell.is-child .question-model-visual .math-reference-tile { display:block!important;width:100%!important;max-width:180px!important;height:auto!important;aspect-ratio:190/125;min-height:0!important;margin:auto!important; }
+#app .app-shell.is-child .question-model-visual .math-object-reference { display:block!important;width:100%!important;max-width:260px!important;height:auto!important;aspect-ratio:320/200;min-height:0!important;margin:auto!important; }
+#app .app-shell.is-child .math-object-reference text { font-size:16px!important; }
+#app .app-shell.is-child .math-object-scene { display:grid;grid-template-columns:1.2fr 1fr;gap:16px;align-items:center;margin:0 0 10px; }
+#app .app-shell.is-child .math-reference-task p { font-size:16px;line-height:1.5;margin:8px 0; }
 #app .app-shell.is-child .math-choice-figures figure { margin:0;min-width:0;padding:8px;border-bottom:1px solid #cfdee4;text-align:center; }
 #app .app-shell.is-child .math-choice-figures figcaption { font-size:18px; }
 #app .app-shell.is-child .math-choice-figures p { text-align:left;font-size:16px;line-height:1.5;margin:8px 0 0; }
@@ -160,6 +170,8 @@
 #app .app-shell.is-child .lesson-picker button { min-height:44px!important;font-size:16px!important; }
 #app .app-shell.is-child .lesson-picker-tabs { display:flex;flex-wrap:wrap;gap:4px; }
 #app .app-shell.is-child .lesson-option { width:100%; }
+#app .app-shell.is-child .lesson-option span, #app .app-shell.is-child .lesson-option small { font-size:14px;line-height:1.5;white-space:normal;overflow-wrap:anywhere; }
+#app .app-shell.is-child .lesson-option strong { font-size:16px;line-height:1.5; }
 @media (min-width:1200px) and (min-height:850px) {
 #app .app-shell.is-child .kid-coach.teacher-cove { padding:24px 32px!important;gap:16px!important; }
 #app .app-shell.is-child .kid-speech-bubble p { font-size:20px!important; }
@@ -178,10 +190,13 @@
 #app .app-shell.is-child .kid-think-box { max-height:10dvh!important;padding:6px 10px!important; }
 #app .app-shell.is-child .kid-speech-bubble p { font-size:18px!important;line-height:1.55!important; }
 #app .app-shell.is-child .kid-teacher-status { display:none!important; }
+#app .app-shell.is-child .question-model-visual .math-reference-tile { width:auto!important;max-width:100%!important;height:70px!important; }
+#app .app-shell.is-child .question-model-visual .math-object-reference { height:85px!important; }
+#app .app-shell.is-child .math-reference-task p { display:none; }
 }
 @media (max-width:600px) and (orientation:portrait) {
 #app .app-shell.is-child .kid-workspace.lesson-stage:has(.voice-confirmation) { grid-template-rows:minmax(0,38%) minmax(0,62%)!important; }
-#app .app-shell.is-child .kid-workspace.lesson-stage:has(.kid-answer-choices) { grid-template-rows:minmax(0,42%) minmax(0,58%)!important; }
+#app .app-shell.is-child .kid-workspace.lesson-stage:has(.kid-answer-choices) { grid-template-rows:minmax(0,52%) minmax(0,48%)!important; }
 #app .app-shell.is-child .kid-workspace.lesson-stage:has(.kid-answer-choices):has(.kid-keyboard-wrap) { grid-template-rows:minmax(0,36%) minmax(0,64%)!important; }
 #app .app-shell.is-child .kid-answer-actions { grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)!important; }
 #app .app-shell.is-child .kid-board-card.has-choice-stem { grid-template-rows:minmax(0,1fr)!important; }
@@ -189,6 +204,13 @@
 #app .app-shell.is-child .math-choice-figures { gap:4px; }
 #app .app-shell.is-child .math-choice-figures figure { padding:2px; }
 #app .app-shell.is-child .math-choice-figures figcaption { font-size:16px; }
+#app .app-shell.is-child .math-reference-task figcaption { font-size:14px;line-height:1.4; }
+#app .app-shell.is-child .question-model-visual .math-reference-tile { width:auto!important;max-width:100%!important;height:45px!important; }
+#app .app-shell.is-child .math-target-figure .math-reference-tile { height:50px!important; }
+#app .app-shell.is-child .question-model-visual .math-object-reference { width:100%!important;height:55px!important; }
+#app .app-shell.is-child .math-object-reference text { display:none; }
+#app .app-shell.is-child .math-object-scene { gap:8px;margin-bottom:6px; }
+#app .app-shell.is-child .math-reference-task p { display:none; }
 #app .app-shell.is-child .kid-classroom { grid-template-rows:56px minmax(0,1fr)!important; }
 #app .app-shell.is-child .kid-topbar { height:56px!important;padding:6px 10px!important;gap:8px!important; }
 #app .app-shell.is-child .kid-brand strong { font-size:18px!important; }
@@ -205,7 +227,8 @@
 #app .app-shell.is-child .kid-coach.teacher-cove { grid-template-columns:68px minmax(0,1fr)!important;padding:8px 10px!important;gap:6px!important; }
 #app .app-shell.is-child .kid-speech-bubble, #app .app-shell.is-child .kid-speech-bubble.is-long, #app .app-shell.is-child .kid-speech-bubble.is-medium, #app .app-shell.is-child .kid-speech-bubble.is-short { max-height:100%!important;padding:4px 8px!important; }
 #app .app-shell.is-child .kid-speech-bubble p { font-size:16px!important;line-height:1.5!important;margin-top:2px!important; }
-#app .app-shell.is-child .kid-speaker-row { min-height:28px; }
+#app .app-shell.is-child .kid-speaker-row { float:right;width:44px;min-height:44px;margin:0 0 2px 6px; }
+#app .app-shell.is-child .kid-speaker-label { display:none; }
 #app .app-shell.is-child .kid-replay { width:44px;height:44px; }
 #app .app-shell.is-child .kid-last-answer { display:block!important; }
 #app .app-shell.is-child .kid-last-answer span { margin-right:8px; }
@@ -231,6 +254,18 @@
 #app .app-shell.is-child .kid-current-problem.task-ribbon { grid-template-columns:1fr!important; }
 #app .app-shell.is-child .kid-task-main strong, #app .app-shell.is-child .kid-think-box strong { font-size:16px!important; }
 #app .app-shell.is-child .kid-think-box { padding:6px 8px!important; }
+#app .app-shell.is-child .kid-board-card.has-choice-stem { grid-template-rows:minmax(0,1fr)!important; }
+#app .app-shell.is-child .question-model-visual .math-reference-tile { width:auto!important;max-width:100%!important;height:55px!important; }
+#app .app-shell.is-child .question-model-visual .math-object-reference { height:65px!important; }
+#app .app-shell.is-child .math-reference-task p { display:none; }
+#app .app-shell.is-child .math-object-reference text { display:none; }
+}
+@media (max-width:360px) and (orientation:portrait) {
+#app .app-shell.is-child .question-model-visual .math-reference-tile { height:35px!important; }
+#app .app-shell.is-child .math-target-figure .math-reference-tile { height:40px!important; }
+#app .app-shell.is-child .question-model-visual .math-object-reference { height:45px!important; }
+#app .app-shell.is-child .kid-answer-actions { grid-template-columns:minmax(0,1fr) 44px!important; }
+#app .app-shell.is-child .kid-type-trigger span { display:none; }
 }
 @media (prefers-reduced-motion:reduce) {
 #app .app-shell.is-child .kid-classroom *, #app .app-shell.is-child .kid-classroom *::before, #app .app-shell.is-child .kid-classroom *::after { animation:none!important;transition:none!important; }

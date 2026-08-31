@@ -120,5 +120,52 @@
     }
     return false;
   }
-  root.LezhiAnswers = { number, clean, choices, choicePrompt, matches, whole };
+  function classify(input, question = {}) {
+    const value = clean(input), prompt = String(question.prompt || "");
+    const result = (kind, shape) => ({kind, shape});
+    if (!value || /^(嗯+|啊+|哦+|呃+|额+|好|好的|这个|那个|我觉得|我认为|因为|所以|答案|不知道怎么说)$/.test(value)) return result("partial", "empty");
+    const options = choices(question);
+    if (whole(input, question)) return result("answer", "complete");
+    if (options.length) {
+      if (/^[a-d](?:[.．、,]?|.+)$/.test(value) && options.some(c => c.label.toLowerCase() === value[0])) {
+        const tail = value.slice(1).replace(/^[.．、,]/, "");
+        if (!tail || options.some(c => canonical(c.text) === canonical(tail))) return result("answer", "choice");
+      }
+      if (options.some(c => canonical(c.text) === canonical(value))) return result("answer", "choice");
+    }
+    const expected = clean(question.answer || "");
+    if (/\d/.test(expected) && value.replace(/\d+/g,"#") === expected.replace(/\d+/g,"#")) return result("answer", "structured");
+    const boolean = /^(对|错|正确|错误|是|不是|是的|不对|不正确|没错|可以|不可以|能|不能|够|不够|够减|不够减)$/;
+    if (boolean.test(value)) return result("answer", "judgement");
+    if (/^(?:左|右)(?:边|面)?(?:的)?(?:更)?(?:大|小|多|少)?$|^(?:一样|同样)(?:多|大)?$|^相等$|^[<>=△○■●□☆]$/.test(value)) return result("answer", "relation");
+
+    // Validate the entire utterance, not the occurrence of a digit or one math word.
+    // This is answer relevance, not correctness: different numbers/units still reach teaching.
+    const numeric = value.replace(/^(?:结果|总数|总人数|一共有|1共有|1共|共|共有|总共|还剩|剩下|剩|有|是|第|=)/, "")
+      .replace(/(?:个顶点|条边|个十|个一|个百|个千|千克|厘米|毫米|千米|分钟|小时|余数|余|还剩|元|角|分|米|克|时|点|半|整|个|支|本|张|朵|只|人|辆|条|颗|种|盒|盘|段|袋|束|把|根|棵|笔|块|份|组|次|票|顶|件)/g, "")
+      .replace(/和|与|及|…/g, ",");
+    if (/\d/.test(value) && /^[\d,;:×÷+\-*=<>（）()]+$/.test(numeric)) {
+      const count = (value.match(/\d+/g) || []).length;
+      const needed = (expected.match(/\d+/g) || []).length;
+      if (needed > 1 && count < needed && !/[×÷+\-=]/.test(expected) && /[,，]|____.*____/.test(String(question.answer) + prompt)) return result("partial", "multiple");
+      return result("answer", "number");
+    }
+    const words = /^(?:长方体|正方体|圆柱|球|平行四边形|三角形|圆形|圆|长方形|正方形|直角|锐角|钝角|正面|侧面|上面|顶面|前面|后面|左面|右面|底面|平移|旋转|轴对称|终点|起点|十位|个位|百位|千位|多得多|少得多|多一些|少一些|不拿|加法|减法|乘法|除法)$/;
+    if (words.test(value)) return result("answer", "category");
+    const categories = [...prompt.matchAll(/\|\s*([^|\n]+)\s*\|\s*\d+\s*\|/g)].map(m => clean(m[1]));
+    const entities = [...new Set([...categories, ...(prompt.match(/小[明红华刚丽亮军芳强]|红球|蓝球|蓝旗|红旗|蓝笔|红笔|语文|数学|科学|体育|甲|乙|丙|丁|猫|狗/g) || [])])];
+    for (const entity of entities) {
+      if (value === entity) return result(expected.includes(",") ? "partial" : "answer", "category");
+      const remainder = value.replaceAll(entity, "").replace(/更多|最多|最少|多|少|人数|数量|一共|1共|共|共有|是|比|人|个|票|支|本|[,，]/g, "");
+      if (/\d/.test(remainder) && /^\d+$/.test(remainder)) return result("answer", "data");
+    }
+    // These tasks ask for a construction/method, not a memorized sentence.
+    if (/关键要点|为什么|怎么|方法|怎样/.test(prompt) && /刻度|数位|凑十|破十|退位|进位|平均|单位|比较|对齐|间隔/.test(value)) {
+      const relevant = /从|先|再|把|用|到|0|刻度|数位|厘米|米|量|起|终|点|凑十|破十|退位|进位|平均|单位|比较|对齐|间隔|开始|结束|分成|换成|算|加|减|乘|除|因为|所以|和|与|个|十|百|千|一|\d|[,，+=×÷-]/g;
+      if (!value.replace(relevant, "")) return result("answer", "method");
+    }
+    if (/^(?:不是|不选|不等于|不等|也许|可能|或者|还是)/.test(String(input).trim()) || /^(?:是|答案是)?(?:几|多少|元|角|分|厘米|千克|个|大于|小于)$/.test(value)) return result("partial", "uncertain");
+    return result("unrelated", "none");
+  }
+  root.LezhiAnswers = { number, clean, choices, choicePrompt, matches, whole, classify };
 })(window);

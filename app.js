@@ -1827,6 +1827,7 @@ function normalizeQuestion(question) {
     answerKeywords: normalizeTextList(question.answerKeywords, [question.answer]).filter(Boolean),
     hasVisualMarkup: Boolean(question.hasVisualMarkup && question.visualMarkup),
     visualCount: Number.isInteger(question.visualCount) ? question.visualCount : undefined,
+    visualModel: question.visualModel || null,
     followUp: question.followUp || null,
     visualMarkup: String(question.visualMarkup || "").trim(),
   };
@@ -6826,7 +6827,7 @@ function renderKidVoicePanel() {
           ${icon("mic")}
           <span>${state.recording ? "说完了" : recognitionBusy ? "正在听清" : state.isProcessing ? "有新想法就说" : "点一下开始说"}</span>
         </button>
-        <button class="kid-type-trigger" data-action="toggle-keyboard" ${inputLocked ? "disabled" : ""}>
+        <button class="kid-type-trigger" data-action="toggle-keyboard" aria-label="打字回答" title="打字回答" ${inputLocked ? "disabled" : ""}>
           ${icon("keyboard")}
           <span>打字回答</span>
         </button>
@@ -8750,7 +8751,7 @@ function saveLearningSession() {
   const lesson=currentLesson();
   if(!state.assessmentMode && !state.lastStudentText && !(state.assistedQuestionIds?.length) && !(state.passedQuestionIds?.length)) return;
   state.historyRecorded=true;
-  window.LezhiHistory?.record({topic:lesson.sourceQuestionBankId,title:lesson.node,volume:lesson.grade,completed:state.phase==="summary",passed:state.teachingState==="MASTERED",independent:state.passedQuestionIds?.length,assisted:state.assistedQuestionIds?.length,seconds:Math.round((Date.now()-(state.sessionStartedAt||Date.now()))/1000),voice:state.voiceCounts});
+  window.LezhiHistory?.record({topic:lesson.sourceQuestionBankId,title:lesson.node,volume:lesson.grade,completed:state.phase==="summary",passed:state.teachingState==="MASTERED",independent:state.passedQuestionIds?.length,assisted:state.assistedQuestionIds?.length,seconds:(Date.now()-(state.sessionStartedAt||Date.now()))/1000,voice:state.voiceCounts});
 }
 
 function advanceToReviewQuestion() {
@@ -8770,10 +8771,10 @@ function renderLearningHistory() {
   const outcomes={passed:"本次通过",review:"待复习",incomplete:"未完成"};
   const showRate=value=>value===null ? "证据不足" : `${value}%`;
   return `<section class="learning-history"><h2>学习记录</h2>
-    <div class="history-periods">${[7,30].map(days=>{const s=LezhiHistory.summary(days);return `<div><h3>最近${days}天</h3><p>${s.sessions}次学习 · ${s.minutes}分钟</p><p>独立答对${s.independent}题 · 求助过${s.assisted}题</p></div>`;}).join("")}</div>
+    <div class="history-periods">${[7,30].map(days=>{const s=LezhiHistory.summary(days);return `<div><h3>最近${days}天</h3><p>${s.sessions}次学习 · ${LezhiHistory.duration(s.seconds)}</p><p>独立答对${s.independent}题 · 求助过${s.assisted}题</p></div>`;}).join("")}</div>
     <p>单次通过不代表长期掌握。记录只保存在这台设备，不保存录音或原始回答。语音直接采用率不代表识别准确率。</p>
     <div class="history-filters"><label>册别<select data-history-filter="volume"><option value="">全部册别</option>${options([...new Set(rows.map(volume))].filter(Boolean).map(v=>[v,v]),filters.volume)}</select></label><label>知识点<select data-history-filter="topic"><option value="">全部知识点</option>${options([...new Map(rows.filter(r=>!filters.volume || volume(r)===filters.volume).map(r=>[r.topic,r.title]))],filters.topic)}</select></label><label>结果<select data-history-filter="outcome"><option value="">全部结果</option>${options(Object.entries(outcomes),filters.outcome)}</select></label></div>
-    <h3>跨日学习证据</h3><div class="history-trends">${LezhiHistory.trends(rows).filter(t=>filtered.some(r=>r.topic===t.topic)).map(t=>`<details><summary>${escapeText(t.title)} · ${t.status}</summary><p>隔日复测通过 ${t.delayedPassed} / ${t.delayedCount} 次</p><p>求助题占比：前7天 ${showRate(t.previous.help)} → 最近7天 ${showRate(t.current.help)}</p><p>语音直接采用率：前7天 ${showRate(t.previous.voice)} → 最近7天 ${showRate(t.current.voice)}</p><ol class="history-timeline">${t.history.map(r=>`<li>${new Date(r.at).toLocaleDateString("zh-CN")} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</li>`).join("")}</ol></details>`).join("") || "<p>还没有符合条件的学习记录。</p>"}</div>
+    <h3>跨日学习证据</h3><div class="history-trends">${LezhiHistory.trends(rows).filter(t=>filtered.some(r=>r.topic===t.topic)).map(t=>`<details><summary>${escapeText(t.title)} · ${t.status}</summary><p>隔日复测通过 ${t.delayedPassed} / ${t.delayedCount} 次${t.delayedCount ? `，通过率 ${Math.round(t.delayedPassed/t.delayedCount*100)}%` : "，尚无隔日证据"}</p><p>求助题占比：前7天 ${showRate(t.previous.help)} → 最近7天 ${showRate(t.current.help)}</p><p>语音直接采用率：前7天 ${showRate(t.previous.voice)} → 最近7天 ${showRate(t.current.voice)}</p><ol class="history-timeline">${t.history.map(r=>`<li>${new Date(r.at).toLocaleDateString("zh-CN")} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</li>`).join("")}</ol></details>`).join("") || "<p>还没有符合条件的学习记录。</p>"}</div>
     <h3>复习安排</h3>${due.filter(r=>filtered.some(f=>f.topic===r.topic)).map(r=>`<p>${escapeText(r.title)} <button data-action="review-topic" data-topic="${escapeText(r.topic)}">${r.outcome==="review" ? "再学一遍" : r.outcome==="incomplete" ? "接着练" : "隔日检验"}</button></p>`).join("") || "<p>当前筛选下没有到期的复习。</p>"}
     <details><summary>最近学习明细（${filtered.length}次）</summary>${filtered.slice(-20).reverse().map(r=>`<p>${new Date(r.at).toLocaleDateString("zh-CN")} · ${escapeText(r.title)} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</p>`).join("")}${filtered.length>20 ? "<p>这里显示最近20次；按知识点展开上方时间线可查看该点保留的记录。</p>" : ""}</details><button data-action="clear-history">清除本机学习记录</button></section>`;
 }
@@ -9230,11 +9231,14 @@ function createVoiceRecognitionContext() {
   const fallbackPrompt = wholeQuestionMode
     ? question?.prompt || lesson?.problem || ""
     : formatChildStepPrompt(plan) || question?.prompt || lesson?.problem || "";
-  const prompt = resolveCurrentVoicePrompt(fallbackPrompt);
+  const answerQuestion = currentAnswerQuestion();
+  const prompt = answerQuestion?.prompt || resolveCurrentVoicePrompt(fallbackPrompt);
   // Voice validation must follow the question the child can currently see.
   // Mixing the final exercise answer into an earlier micro-step makes valid
   // replies such as "右边" look like invalid comparison-symbol answers.
-  const expectedAnswers = wholeQuestionMode
+  const expectedAnswers = state.remediationCheck
+    ? [state.remediationCheck.answer, ...(state.remediationCheck.answerKeywords || [])]
+    : wholeQuestionMode
     ? questionExpectedAnswers
     : stepExpectedAnswers.length
       ? stepExpectedAnswers
@@ -9248,6 +9252,7 @@ function createVoiceRecognitionContext() {
     prompt,
     expectedType,
     expectedAnswers,
+    answerQuestion,
     hotwords: buildVoiceHotwords(lesson, wholeQuestionMode ? null : plan, expectedAnswers, prompt),
   };
 }
@@ -9336,7 +9341,6 @@ function processVoiceTranscript(transcript, metadata = {}) {
   if (metadata.generation !== undefined && metadata.generation !== voiceGeneration) return;
   state.voiceStatus = "idle";
   state.transcript = "";
-  state.lastStudentText = "";
   const assessment = assessVoiceTranscript(transcript, metadata, createVoiceRecognitionContext());
   state.voiceCounts ||= {accepted:0,uncertain:0};
   state.voiceCounts[assessment.status === "accept" ? "accepted" : "uncertain"]++;
@@ -9411,7 +9415,7 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
   const submitText = correction?.text || normalizeSafeVoiceUnits(heardText, context);
   const plausible = isPlausibleVoiceAnswer(submitText, context);
   const shortAnswer = normalizeText(submitText).length <= 3;
-  const childIntent = isVoiceControlPhrase(submitText) || /不知道|不会|不懂|没听懂|再讲/.test(normalizeText(submitText));
+  const childIntent = isVoiceControlPhrase(submitText) || isCannotAnswerText(normalizeText(submitText));
   const lowConfidence = quality.confidence !== null && quality.confidence < VOICE_LOW_CONFIDENCE;
   const marginalAudio =
     (quality.durationMs > 0 && quality.durationMs < VOICE_MIN_DURATION_MS) ||
@@ -9422,7 +9426,7 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
     return { status: "accept", heardText, submitText, reason: "child-intent" };
   }
 
-  if (!plausible || /天气|下雨|明天去|播放音乐|打开电视/.test(submitText)) {
+  if (!plausible) {
     return {
       status: "retry",
       heardText,
@@ -9465,14 +9469,9 @@ function isOnlyVoiceFiller(text) {
 function isPlausibleVoiceAnswer(text, context) {
   const normalized = normalizeText(text);
   if (!normalized) return false;
-  if (isVoiceControlPhrase(normalized) || /不知道|不会|不懂|没听懂|再讲/.test(normalized)) return true;
-  if (context.expectedType === "number") return hasSpokenNumber(normalized) || /大于|小于|等于|一样/.test(normalized);
-  if (context.expectedType === "comparison") return /大于|小于|等于|一样|[<>=＝]/.test(normalized);
-  if (context.expectedType === "yes-no") return /对|不对|是|不是|能|不能|可以|不可以/.test(normalized);
-  if (context.expectedType === "explanation") return normalized.length >= 3;
-  if (matchesGuidedKeywords(normalized, context.expectedAnswers || [])) return true;
-  if (context.expectedType === "choice") return normalized.length >= 1 && normalized.length <= 14;
-  return normalized.length >= 2;
+  if (isVoiceControlPhrase(normalized) || isCannotAnswerText(normalized)) return true;
+  const question = context.answerQuestion || {prompt:context.prompt,answer:context.expectedAnswers?.[0] || ""};
+  return LezhiAnswers.classify(text, question).kind === "answer";
 }
 
 function matchesExpectedVoiceAnswer(text, context) {
@@ -9529,7 +9528,15 @@ function parseVoiceNumberToken(token) {
 }
 
 function isVoiceControlPhrase(text) {
-  return /换知识点|下一题|换一题|看图|提示|再说一遍|重新讲|我来讲/.test(normalizeText(text));
+  return Boolean(childHelpCommand(text)) || findRequestedLessonIndex(text)>=0;
+}
+
+function childHelpCommand(text) {
+  const value=normalizeText(text).replace(/^(?:老师|请|我想|给我|帮我)/,"").replace(/吧$|好吗$|可以吗$/,"");
+  if (/^(?:看图|看提示图|画图讲|画图看看|给我看图)$/.test(value)) return "visual";
+  if (/^(?:提示|给个提示|我需要提示|重新讲|再讲一下|再讲一遍)$/.test(value)) return "hint";
+  if (/^(?:再说一遍|再听一遍|重听)$/.test(value)) return "repeat";
+  return "";
 }
 
 function hasSpokenNumber(text) {
@@ -10281,8 +10288,6 @@ function handleChildInput(text, inputType) {
   }
 
   cancelSupersededInteraction();
-  state.visualHelpActive = false;
-  state.teacherReaction = "responding";
   state.voiceConfirmation = null;
   state.transcript = "";
 
@@ -10303,6 +10308,19 @@ function handleChildInput(text, inputType) {
     return;
   }
 
+  const command=childHelpCommand(text);
+  if(command) {
+    if(command==="repeat") speakCurrentMessage();
+    else if(command==="visual") showCurrentStepVisual();
+    else switchExplanation("我们换一个讲法。 ");
+    return;
+  }
+  if (redirectNonAnswer(text)) {
+    render();
+    return;
+  }
+  state.visualHelpActive = false;
+  state.teacherReaction = "responding";
   state.lastStudentText = text;
   state.isProcessing = true;
   resetGeneratedVisualForTurn();
@@ -10465,7 +10483,30 @@ function applyGatewayTutor(payload, inputType) {
   speakCurrentMessage();
 }
 
+function currentAnswerQuestion() {
+  const lesson = currentLesson();
+  if (state.remediationCheck) return {...state.remediationCheck.answerQuestion, prompt:state.remediationCheck.checkPrompt, answer:state.remediationCheck.answer};
+  if (isWholeQuestionTurn()) return lesson.activeQuestion;
+  return createGuidedStepPlan(lesson, state.completedSteps)?.answerQuestion || lesson.activeQuestion;
+}
+
+function redirectNonAnswer(text) {
+  if (isCannotAnswerText(normalizeText(text)) || state.phase === "summary") return false;
+  const question = currentAnswerQuestion();
+  const classification = LezhiAnswers.classify(text, question);
+  if (classification.kind === "answer") return false;
+  const prefix = classification.shape === "multiple" ? "这题还有一部分没有说完。" : classification.kind === "partial" ? "这句还没说完整，我们接着来。" : "我听到了。我们先看眼前这一题。";
+  state.aiMessage = `${prefix}${childFacingPrompt(question.prompt)} 可以回答，也可以说“我没听懂”。`;
+  state.teacherReaction = "listening";
+  state.isProcessing = false;
+  state.voiceStatus = "idle";
+  // A non-answer changes only the conversation, never learning or repair evidence.
+  speakCurrentMessage();
+  return true;
+}
+
 function evaluateLocally(text, inputType) {
+  if (redirectNonAnswer(text)) return;
   const lesson = currentLesson();
   if (state.remediationCheck) {
     evaluateRemediationCheck(text, inputType);
@@ -10794,6 +10835,7 @@ function teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal
 }
 
 function evaluateRemediationCheck(text, inputType) {
+  if (redirectNonAnswer(text)) return;
   const lesson = currentLesson();
   const remediation = state.remediationCheck;
   if (!remediation) {
@@ -10859,6 +10901,7 @@ function evaluateRemediationCheck(text, inputType) {
 }
 
 function evaluateQuestionBankAttempt(text, inputType) {
+  if (redirectNonAnswer(text)) return;
   const lesson = currentLesson();
   if (isWholeQuestionTurn()) {
     evaluateWholeQuestionAssessment(text, inputType);
@@ -11039,6 +11082,7 @@ function activateNextAssessmentQuestion(lesson, lead = "") {
 }
 
 function evaluateWholeQuestionAssessment(text, inputType) {
+  if (redirectNonAnswer(text)) return;
   const lesson = currentLesson();
   const question = lesson?.activeQuestion || null;
   const normalized = normalizeText(text);
@@ -11113,10 +11157,7 @@ function matchesWholeQuestionAnswer(normalizedText, question, lesson) {
 }
 
 function isLikelyOffTopicWholeAnswer(normalizedText) {
-  if (!normalizedText) return true;
-  if (/冰淇淋|吃|玩|游戏|动画片|睡觉|不想学|不要学|累了|无聊/.test(normalizedText)) return true;
-  const hasAnswerSignal = /\d|一|二|三|四|五|六|七|八|九|十|百|千|万|元|角|分|个|只|本|支|块|张|条|米|克|大|小|多|少|对|错|左|右|<|>|=/.test(normalizedText);
-  return normalizedText.length > 8 && !hasAnswerSignal;
+  return LezhiAnswers.classify(normalizedText, currentAnswerQuestion()).kind !== "answer";
 }
 
 function getAssessmentQuestionCandidates(lesson) {
@@ -11253,20 +11294,8 @@ function keepOnCurrentGuidedStep(lesson, plan, prefix, inputType, signal) {
 }
 
 function isLikelyOffTopicAnswer(normalizedText, lesson, plan) {
-  if (!normalizedText) return true;
   if (isCannotAnswerText(normalizedText)) return false;
-  if (matchesGuidedKeywords(normalizedText, plan.answerKeywords)) return false;
-  if (plan.isReason && looksLikeReason(normalizedText)) return false;
-  if (/冰淇淋|吃|玩|游戏|动画片|睡觉|不想学|不要学|累了|无聊/.test(normalizedText)) return true;
-  const question = lesson.activeQuestion || null;
-  const text = normalizeText(`${question?.prompt || ""} ${lesson.node || ""} ${lesson.lesson || ""} ${plan.label || ""} ${plan.prompt || ""}`);
-  const hasMoneyContext = hasMoneyTerm(text);
-  if (hasMoneyContext) {
-    const hasMoneyAnswer = /元|角|分|钱|人民币|\d|一|二|三|四|五|六|七|八|九|十|百/.test(normalizedText);
-    return !hasMoneyAnswer;
-  }
-  const hasMathSignal = /\d|一|二|三|四|五|六|七|八|九|十|百|大|小|多|少|等|加|减|乘|除|平均|一共|还剩|因为|所以/.test(normalizedText);
-  return normalizedText.length > 8 && !hasMathSignal;
+  return LezhiAnswers.classify(normalizedText, currentAnswerQuestion()).kind !== "answer";
 }
 
 function looksLikeShortAnswer(normalizedText) {
@@ -11386,7 +11415,7 @@ function isUnclearChildText(normalizedText) {
 
 function isCannotAnswerText(normalizedText) {
   if (!normalizedText) return false;
-  return /不知道|不会|不会答|不会说|不懂|没懂|没听懂|不明白|讲不出|讲不出来|不知道怎么说|我不会|我不知道|我讲不出来|老师讲一下|老师讲讲|教我一下/.test(normalizedText);
+  return /^(?:(?:老师|我|这道题|这题|这个|这一步|这里|还是|也|真的|有点))*(?:不知道|不会|不会答|不会说|不懂|没懂|没听懂|不明白|讲不出|讲不出来|不知道怎么说|不知道怎么做|不知道怎么算|不会算|算不出来)(?:了|呀|啊|呢|这道题|这题|这个)?$/.test(normalizedText) || /^(?:老师讲一下|老师讲讲|教我一下|我没听懂|我不理解)$/.test(normalizedText);
 }
 
 function formatExpectedAnswer(question, lesson) {
@@ -11606,7 +11635,7 @@ function findRequestedLessonIndex(text) {
     "下一个",
     "下一题",
     "重新选",
-  ].some((keyword) => normalized.includes(normalizeText(keyword)));
+  ].some((keyword) => normalized.replace(/^(?:老师|请|我想|帮我|我想要|我们|我要)/,"").replace(/吧$|好吗$|可以吗$/,"") === normalizeText(keyword));
 
   const hasTopicSwitchIntent = [
     "换",

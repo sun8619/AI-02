@@ -20,6 +20,20 @@
     return drawing + (label ? text(x, 190, name, 'text-anchor="middle"') : "");
   };
   const shapeTile = name => `<svg class="math-shape-tile" viewBox="185 30 150 135" role="img" aria-label="${escape(name)}">${shape(name,260,false,false)}</svg>`;
+  function angleTile(degrees, hint=false, label="这个角") {
+    const rad=degrees*Math.PI/180,x=90+65*Math.cos(rad),y=98-65*Math.sin(rad);
+    return `<svg class="math-reference-tile" viewBox="0 0 190 125" role="img" aria-label="${escape(label)}" data-angle-degrees="${degrees}"><path d="M166 98H90L${x} ${y}" fill="none" stroke="#345768" stroke-width="4" stroke-linecap="round"/>${hint ? '<path d="M90 28v70h76 M90 80h18v18" fill="none" stroke="#a76a15" stroke-width="2" stroke-dasharray="5 3"/>' : ''}<circle cx="90" cy="98" r="3" fill="#345768"/></svg>`;
+  }
+  function viewTile(view,label) {
+    const front='<rect x="45" y="15" width="100" height="92" rx="2"/><path d="M80 107V57h30v50"/><circle cx="104" cy="83" r="2"/>';
+    const side='<rect x="78" y="15" width="34" height="92" rx="2"/>';
+    const top='<rect x="45" y="43" width="100" height="34" rx="2"/>';
+    return `<svg class="math-reference-tile" data-object-view="${view}" viewBox="0 0 190 125" role="img" aria-label="${escape(label)}"><g fill="#e0eee8" stroke="#345768" stroke-width="3">${{front,side,top}[view]}</g></svg>`;
+  }
+  function observationReference(hint) {
+    // A 2D worksheet diagram of one box, with a door only on its front face.
+    return `<svg class="math-object-reference" viewBox="0 0 320 200" role="img" aria-label="同一个玩具小屋，门在正面，侧面较窄，屋顶没有门"><path d="M105 65h85v96h-85z" fill="#dcece4" stroke="#345768" stroke-width="3"/><path d="M190 65l34-26v96l-34 26z" fill="#a9c9c4" stroke="#345768" stroke-width="3"/><path d="M105 65l34-26h85l-34 26z" fill="#e4ebee" stroke="#345768" stroke-width="3"/><path d="M132 161v-48h30v48" fill="none" stroke="#345768" stroke-width="3"/><circle cx="156" cy="139" r="2" fill="#345768"/>${hint ? '<path d="M148 193v-25m-6 7 6-7 6 7 M282 103h-45m8-6-8 6 8 6 M168 8v25m-6-7 6 7 6-7" fill="none" stroke="#a76a15" stroke-width="3"/>'+text(90,190,"门前")+text(255,88,"旁边")+text(181,20,"上方") : ''}</svg>`;
+  }
   const features = {
     长方体:"看平平的面，相对的面一样。",正方体:"看六个面，都是一样大的正方形。",圆柱:"看两端的圆面，再看中间弯曲的面。",球:"转着看：整个表面弯曲，没有平平的面。",
     三角形:"沿边走一圈，数直边和拐角。",圆:"沿轮廓走一圈，观察有没有拐角。",圆形:"沿轮廓走一圈，观察有没有拐角。",正方形:"比较四条边，再看四个角。",长方形:"比较相对的两条边，再看四个角。",平行四边形:"看相对的两条边是否一直一样远。",
@@ -36,6 +50,12 @@
     const prompt = String(question?.visualPrompt || question?.prompt || "");
     const hint = mode === "hint" || mode === "step" || mode === "solution";
     const numbers = [...prompt.matchAll(/\d+/g)].map(m => Number(m[0]));
+    if (question.choices?.length && family === "angle" && question.visualModel?.kind==="angle") {
+      return `<div class="math-reference-task"><figure class="math-target-figure"><figcaption>题目中的角</figcaption>${angleTile(question.visualModel.degrees,hint)}${hint ? '<p>虚线是直角：顶点和一条边对齐，再比张口。</p>' : ''}</figure><div class="math-choice-figures has-three">${question.choices.map(c=>`<figure data-visual-choice="${escape(c.label)}">${angleTile({直角:90,锐角:45,钝角:125}[c.text],false,c.text)}<figcaption><b>${escape(c.label)}</b> ${escape(c.text)}</figcaption></figure>`).join('')}</div></div>`;
+    }
+    if (question.choices?.length && family === "observation" && question.visualModel?.kind==="observation") {
+      return `<div class="math-reference-task"><div class="math-object-scene"><figure><figcaption>同一个小屋</figcaption>${observationReference(hint)}</figure><figure><figcaption>看到的样子</figcaption>${viewTile(question.visualModel.view,"题目中的观察结果")}</figure></div><div class="math-choice-figures has-three">${question.choices.map(c=>`<figure data-visual-choice="${escape(c.label)}">${viewTile({正面:"front",侧面:"side",上面:"top"}[c.text],c.text)}<figcaption><b>${escape(c.label)}</b> ${escape(c.text)}</figcaption></figure>`).join('')}</div>${hint ? '<p>先找门前、旁边和上方的位置，再比较各自看到的轮廓。</p>' : ''}</div>`;
+    }
     if (question.choices?.length && family === "shape") {
       return `<div class="math-choice-figures">${question.choices.map(choice=>`<figure data-visual-choice="${escape(choice.label)}">${shapeTile(choice.text)}<figcaption><b>${escape(choice.label)}</b> ${escape(choice.text)}</figcaption>${hint ? `<p>${escape(features[choice.text] || "沿着轮廓看一圈，比较题目说的特征。")}</p>` : ""}</figure>`).join("")}</div>`;
     }
@@ -112,7 +132,8 @@
       const ends = prompt.match(/左端.*?(\d+)厘米.*?右端.*?(\d+)厘米/);
       if (ends) {
         const a = +ends[1], b = +ends[2], max = Math.max(10, b), scale = 440 / max;
-        return svg(`<line x1="40" y1="140" x2="480" y2="140" stroke="#345768" stroke-width="3"/>${Array.from({length:max+1}, (_,i) => `<line x1="${40+i*scale}" x2="${40+i*scale}" y1="130" y2="150" stroke="#345768"/>${text(40+i*scale,175,i,'text-anchor="middle"')}`).join("")}<line x1="${40+a*scale}" x2="${40+b*scale}" y1="95" y2="95" stroke="#198667" stroke-width="8"/>${hint ? Array.from({length:b-a},(_,i)=>`<rect x="${40+(a+i)*scale+2}" y="106" width="${scale-4}" height="16" fill="${i%2 ? "#99c7e5" : "#b8e3cf"}"/>`).join("") : ""}${text(260,218,hint ? "数间隔，不数刻度线" : "两个端点之间有几厘米？",'text-anchor="middle"')}`, prompt);
+        const startQuestion=/(?:左端|起点)[^，。；,]*?(?:几|多少)/.test(question.prompt || "");
+        return svg(`<line x1="40" y1="140" x2="480" y2="140" stroke="#345768" stroke-width="3"/>${Array.from({length:max+1}, (_,i) => `<line x1="${40+i*scale}" x2="${40+i*scale}" y1="130" y2="150" stroke="#345768"/>${text(40+i*scale,175,i,'text-anchor="middle"')}`).join("")}<line x1="${40+a*scale}" x2="${40+b*scale}" y1="95" y2="95" stroke="#198667" stroke-width="8"/>${hint ? (startQuestion ? `<path d="M${40+a*scale} 96v58" stroke="#a76a15" stroke-width="3" stroke-dasharray="4 3"/>` : Array.from({length:b-a},(_,i)=>`<rect x="${40+(a+i)*scale+2}" y="106" width="${scale-4}" height="16" fill="${i%2 ? "#99c7e5" : "#b8e3cf"}"/>`).join("")) : ""}${text(260,218,startQuestion ? (hint ? "沿左端的虚线往下找刻度" : "左端对着哪个刻度？") : hint ? "数间隔，不数刻度线" : "两个端点之间有几厘米？",'text-anchor="middle"')}`, prompt);
       }
       const segment=prompt.match(/长(\d+)厘米的线段/);
       if(segment) return diagram({question:{...question,prompt:`线段左端对着0厘米，右端对着${segment[1]}厘米。`,visualPrompt:""},family,mode});
@@ -123,8 +144,9 @@
       const rows = [...prompt.matchAll(/\|\s*([^|\n]+)\s*\|\s*(\d+)\s*\|/g)].map(m => ({label:m[1].trim(),value:+m[2]}));
       if (rows.length) {
         const max = Math.max(...rows.map(x=>x.value),1);
-        const focus=String(question.prompt||"").match(/([^\n。？]+)对应的数量/)?.[1];
-        return `<div class="math-data">${rows.map(row => `<div class="math-data-row ${hint && focus?.endsWith(row.label) ? "is-emphasized" : ""}"><span>${escape(row.label)}</span><div><i style="width:${row.value / max * 100}%"></i></div><strong>${row.value}</strong></div>`).join("")}${hint ? `<p>${focus ? '找到问题中的类别，沿着这一行看右边的数，不要看成上下另一行。' : /多多少/.test(prompt) ? '先把每一类的名字和数量对应好。较多数减较少数，才能知道多几个。' : '先对准问题中的类别，再读同一行的数量。求总数就合起来，比较多少就比各项数量。'}</p>` : ""}</div>`;
+      const focus=String(question.prompt||"").match(/([^\n。？]+)对应的数量/)?.[1];
+        const sum=hint && !focus && /一共|总人数|总数/.test(question.prompt || "");
+        return `<div class="math-data">${rows.map(row => `<div class="math-data-row ${hint && focus?.endsWith(row.label) ? "is-emphasized" : ""}"><span>${escape(row.label)}</span><div><i style="width:${row.value / max * 100}%"></i></div><strong>${row.value}</strong></div>`).join("")}${sum ? `<div class="math-sum-row">${rows.map(row=>`<span>${escape(row.label)} ${row.value}</span>`).join('<span>+</span>')}<span>= ?</span></div>` : ''}${hint ? `<p>${focus ? '找到问题中的类别，沿着这一行看右边的数，不要看成上下另一行。' : /多多少/.test(prompt) ? '先把每一类的名字和数量对应好。较多数减较少数，才能知道多几个。' : '先对准问题中的类别，再读同一行的数量。求总数就合起来，比较多少就比各项数量。'}</p>` : ""}</div>`;
       }
     }
     if (["time", "timeDuration"].includes(family)) {
@@ -133,7 +155,11 @@
       if (!clockTimes.length && hour && minute) clockTimes.push([+hour[1], (+minute[1] % 12)*5]);
       if (clockTimes.length) return `<div class="math-clocks">${clockTimes.slice(0,3).map(([h,m]) => {
         const hAngle=(h%12+m/60)*Math.PI/6, mAngle=m*Math.PI/30;
-        return `<svg viewBox="0 0 200 210" role="img" aria-label="钟面"><circle cx="100" cy="100" r="82" fill="#fff" stroke="#345768" stroke-width="3"/>${Array.from({length:12},(_,i)=>text(100+66*Math.sin((i+1)*Math.PI/6),105-66*Math.cos((i+1)*Math.PI/6),i+1,'text-anchor="middle"')).join("")}<line x1="100" y1="100" x2="${100+43*Math.sin(hAngle)}" y2="${100-43*Math.cos(hAngle)}" stroke="#198667" stroke-width="7" stroke-linecap="round"/><line x1="100" y1="100" x2="${100+62*Math.sin(mAngle)}" y2="${100-62*Math.cos(mAngle)}" stroke="#477db0" stroke-width="4" stroke-linecap="round"/></svg>`;
+        const focusMinute=/长针|分针/.test(question.prompt || "") && !/短针|时针/.test(question.prompt || "");
+        const focusHour=/短针|时针/.test(question.prompt || "") && !/长针|分针/.test(question.prompt || "");
+        const ticks=hint ? Array.from({length:60},(_,i)=>{const a=i*Math.PI/30;return `<line x1="${100+76*Math.sin(a)}" y1="${100-76*Math.cos(a)}" x2="${100+(i%5 ? 80 : 83)*Math.sin(a)}" y2="${100-(i%5 ? 80 : 83)*Math.cos(a)}" stroke="#638079" stroke-width="${i%5 ? 1 : 2}"/>`;}).join("") : "";
+        const markedMinutes=hint && !focusHour && m>0 ? `<path d="M100 18A82 82 0 ${m>30 ? 1 : 0} 1 ${100+82*Math.sin(mAngle)} ${100-82*Math.cos(mAngle)}" fill="none" stroke="#b07923" stroke-width="5"/>` : "";
+        return `<svg viewBox="0 0 200 210" role="img" aria-label="钟面"><circle cx="100" cy="100" r="82" fill="#fff" stroke="#345768" stroke-width="3"/>${ticks}${markedMinutes}${Array.from({length:12},(_,i)=>text(100+66*Math.sin((i+1)*Math.PI/6),105-66*Math.cos((i+1)*Math.PI/6),i+1,'text-anchor="middle"')).join("")}<line data-clock-hand="hour" x1="100" y1="100" x2="${100+43*Math.sin(hAngle)}" y2="${100-43*Math.cos(hAngle)}" stroke="${hint && focusHour ? '#a76a15' : '#198667'}" stroke-width="7" stroke-linecap="round" opacity="${hint && focusMinute ? .35 : 1}"/><line data-clock-hand="minute" x1="100" y1="100" x2="${100+62*Math.sin(mAngle)}" y2="${100-62*Math.cos(mAngle)}" stroke="${hint && focusMinute ? '#a76a15' : '#477db0'}" stroke-width="4" stroke-linecap="round" opacity="${hint && focusHour ? .35 : 1}"/></svg>`;
       }).join("")}</div>${hint ? `<p>${family === "timeDuration" ? (clockTimes[0][0]===clockTimes[1]?.[0] ? '开始和结束在同一小时内，数分针从开始到结束走了几分。' : '先从开始数到下一个整时，再数整时到结束。钟面上一整圈是60分。') : /较早|最早|先后/.test(prompt) ? '先比几时；几时相同，再比几分。' : '短针指几时：还没到下一个数，就读前面的时数。长针看几分：一大格是5分。'}</p>` : ""}`;
     }
     if (family === "angle" && !/^判断对错/.test(prompt)) {
@@ -174,7 +200,10 @@
     }
     if (family === "arrangement") {
       const numbersTask=prompt.match(/用数字([\d、]+)组成/);
-      if(numbersTask) return `<div class="math-quantity"><p>可用数字：${escape(numbersTask[1])}</p><div class="math-parts"><span>十位：?</span><span>个位：?</span></div>${hint ? '<p>先固定一个十位，从剩下的数字里轮流选个位，再换十位。</p>' : ""}</div>`;
+      if(numbersTask) {
+        const digits=numbersTask[1].split('、');
+        return `<div class="math-quantity"><p>可用数字：${escape(numbersTask[1])}</p><div class="math-parts"><span>十位：${hint ? digits[0] : '?'}</span><span>个位：?</span></div>${hint ? `<div class="math-sequence">${digits.slice(1).map(n=>`<span>${digits[0]} → ${n}</span>`).join('')}</div><p>先固定一个十位，从剩下的数字里轮流选个位，再换十位。</p>` : ""}</div>`;
+      }
       if(numbers.length>=2 && numbers[0]<=5 && numbers[1]<=5) return svg(`${Array.from({length:numbers[0]},(_,i)=>text(110,45+i*32,`第${i+1}种`)).join("")}${Array.from({length:numbers[1]},(_,i)=>text(340,45+i*32,`第${i+1}种`)).join("")}${hint ? Array.from({length:numbers[1]},(_,i)=>`<path d="M185 40L325 ${40+i*32}" stroke="#3e8871" stroke-width="2"/>`).join("") : ""}${text(260,225,"每边各选一种，怎样不重复、不遗漏？",'text-anchor="middle"')}`,prompt);
     }
     if (family === "motion" && hint) {
@@ -191,14 +220,14 @@
     const written=escape(prompt).replace(/\n/g,"<br>");
     return `<div class="math-givens">${hint ? marked(prompt).replace(/\n/g,"<br>") : written}</div>`;
   }
-  const helpLabels={shape:"比较图形特征",logic:"找排除的线索",observation:"找观察的位置",placeValue:"把数位摆出来",time:"看长针和短针",timeDuration:"在钟面上数",money:"把钱换一换",moneyApplication:"画出钱的关系",measure:"标出单位和刻度",data:"对着表找一行",arrangement:"连一连试试",pattern:"找重复和变化",compare:"把两边对一对",division:"分一分看看",remainderDivision:"分一分看看",remainderApplication:"看分完剩多少",calculation:"把计算画出来",makeTenAdd:"用十格框看看",breakTenSubtract:"把十拆开看看",multiplication:"看看每组几个",motion:"看它怎样动"};
+  const helpLabels={shape:"比较图形特征",angle:"和直角对一对",logic:"找排除的线索",observation:"找观察的位置",placeValue:"把数位摆出来",time:"看长针和短针",timeDuration:"在钟面上数",money:"把钱换一换",moneyApplication:"画出钱的关系",measure:"标出单位和刻度",data:"对着表找一行",arrangement:"连一连试试",pattern:"找重复和变化",compare:"把两边对一对",division:"分一分看看",remainderDivision:"分一分看看",remainderApplication:"看分完剩多少",calculation:"把计算画出来",makeTenAdd:"用十格框看看",breakTenSubtract:"把十拆开看看",multiplication:"看看每组几个",motion:"看它怎样动"};
   function help(payload) {
     const family=contextFamily(payload.question,payload.family);
     const normal=diagram({...payload,family,mode:"question"});
     const hinted=diagram({...payload,family,mode:"hint"});
     // No decorative state-only change counts as a useful teaching action.
     if(normal===hinted || normal.replace(/ (?:is-emphasized|math-sequence-hint)/g,"")===hinted.replace(/ (?:is-emphasized|math-sequence-hint)/g,"")) return null;
-    const cues={shape:"把每个图都留下来，照着图旁的特征比较。",logic:"标出的都是题目给的条件，先排除不可能的。",observation:"先找题目说的观察位置，再看朝着这一边的特征。",time:"短针看几时，长针看几分。",money:"看每部分钱的单位，再按图中关系换一换。",data:"对照标出的名称和同一行的数字。"};
+    const cues={shape:"把每个图都留下来，照着图旁的特征比较。",angle:"虚线是直角。把顶点和一条边对齐，再比较另一条边张开的大小。",logic:"标出的都是题目给的条件，先排除不可能的。",observation:"先找小屋的门，再看看旁边和屋顶。把看到的轮廓和三个方向对一对。",time:"短针看几时，长针看几分。",money:"看每部分钱的单位，再按图中关系换一换。",data:"对照标出的名称和同一行的数字。"};
     return {label:helpLabels[family] || "标出题目线索",cue:cues[family] || "看图里新标出的部分，再试试当前这个问题。",family};
   }
   function render(payload) {

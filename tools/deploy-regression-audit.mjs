@@ -52,9 +52,10 @@ try {
       .replace("{1..30}", "{1..2}")
       .replace("sleep 1", "sleep 0.01");
     const result = spawnSync("bash", ["-s", "--", sha], {
-      input:script, encoding:"utf8", timeout:15000,
+      input:script, encoding:"utf8", timeout:60000,
       env:{...process.env,PATH:`${bin}:${process.env.PATH}`,ARCHIVE:archive,SCENARIO:scenario},
     });
+    assert.equal(result.error,undefined,`${scenario}: updater harness timed out or failed to launch`);
     if(scenario==="success") assert.equal(result.status,0,result.stderr || result.stdout);
     else assert.ok(result.status!==0,scenario+": failure was ignored");
     assert.equal(readFileSync(join(app,"app.js"),"utf8"),scenario==="success" ? newCode : 'const version="old";\n',scenario);

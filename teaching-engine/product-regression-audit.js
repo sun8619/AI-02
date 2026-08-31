@@ -102,7 +102,8 @@ check("all 462 whole-answer submissions advance; wrong answers start teaching",(
       evaluateQuestionBankAttempt(q.answer,"typed");
       if(!state.assessmentMode || state.remediationCheck) errors.push(q.id+": valid answer did not advance");
       changeLesson("audit",i); activateLessonQuestion(l,q,0);
-      evaluateQuestionBankAttempt("99999","typed");
+      const wrong = /\\d/.test(q.answer) ? q.answer.replace(/\\d+/,n=>String(+n+101)) : q.choices?.find(c=>!LezhiAnswers.whole(c.text,q))?.text || (q.answer==="对" ? "错" : q.answer==="错" ? "对" : "99999");
+      evaluateQuestionBankAttempt(wrong,"typed");
       const r=state.remediationCheck;
       if(!r || !r.checkPrompt || !r.explanation) errors.push(q.id+": no remedial teaching");
       else {

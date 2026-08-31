@@ -13,7 +13,13 @@
   }
   function summary(days) {
     const rows=read().filter(r=>r.at>=Date.now()-days*day);
-    return {sessions:rows.length,independent:rows.reduce((s,r)=>s+r.independent,0),assisted:rows.reduce((s,r)=>s+r.assisted,0),minutes:Math.round(rows.reduce((s,r)=>s+r.seconds,0)/60)};
+    const seconds=rows.reduce((s,r)=>s+(Number.isFinite(r.seconds) ? Math.max(0,r.seconds) : 0),0);
+    return {sessions:rows.length,independent:rows.reduce((s,r)=>s+r.independent,0),assisted:rows.reduce((s,r)=>s+r.assisted,0),seconds,minutes:Math.round(seconds/60)};
+  }
+  function duration(seconds) {
+    if(seconds>0 && seconds<1) return "少于1秒";
+    const total=Math.max(0,Math.floor(seconds || 0)),minutes=Math.floor(total/60),rest=total%60;
+    return minutes ? `${minutes}分${rest ? rest+"秒" : "钟"}` : `${rest}秒`;
   }
   function due() {
     const latest=new Map(); for(const row of read()) latest.set(row.topic,row);
@@ -34,5 +40,5 @@
       return {topic,title:latest.title,volume:latest.volume || "",status,delayedCount:delayed.length,delayedPassed:delayed.filter(r=>r.outcome==="passed").length,current,previous,history};
     });
   }
-  root.LezhiHistory={read,record,summary,due,trends,clear(){try{localStorage.removeItem(key);return true;}catch{return false;}}};
+  root.LezhiHistory={read,record,summary,duration,due,trends,clear(){try{localStorage.removeItem(key);return true;}catch{return false;}}};
 })(window);
