@@ -1,6 +1,6 @@
 # v94 服务器更新
 
-固定代码提交：`4d9eec091b73f2eb576e7d57558041da1ffdf0c2`
+固定代码提交：`24050532ace0a263e923c813bdaf43e3132fe648`
 
 版本：`v94-20260831`
 
@@ -12,7 +12,7 @@
 
 ```bash
 cd /opt/qibu-ai
-bash tools/update-server.sh 4d9eec091b73f2eb576e7d57558041da1ffdf0c2
+bash tools/update-server.sh 24050532ace0a263e923c813bdaf43e3132fe648
 ```
 
 ## 没有更新脚本时
@@ -22,7 +22,7 @@ bash tools/update-server.sh 4d9eec091b73f2eb576e7d57558041da1ffdf0c2
 ```bash
 bash <<'SH'
 set -Eeuo pipefail
-REV=4d9eec091b73f2eb576e7d57558041da1ffdf0c2
+REV=24050532ace0a263e923c813bdaf43e3132fe648
 TMP=$(mktemp -d /tmp/lezhi-launch.XXXXXX)
 trap 'rm -rf "$TMP"' EXIT
 curl -fL --retry 8 --connect-timeout 20 --max-time 300 \
