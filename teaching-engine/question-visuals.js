@@ -185,6 +185,8 @@
       const left = prompt.split(/等于|是几|=|换成/)[0].replace(/^.*?填空[:：]/, "");
       const quantities = [...left.matchAll(/(\d+)\s*(元|角|分)/g)].filter(m=>+m[1]>0);
       const target=[...prompt.matchAll(/(?:多少|几|_{2,})\s*(元|角|分)/g)].at(-1)?.[1];
+      const targets = root.LezhiAnswers?.multipart(question)?.slots.map(s => s.unit).filter(Boolean);
+      if (quantities.length && targets?.length > 1) return `<div class="math-quantity"><div class="math-money">${quantities.map(m=>`<div class="math-money-amount"><i class="math-note">${m[1]}${m[2]}</i><strong>${m[1]}${m[2]}</strong></div>`).join('<span>+</span>')}</div><div class="math-groups">${targets.map(unit=>`<strong>几${escape(unit)}？</strong>`).join('<span>，</span>')}</div>${hint ? '<p>先想1元能换几个1角，再把角换成分。</p>' : ''}</div>`;
       const relation={元角:"每1元可以换10角",元分:"每1元可以换100分",角分:"每1角可以换10分",角元:"每10角可以换1元",分角:"每10分可以换1角",分元:"每100分可以换1元"};
       if (quantities.length) return `<div class="math-money">${quantities.map(m=>`<div class="math-money-amount">${+m[1]<=5 ? Array.from({length:+m[1]},()=>`<i class="${m[2]==="元" ? "math-note" : "math-coin"}">1${m[2]}</i>`).join("") : ""}<strong>${m[1]}${m[2]}</strong>${hint ? `<span>${relation[m[2]+target] || "这部分单位不用变，先留着。"}</span>` : ""}</div>`).join('<span class="math-join">+</span>')}<span class="math-join">→</span><strong>?</strong></div>`;
     }

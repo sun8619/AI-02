@@ -2106,14 +2106,16 @@ function childFacingPrompt(prompt) {
   const tablePrompt = markdownTableToChildPrompt(prompt);
   const text = stripExercisePrefix(tablePrompt || prompt);
   if (!text) return "";
-  const moneyKnownAnswer = text.match(/^填空[:：]\s*(.+?)=\s*\d+\s*(角|分)$/);
-  if (moneyKnownAnswer) return `${moneyKnownAnswer[1]}等于多少${moneyKnownAnswer[2]}？`;
   const moneyKnownTwoAnswers = text.match(/^填空[:：]\s*(.+?)=\s*\d+\s*(角|分)=\s*\d+\s*(分)$/);
   if (moneyKnownTwoAnswers) return `${moneyKnownTwoAnswers[1]}等于多少${moneyKnownTwoAnswers[2]}，又等于多少${moneyKnownTwoAnswers[3]}？`;
-  const moneyBlank = text.match(/^(.+?)=_{2,}\s*(角|分)$/);
-  if (moneyBlank) return `${moneyBlank[1]}等于多少${moneyBlank[2]}？`;
+  const moneyKnownAnswer = text.match(/^填空[:：]\s*([^=]+)=\s*\d+\s*(角|分)$/);
+  if (moneyKnownAnswer) return `${moneyKnownAnswer[1]}等于多少${moneyKnownAnswer[2]}？`;
   const moneyDoubleBlank = text.match(/^(.+?)=_{2,}\s*(角|分)=_{2,}\s*(分)$/);
   if (moneyDoubleBlank) return `${moneyDoubleBlank[1]}等于多少${moneyDoubleBlank[2]}，又等于多少${moneyDoubleBlank[3]}？`;
+  const moneyBlank = text.match(/^([^=]+)=_{2,}\s*(角|分)$/);
+  if (moneyBlank) return `${moneyBlank[1]}等于多少${moneyBlank[2]}？`;
+  const remainder = text.match(/^(\d+)÷(\d+)=_{2,}…+_{2,}$/);
+  if (remainder) return `${remainder[1]}除以${remainder[2]}，商是几，余数是几？`;
   const result = text
     .replace(/^填空[:：]\s*/, "")
     .replace(/_{2,}/g, "多少")
@@ -6396,6 +6398,7 @@ function getQuestionBankSample(lesson = currentLesson()) {
 
 function activateLessonQuestion(lesson, question, cursor = 0) {
   if (!lesson || !question) return false;
+  state.multipartAnswer = null;
   clearRemediationCheck();
   lesson.activeQuestion = question;
   lesson.problem = question.prompt;
@@ -6588,7 +6591,7 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
 
 function createLessonStartMessage(lesson, starter, reason = "") {
   const intro = reason ? "好，我们换一个知识点。" : "";
-  if (lesson.useQuestionBankTutor) return `${intro}${childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem)} 先说最后的答案，不会我们一起想。`;
+  if (lesson.useQuestionBankTutor) return `${intro}${childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem)} ${LezhiAnswers.multipart(lesson.activeQuestion)?.instruction || '先说最后的答案，不会我们一起想。'}`;
   if (lesson.useQuestionBankTutor && lesson.activeQuestion && starter) {
     const prompt = childFacingPrompt(lesson.activeQuestion.prompt);
     const family = inferActiveQuestionFamily(lesson, lesson.activeQuestion);
@@ -6797,7 +6800,7 @@ function renderKidCurrentProblem(lesson) {
     : Math.min(ladder.length || 1, Math.max(1, Number(plan?.index ?? state.completedSteps) + 1));
   const totalSteps = wholeQuestionMode ? assessmentTotal : ladder.length || 1;
   const currentLabel = wholeQuestionMode
-    ? "直接答整题"
+    ? pendingMultipartPrompt() || "直接答整题"
     : state.remediationCheck?.checkPrompt || plan?.label || state.currentAtomName || "看清题目";
   const countUnit = wholeQuestionMode ? "题" : "步";
   return `
@@ -7072,6 +7075,7 @@ function renderShoppingAmountBox(label, amount, active) {
 }
 
 function getKidBoardPrompt(lesson) {
+  if (pendingMultipartPrompt()) return pendingMultipartPrompt();
   if(lesson?.useQuestionBankTutor) return childFacingPrompt(lesson.activeQuestion?.stem || lesson.activeQuestion?.prompt || lesson.problem || "");
   if (state.remediationCheck?.checkPrompt) return state.remediationCheck.checkPrompt;
   if (isWholeQuestionTurn()) {
@@ -7573,7 +7577,8 @@ function getCurrentVisualPlan(lesson = currentLesson()) {
       index: Math.max(0, (state.passedQuestionIds || []).length),
       totalSteps: state.assessmentTargetCount || 3,
       label: "直接答整题",
-      prompt: childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || ""),
+      prompt: pendingMultipartPrompt() || childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || ""),
+      answerQuestion: lesson?.activeQuestion,
       answerKeywords: lesson?.activeQuestion?.answerKeywords || [],
       isReason: false,
       isFinal: false,
@@ -9232,7 +9237,7 @@ function createVoiceRecognitionContext() {
     ? question?.prompt || lesson?.problem || ""
     : formatChildStepPrompt(plan) || question?.prompt || lesson?.problem || "";
   const answerQuestion = currentAnswerQuestion();
-  const prompt = answerQuestion?.prompt || resolveCurrentVoicePrompt(fallbackPrompt);
+  const prompt = pendingMultipartPrompt() || answerQuestion?.prompt || resolveCurrentVoicePrompt(fallbackPrompt);
   // Voice validation must follow the question the child can currently see.
   // Mixing the final exercise answer into an earlier micro-step makes valid
   // replies such as "右边" look like invalid comparison-symbol answers.
@@ -9432,7 +9437,7 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
       heardText,
       submitText: "",
       reason: "not-an-answer",
-      message: `我们回到这一题：${shortVoicePrompt(context.prompt)}。可以说答案，也可以说“我没听懂”。`,
+      message: `我们回到这一题：${pendingMultipartPrompt() || childFacingPrompt(context.prompt)} ${LezhiAnswers.multipart(context.answerQuestion)?.instruction || '可以说答案，也可以说“我没听懂”。'}`,
     };
   }
 
@@ -10496,7 +10501,7 @@ function redirectNonAnswer(text) {
   const classification = LezhiAnswers.classify(text, question);
   if (classification.kind === "answer") return false;
   const prefix = classification.shape === "multiple" ? "这题还有一部分没有说完。" : classification.kind === "partial" ? "这句还没说完整，我们接着来。" : "我听到了。我们先看眼前这一题。";
-  state.aiMessage = `${prefix}${childFacingPrompt(question.prompt)} 可以回答，也可以说“我没听懂”。`;
+  state.aiMessage = `${prefix}${pendingMultipartPrompt() || childFacingPrompt(question.prompt)} ${LezhiAnswers.multipart(question)?.instruction || '可以回答，也可以说“我没听懂”。'}`;
   state.teacherReaction = "listening";
   state.isProcessing = false;
   state.voiceStatus = "idle";
@@ -10505,7 +10510,43 @@ function redirectNonAnswer(text) {
   return true;
 }
 
+function multipartContextKey(question = currentAnswerQuestion()) {
+  return [currentLesson().id, question?.id, question?.prompt, state.phase, state.completedSteps, Boolean(state.remediationCheck), isWholeQuestionTurn()].join("|");
+}
+
+function pendingMultipartPrompt() {
+  const pending = state.multipartAnswer;
+  if (!pending || pending.key !== multipartContextKey()) return "";
+  const contract = LezhiAnswers.multipart(currentAnswerQuestion());
+  return contract?.slots.find((_,i) => pending.values[i] === undefined)?.ask || "";
+}
+
+function collectMultipartAnswer(text) {
+  const contract = LezhiAnswers.multipart(currentAnswerQuestion());
+  if (!contract || isCannotAnswerText(normalizeText(text))) return {text};
+  const key = multipartContextKey();
+  const previous = state.multipartAnswer?.key === key ? state.multipartAnswer.values : {};
+  const fresh = LezhiAnswers.readParts(text, contract);
+  const parts = fresh?.complete ? fresh : LezhiAnswers.readParts(text, contract, previous);
+  if (!parts) return {text};
+  if (parts.complete) {
+    state.multipartAnswer = null;
+    return {text:contract.slots.map((_,i) => parts.values[i]).join("，")};
+  }
+  state.multipartAnswer = {key, values:parts.values};
+  state.lastStudentText = text;
+  state.aiMessage = `这一部分记下了。${pendingMultipartPrompt()}`;
+  state.teacherReaction = "listening";
+  state.isProcessing = false;
+  state.voiceStatus = "idle";
+  speakCurrentMessage();
+  return {waiting:true};
+}
+
 function evaluateLocally(text, inputType) {
+  const multipart = collectMultipartAnswer(text);
+  if (multipart.waiting) return;
+  text = multipart.text;
   if (redirectNonAnswer(text)) return;
   const lesson = currentLesson();
   if (state.remediationCheck) {
@@ -10786,6 +10827,7 @@ function sanitizeMicrostepExplanation(remediation, lesson) {
 }
 
 function teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal, attempt = null) {
+  state.multipartAnswer = null;
   state.assistedQuestionIds = uniqueKeywords([...(state.assistedQuestionIds || []), lesson.activeQuestion?.id]);
   const nextAttempt = attempt === null ? Math.max(0, Number(state.remediationAttempts) || 0) : Math.max(0, Number(attempt) || 0);
   if (nextAttempt >= 3) {
@@ -11066,7 +11108,7 @@ function activateNextAssessmentQuestion(lesson, lead = "") {
   state.aiMessage = [
     lead,
     `现在做一道完整题：${childFacingPrompt(selected.prompt || lesson.problem)}`,
-    "这次不用拆小步，只说最后答案。",
+    LezhiAnswers.multipart(selected)?.instruction || "这次不用拆小步，只说最后答案。",
   ]
     .filter(Boolean)
     .join(" ");

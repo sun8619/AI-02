@@ -27,14 +27,14 @@ try {
   await page.route("**/api/**",route=>route.request().method()==="GET" ? route.continue() : route.fulfill({status:503,contentType:"application/json",body:'{"error":"Provider disabled in browser regression"}'}));
   await page.goto(`http://127.0.0.1:${port}/`,{waitUntil:"domcontentloaded"});
   const results={pageErrors};
-  for(const name of ["browser-v92-audit","browser-v92-interaction-audit","browser-v93-audit"]) {
+  for(const name of ["browser-v92-audit","browser-v92-interaction-audit","browser-v93-audit","browser-multipart-audit"]) {
     const source=await readFile(new URL(`teaching-engine/${name}.js`,root),"utf8");
     results[name]=await new Script(`(${source})`,{filename:name}).runInThisContext()(page);
   }
-  await writeFile(new URL("output/playwright/v93-results.json",root),JSON.stringify(results,null,2));
+  await writeFile(new URL("output/playwright/v94-results.json",root),JSON.stringify(results,null,2));
   const failures=[...pageErrors,...Object.values(results).flatMap(result=>result && !Array.isArray(result) ? Object.entries(result).filter(([key])=>/errors$/i.test(key)).flatMap(([,items])=>items) : [])];
   if(failures.length)throw new Error(JSON.stringify(failures));
-  console.log("PASS browser: v92 coverage retained; v93 candidate diagrams, typed non-answers, picker typography and short-session durations",JSON.stringify(results["browser-v93-audit"]));
+  console.log("PASS browser: v92/v93 coverage retained; multipart answers and responsive prompts",JSON.stringify(results["browser-multipart-audit"]));
 } finally {
   await browser?.close();
   if(server.exitCode===null){server.kill();await once(server,"exit");}
