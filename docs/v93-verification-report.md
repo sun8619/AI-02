@@ -29,6 +29,13 @@ Release: `v93-20260831`. Date: 2026-08-31.
 - Source audit independently recomputes 128 numeric/comparison/conversion answers. Thirteen new authored angle/view facts are additionally checked. Other semantic answers still require teacher review.
 - Release manifest verifies 51 files. Deployment fixtures cover success, download/preflight/restart failure and stale-health rollback with protected configuration/data preserved. One local fixture run hit the old 15-second harness timeout under simultaneous heavy tests; isolated rerun passed, and the harness now allows 60 seconds and reports timeouts explicitly.
 
+## Release Evidence
+
+- Code commit: `3cfeea9e41077814d03a101e61051d0a29ca6191` on `sun8619/AI-02`.
+- Downloaded the pinned GitHub archive separately; verified all 51 manifest files, installed production-only dependencies and passed `npm test` from that fresh archive.
+- Independent Ubuntu/Node 20 pipeline: [Child learning regression](https://github.com/sun8619/AI-02/actions/runs/33360464318). Its live result is the source of truth for CI status.
+- The pinned, backup-and-rollback server command is in `docs/v93-server-update.md`. Publishing to GitHub does not update the running production server.
+
 ## Remaining Manual Gates
 
 This release is not a claim that every utterance is understood, speech recognition is solved, or the product is commercially mature. Real children, actual iOS/Android/WeChat microphone and autoplay behavior, weak-network interruptions, professional teaching review, and delayed retention need the manual acceptance checklist in `docs/v92-manual-acceptance.md`. Local tests do not deploy the live server or certify the live speech provider's configuration.
