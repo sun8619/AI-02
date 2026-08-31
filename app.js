@@ -2106,6 +2106,10 @@ function childFacingPrompt(prompt) {
   const tablePrompt = markdownTableToChildPrompt(prompt);
   const text = stripExercisePrefix(tablePrompt || prompt);
   if (!text) return "";
+  if (/规律/.test(text) && /_{2,}/.test(text)) {
+    const sequence=text.replace(/^(?:按规律填一填|找规律)[:：]\s*/, "").replace(/[,，、\s]*_{2,}[。？?]*$/, "");
+    return /[△○●■]/.test(sequence) ? `按规律接着排：${sequence}。接下来是什么图形？` : `看这些数：${sequence}。按规律，下一个数是几？`;
+  }
   const moneyKnownTwoAnswers = text.match(/^填空[:：]\s*(.+?)=\s*\d+\s*(角|分)=\s*\d+\s*(分)$/);
   if (moneyKnownTwoAnswers) return `${moneyKnownTwoAnswers[1]}等于多少${moneyKnownTwoAnswers[2]}，又等于多少${moneyKnownTwoAnswers[3]}？`;
   const moneyKnownAnswer = text.match(/^填空[:：]\s*([^=]+)=\s*\d+\s*(角|分)$/);
@@ -2117,10 +2121,18 @@ function childFacingPrompt(prompt) {
   const remainder = text.match(/^(\d+)÷(\d+)=_{2,}…+_{2,}$/);
   if (remainder) return `${remainder[1]}除以${remainder[2]}，商是几，余数是几？`;
   const result = text
+    .replace(/个_{2,}/g, "个几")
+    .replace(/读作_{2,}/g, "怎么读")
+    .replace(/(?:第[一二三四五六七八九十]+|[一二三四五六七八九十]+名)是_{2,}/g, match=>match.replace(/_{2,}/,"谁"))
+    .replace(/(现象叫|运动叫)_{2,}/g,"$1什么")
+    .replace(/(看到的是它的)_{2,}/g,"$1哪个面")
+    .replace(/(没有角的是)_{2,}/g,"$1哪个图形")
+    .replace(/可以拼成一个_{2,}/g,"可以拼成什么图形")
+    .replace(/(三角形、正方形和)_{2,}/g,"$1哪种图形")
     .replace(/^填空[:：]\s*/, "")
     .replace(/_{2,}/g, "多少")
-    .replace(/。+$/, "") + (/[？?]$/.test(text) ? "" : "？");
-  return naturalizeChildQuestion(result);
+    .replace(/。+$/, "");
+  return naturalizeChildQuestion(result + (/[？?]/.test(result) ? "" : "？"));
 }
 
 function stripExercisePrefix(prompt) {
@@ -2151,10 +2163,11 @@ function markdownTableToChildPrompt(prompt) {
   const before = raw.slice(0, tableStart).replace(/[：:]\s*$/, "");
   const afterMatch = raw.match(/\|\s*([^|]+?)\s*\|\s*([0-9一二两三四五六七八九十百千万]+)\s*\|/g) || [];
   const rows = [];
+  const unit=/\|\s*票数\s*\|/.test(raw) ? "票" : /\|\s*人数\s*\|/.test(raw) ? "人" : "";
   for (const row of afterMatch) {
     if (/---/.test(row) || /类别|数量|项目|票数/.test(row)) continue;
     const cells = row.split("|").map((cell) => cell.trim()).filter(Boolean);
-    if (cells.length >= 2) rows.push(`${cells[0]}${cells[1]}个`);
+    if (cells.length >= 2) rows.push(`${cells[0]}${cells[1]}${unit}`);
   }
   const tail = raw
     .slice(raw.lastIndexOf("|") + 1)
@@ -3166,6 +3179,9 @@ function softenTeacherScaffoldText(text) {
 }
 
 function teacherAdvanceMessage(nextPlan, previousPlan = null) {
+  if (safeCurrentLesson()?.useQuestionBankTutor && !nextPlan?.isReason) {
+    return `${LezhiCoach.fresh(coachMemory(), "step-success", ["这一步对了。", "对，这一点弄清楚了。", "这一问答对了。"])} ${formatCompactStepPrompt(nextPlan)}`;
+  }
   const bridge = String(previousPlan?.bridgeMessage || "").trim();
   const follow = String(nextPlan?.followPrompt || "").trim();
   const leadOptions = nextPlan?.isReason
@@ -3973,7 +3989,8 @@ function createTaskBoundGuidedSteps(lesson, question, family) {
       return [...new Set(places)].map(place => {
         const digit = Math.floor(+n/scales[place])%10;
         const position = place === "一" ? "个" : place;
-        return exact(`看${position}位`, `${n}的${position}位上是几？`, String(digit), `从右往左找数位，最右是个位，接着是十位、百位、千位。${n}的${position}位上是${digit}，表示${digit}个${place}。`, "place", {n:+n, place, scale:scales[place]});
+        const positions=["个","十","百","千"].slice(0,String(n).length).map(name=>`${name}位`).join("、");
+        return exact(`看${position}位`, `${n}的${position}位上是几？`, String(digit), `从右往左是${positions}。${n}的${position}位上是${digit}，表示${digit}个${place}。`, "place", {n:+n, place, scale:scales[place]});
       });
     }
     return [exact("按数位读写")];
@@ -3984,7 +4001,7 @@ function createTaskBoundGuidedSteps(lesson, question, family) {
   }
   if (family === "compare" && !/[□_]/.test(question.prompt)) return [exact("比较两个数")];
   if (family === "compare" && /较大.*较小/.test(question.prompt)) {
-    return [exact("找较大的数", `${numbers[0]}和${numbers[1]}，较大的是几？`, String(Math.max(...numbers.slice(0,2)))), exact("找较小的数", `${numbers[0]}和${numbers[1]}，较小的是几？`, String(Math.min(...numbers.slice(0,2))))];
+    return [true,false].map(larger=>exact(larger ? "找较大的数" : "找较小的数", `${numbers[0]}和${numbers[1]}，${larger ? "较大" : "较小"}的是几？`, String((larger ? Math.max : Math.min)(...numbers.slice(0,2))),question.explanation,"compare-value",{a:numbers[0],b:numbers[1],larger}));
   }
   if (family === "composition" && /[+\-]/.test(question.prompt)) return [exact("分开看每一个空")];
   if (family === "time") {
@@ -3996,7 +4013,8 @@ function createTaskBoundGuidedSteps(lesson, question, family) {
   if (family === "compare" && numbers.length >= 2) {
     const [a,b] = numbers;
     const side = a===b ? "一样多" : a>b ? "左边" : "右边";
-    return [exact("先比较数量", `左边${a}，右边${b}，哪边大？一样大也可以说一样大。`, a===b ? "一样多或一样大或相等" : `${side}或${Math.max(a,b)}`, `先看位数，位数一样时从最高位比。${a}和${b}比较，${a===b ? "两边一样大" : side+"的数大"}。`, "compare", {a,b}), exact("用符号表示",prompt,question.answer,"比较后，开口朝大的数，尖尖朝小的数；一样大用等号。")];
+    const compareHint=Math.max(a,b)<=20 ? `左边${a}个，右边${b}个。先配成${Math.min(a,b)}对，${a===b ? "两边都没剩，一样多" : `${side}还剩${Math.abs(a-b)}个，所以${side}多`}。` : `先看位数，位数一样时从最高位比。${a}和${b}比较，${a===b ? "两边一样大" : side+"的数大"}。`;
+    return [exact("先比较数量", `左边${a}，右边${b}，哪边大？一样大也可以说一样大。`, a===b ? "一样多或一样大或相等" : `${side}或${Math.max(a,b)}`, compareHint, "compare", {a,b}), exact("用符号表示",prompt,question.answer,"比较后，开口朝大的数，尖尖朝小的数；一样大用等号。")];
   }
   if (family === "composition" && /把\d+分成/.test(normalizeText(question.prompt))) {
     const [total,part] = numbers;
@@ -6210,6 +6228,7 @@ function recordMasteryEvidence(kind) {
 }
 
 let state = {
+  coach: {counts:{}, seed:Math.random(), paused:false, choices:false, pauseStartedAt:0, pausedMs:0},
   sessionStartedAt: Date.now(),
   voiceCounts: {accepted:0,uncertain:0},
   view: "child",
@@ -6237,7 +6256,7 @@ let state = {
   transcript: "",
   lastStudentText: "",
   aiContext: defaultLesson.initialContext,
-  aiMessage: `我们先试一道。${childFacingPrompt(defaultLesson.activeQuestion?.prompt || defaultLesson.problem)} 说最后的答案就可以。`,
+  aiMessage: LezhiCoach.task(defaultLesson, childFacingPrompt(defaultLesson.activeQuestion?.prompt || defaultLesson.problem).replace(/^(?:填空|判断|选择|计算|口算)[：:]\s*/, ""), {}, "start", LezhiAnswers.multipart(defaultLesson.activeQuestion)?.instruction || ""),
   currentStep: defaultLesson.initialStep,
   teachingState: "GUIDED_STEP",
   currentAtomName: defaultLesson.useQuestionBankTutor ? createGuidedStepPlan(defaultLesson, 0).label : "",
@@ -6591,7 +6610,7 @@ function createVariantQuestionMessage(lesson, question, starter, reason = "") {
 
 function createLessonStartMessage(lesson, starter, reason = "") {
   const intro = reason ? "好，我们换一个知识点。" : "";
-  if (lesson.useQuestionBankTutor) return `${intro}${childFacingPrompt(lesson.activeQuestion?.prompt || lesson.problem)} ${LezhiAnswers.multipart(lesson.activeQuestion)?.instruction || '先说最后的答案，不会我们一起想。'}`;
+  if (lesson.useQuestionBankTutor) return LezhiCoach.task(lesson, coachQuestion(lesson.activeQuestion), coachMemory(), "start", LezhiAnswers.multipart(lesson.activeQuestion)?.instruction || "");
   if (lesson.useQuestionBankTutor && lesson.activeQuestion && starter) {
     const prompt = childFacingPrompt(lesson.activeQuestion.prompt);
     const family = inferActiveQuestionFamily(lesson, lesson.activeQuestion);
@@ -6773,7 +6792,7 @@ function renderKidQuestionBubble(lesson) {
 
 function ensureTeacherMessageHasAnswerTarget(message, lesson, plan) {
   const value = String(message || "").trim();
-  if (!value || state.phase === "summary") return value;
+  if (!value || state.phase === "summary" || state.coach?.paused || state.coach?.choices) return value;
   if (plan?.isReason && /照着|跟着|说一遍|一句原因/.test(value)) return value;
   const tail = value.slice(-90);
   const hasQuestion = /[？?]/.test(tail);
@@ -6811,7 +6830,7 @@ function renderKidCurrentProblem(lesson) {
       </div>
       <div class="kid-task-step">
         <span>${wholeQuestionMode ? state.initialWholeQuestion ? "先试一题" : "整题检验" : state.remediationCheck ? "讲完马上试" : "这一小步"}</span>
-        <strong>${escapeText(currentLabel)}</strong>
+        <strong>${escapeText(LezhiCoach.target(currentLabel,lesson.activeQuestionFamily))}</strong>
       </div>
       <div class="kid-task-count" aria-label="第 ${currentNumber} ${countUnit}，共 ${totalSteps} ${countUnit}">
         <b>${currentNumber}</b><span>/ ${totalSteps}</span>
@@ -6844,6 +6863,7 @@ function renderKidVoicePanel() {
 }
 
 function renderAnswerChoices() {
+  if (state.coach?.paused || state.coach?.choices) return "";
   if (state.phase === "summary") return "";
   const question = state.remediationCheck?.answerQuestion || (isWholeQuestionTurn() ? currentLesson().activeQuestion : getCurrentVisualPlan()?.answerQuestion);
   if (!question) return "";
@@ -6860,6 +6880,8 @@ function renderVoiceConfirmation() {
 }
 
 function renderKidHelpButtons() {
+  if (state.coach?.paused) return `<div class="kid-help-row" aria-label="休息选择"><button class="kid-help-button" data-action="coach-resume">${icon("mic")}我准备好了</button><button class="kid-help-button" data-action="change-lesson">${icon("book")}选别的知识点</button></div>`;
+  if (state.coach?.choices) return `<div class="kid-help-row" aria-label="接下来怎么学"><button class="kid-help-button" data-action="coach-change">${icon("repeat")}换一道简单的</button><button class="kid-help-button" data-action="coach-pause">先休息</button></div>`;
   if (state.phase === "summary") return `<div class="kid-help-row"><button class="kid-help-button" data-action="next-lesson">${icon("book")}选下一个知识点</button><button class="kid-help-button" data-action="change-lesson">${icon("repeat")}换个知识点</button></div>`;
   const explainAction = state.phase === "repair" ? "cant-explain" : "dont-understand";
   const visualLesson = createActiveVisualLesson(currentLesson());
@@ -7076,7 +7098,7 @@ function renderShoppingAmountBox(label, amount, active) {
 
 function getKidBoardPrompt(lesson) {
   if (pendingMultipartPrompt()) return pendingMultipartPrompt();
-  if(lesson?.useQuestionBankTutor) return childFacingPrompt(lesson.activeQuestion?.stem || lesson.activeQuestion?.prompt || lesson.problem || "");
+  if(lesson?.useQuestionBankTutor) return LezhiCoach.target(childFacingPrompt(lesson.activeQuestion?.stem || lesson.activeQuestion?.prompt || lesson.problem || ""),inferActiveQuestionFamily(lesson));
   if (state.remediationCheck?.checkPrompt) return state.remediationCheck.checkPrompt;
   if (isWholeQuestionTurn()) {
     return childFacingPrompt(lesson?.activeQuestion?.prompt || lesson?.problem || "");
@@ -8756,7 +8778,9 @@ function saveLearningSession() {
   const lesson=currentLesson();
   if(!state.assessmentMode && !state.lastStudentText && !(state.assistedQuestionIds?.length) && !(state.passedQuestionIds?.length)) return;
   state.historyRecorded=true;
-  window.LezhiHistory?.record({topic:lesson.sourceQuestionBankId,title:lesson.node,volume:lesson.grade,completed:state.phase==="summary",passed:state.teachingState==="MASTERED",independent:state.passedQuestionIds?.length,assisted:state.assistedQuestionIds?.length,seconds:(Date.now()-(state.sessionStartedAt||Date.now()))/1000,voice:state.voiceCounts});
+  const memory=coachMemory();
+  const pausedMs=memory.pausedMs+(memory.paused ? Math.max(0,Date.now()-memory.pauseStartedAt) : 0);
+  window.LezhiHistory?.record({topic:lesson.sourceQuestionBankId,title:lesson.node,volume:lesson.grade,completed:state.phase==="summary",passed:state.teachingState==="MASTERED",independent:state.passedQuestionIds?.length,assisted:state.assistedQuestionIds?.length,seconds:Math.max(0,Date.now()-(state.sessionStartedAt||Date.now())-pausedMs)/1000,voice:state.voiceCounts});
 }
 
 function advanceToReviewQuestion() {
@@ -8941,6 +8965,11 @@ function showCurrentStepVisual() {
 async function handleAction(event) {
   const action = event.currentTarget.dataset.action;
 
+  if (action === "coach-resume" || action === "coach-pause" || action === "coach-change") {
+    handleChildInput({"coach-resume":"我准备好了","coach-pause":"先休息","coach-change":"换一道简单的"}[action], "button");
+    return;
+  }
+
   if (action === "child-home") {
     state.view = "child";
     state.showLessonPicker = false;
@@ -9095,6 +9124,7 @@ function changeLesson(reason, targetIndex = null) {
   }
   const starter = lesson.useQuestionBankTutor ? createGuidedStepPlan(lesson, 0) : null;
   state.lessonIndex = nextIndex;
+  state.coach = {counts:{}, seed:Math.random(), paused:false, choices:false, pauseStartedAt:0, pausedMs:0};
   state.phase = "guiding";
   state.initialWholeQuestion = true;
   state.assistedQuestionIds = [];
@@ -9346,6 +9376,13 @@ function processVoiceTranscript(transcript, metadata = {}) {
   if (metadata.generation !== undefined && metadata.generation !== voiceGeneration) return;
   state.voiceStatus = "idle";
   state.transcript = "";
+  const intent = LezhiCoach.intent(transcript);
+  const quality = normalizeVoiceMetadata(metadata);
+  if (intent && (quality.confidence === null || quality.confidence >= VOICE_LOW_CONFIDENCE) && !hasSevereVoiceQualityProblem(quality)) {
+    state.voiceConfirmation = null;
+    handleChildInput(transcript, "voice");
+    return;
+  }
   const assessment = assessVoiceTranscript(transcript, metadata, createVoiceRecognitionContext());
   state.voiceCounts ||= {accepted:0,uncertain:0};
   state.voiceCounts[assessment.status === "accept" ? "accepted" : "uncertain"]++;
@@ -9389,6 +9426,12 @@ function processVoiceTranscript(transcript, metadata = {}) {
   handleChildInput(assessment.submitText, "voice");
 }
 
+function hasSevereVoiceQualityProblem(quality) {
+  return (quality.durationMs > 0 && quality.durationMs < 220) ||
+    (quality.rms > 0 && quality.rms < VOICE_MIN_RMS * 0.5) ||
+    (quality.totalFrames > 0 && quality.voicedRatio < VOICE_MIN_VOICED_RATIO * 0.35);
+}
+
 function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceRecognitionContext()) {
   const heardText = String(transcript || "").replace(/^[，。！？、；：,.!?;:\s]+|[，。！？、；：,.!?;:\s]+$/g, "").trim();
   if (!heardText || isOnlyVoiceFiller(heardText)) {
@@ -9396,17 +9439,13 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
   }
 
   const quality = normalizeVoiceMetadata(metadata);
-  const severeQualityProblem =
-    (quality.durationMs > 0 && quality.durationMs < 220) ||
-    (quality.rms > 0 && quality.rms < VOICE_MIN_RMS * 0.5) ||
-    (quality.totalFrames > 0 && quality.voicedRatio < VOICE_MIN_VOICED_RATIO * 0.35);
-  if (severeQualityProblem) {
+  if (hasSevereVoiceQualityProblem(quality)) {
     return {
       status: "retry",
       heardText,
       submitText: "",
       reason: "audio-too-weak",
-      message: "声音有点短或太轻了。靠近一点，完整说一遍答案。",
+      message: "声音有点短或太轻了。靠近一点，再说一遍。",
     };
   }
 
@@ -10296,6 +10335,11 @@ function handleChildInput(text, inputType) {
   state.voiceConfirmation = null;
   state.transcript = "";
 
+  if (handleCoachingIntent(text, inputType)) {
+    render();
+    return;
+  }
+
   if (state.phase === "summary" && isNextLessonRequest(text)) {
     changeLesson("孩子选择继续下一个知识点。", getNextLessonIndex());
     return;
@@ -10495,13 +10539,104 @@ function currentAnswerQuestion() {
   return createGuidedStepPlan(lesson, state.completedSteps)?.answerQuestion || lesson.activeQuestion;
 }
 
+function coachMemory() {
+  return state.coach ||= {counts:{},seed:Math.random(),paused:false,choices:false,pauseStartedAt:0,pausedMs:0};
+}
+
+function coachQuestion(question = currentAnswerQuestion()) {
+  return childFacingPrompt(question?.prompt || "").replace(/^(?:填空|判断|选择|计算|口算)[：:]\s*/, "");
+}
+
+function resumeCoaching() {
+  const memory=coachMemory();
+  if (memory.paused && memory.pauseStartedAt) memory.pausedMs += Math.max(0,Date.now()-memory.pauseStartedAt);
+  memory.paused=false;
+  memory.pauseStartedAt=0;
+  memory.choices=false;
+}
+
+function changeCoachingQuestion() {
+  const lesson=currentLesson(),memory=coachMemory();
+  const seen=uniqueKeywords([...(state.assessmentAskedQuestionIds || []),...(memory.skipped || []),lesson.activeQuestion.id]);
+  const next=seen.length >= 7 ? null : LezhiCoach.select(getAssessmentQuestionCandidates(lesson),{asked:seen,current:lesson.activeQuestion,assisted:true,seed:memory.seed});
+  if (!next) {
+    state.aiMessage="这轮的题先到这里。可以休息，或者选别的知识点。";
+    if(!memory.paused) memory.pauseStartedAt=Date.now();
+    memory.paused=true;
+    memory.choices=false;
+    speakCurrentMessage();
+    return;
+  }
+  const wasSummary=state.phase==="summary";
+  if (wasSummary) changeLesson("重新试一道",state.lessonIndex);
+  resumeCoaching();
+  coachMemory().skipped=seen;
+  activateLessonQuestion(lesson,next,getLessonQuestionBank(lesson).indexOf(next));
+  state.assessmentQuestionInRepair=false;
+  state.completedSteps=0;
+  clearGuidedRepairAttempts();
+  state.initialWholeQuestion=!state.assessmentMode;
+  if(state.assessmentMode) state.assessmentAskedQuestionIds=uniqueKeywords([...state.assessmentAskedQuestionIds,next.id]);
+  state.phase=state.assessmentMode ? "assessment" : "guiding";
+  state.teachingState=state.assessmentMode ? "PRACTICE_SET" : "GUIDED_STEP";
+  state.teacherReaction="guiding";
+  state.visualHelpActive=false;
+  state.lastStudentText="";
+  state.aiMessage=LezhiCoach.task(lesson,coachQuestion(next),coachMemory(),"practice",LezhiAnswers.multipart(next)?.instruction || "");
+  resetGeneratedVisualForTurn();
+  speakCurrentMessage();
+}
+
+function handleCoachingIntent(text, inputType) {
+  const kind=LezhiCoach.intent(text),memory=coachMemory();
+  // Help is routed once at the input boundary; evaluator calls still use their
+  // established remediation transition, so a help phrase cannot recurse.
+  if (inputType === "conversation" && ["help","repeat","change"].includes(kind)) return false;
+  if (!kind) {
+    if ((memory.paused || memory.choices) && LezhiAnswers.classify(text,currentAnswerQuestion()).kind === "answer") resumeCoaching();
+    else if(memory.paused) {
+      state.aiMessage="我们还停在刚才的地方。准备好了，可以说‘我准备好了’。";
+      speakCurrentMessage();
+      return true;
+    }
+    return false;
+  }
+  if (kind==="resume" && state.phase==="summary" && !memory.paused && !memory.choices) return false;
+  state.isProcessing=false;
+  state.voiceStatus="idle";
+  state.teacherReaction="listening";
+  if(kind==="repeat") {speakCurrentMessage();return true;}
+  if(kind==="help") {resumeCoaching();switchExplanation("");return true;}
+  if(kind==="change") {changeCoachingQuestion();return true;}
+  if(kind==="pause") {
+    memory.choices=false;
+    if(!memory.paused) memory.pauseStartedAt=Date.now();
+    memory.paused=true;
+  } else if(kind==="resume") {
+    if (state.phase === "summary") {
+      changeCoachingQuestion();
+      return true;
+    }
+    resumeCoaching();
+    state.aiMessage=`好，接着刚才这一问：${pendingMultipartPrompt() || coachQuestion()}`;
+    speakCurrentMessage();
+    return true;
+  } else if(kind==="bored") memory.choices=true;
+  const target=memory.paused ? "准备好了再继续。" : pendingMultipartPrompt() || coachQuestion();
+  state.aiMessage=LezhiCoach.social(kind,currentLesson(),target,memory);
+  speakCurrentMessage();
+  return true;
+}
+
 function redirectNonAnswer(text) {
+  if (handleCoachingIntent(text, "conversation")) return true;
   if (isCannotAnswerText(normalizeText(text)) || state.phase === "summary") return false;
   const question = currentAnswerQuestion();
   const classification = LezhiAnswers.classify(text, question);
   if (classification.kind === "answer") return false;
-  const prefix = classification.shape === "multiple" ? "这题还有一部分没有说完。" : classification.kind === "partial" ? "这句还没说完整，我们接着来。" : "我听到了。我们先看眼前这一题。";
-  state.aiMessage = `${prefix}${pendingMultipartPrompt() || childFacingPrompt(question.prompt)} ${pendingMultipartPrompt() ? '只补这一项就可以。' : LezhiAnswers.multipart(question)?.instruction || '可以回答，也可以说“我没听懂”。'}`;
+  const target = pendingMultipartPrompt() || coachQuestion(question);
+  state.aiMessage = classification.kind === "partial" ? `这句还没说完，我接着听。${target}` : LezhiCoach.social("redirect", currentLesson(), target, coachMemory());
+  if (!pendingMultipartPrompt() && LezhiAnswers.multipart(question)) state.aiMessage += ` ${LezhiAnswers.multipart(question).instruction}`;
   state.teacherReaction = "listening";
   state.isProcessing = false;
   state.voiceStatus = "idle";
@@ -10685,11 +10820,16 @@ function createBoundRemediation(lesson, plan, attempt) {
   }
   if (plan.transferKind === "table-row" && data) {
     const row = data.rows.find(row=>row.label!==data.label) || data.rows[0];
-    check = {prompt:`看表：\n| 类别 | 数量 |\n| --- | --- |\n${data.rows.map(row=>`| ${row.label} | ${row.value} |`).join("\n")}\n${row.label}对应的数量是几？`, answer:String(row.value)};
+    const quantity=/\|\s*票数\s*\|/.test(original.prompt) ? "票数" : /\|\s*人数\s*\|/.test(original.prompt) ? "人数" : "数量";
+    check = {prompt:`看表：\n| 类别 | ${quantity} |\n| --- | --- |\n${data.rows.map(row=>`| ${row.label} | ${row.value} |`).join("\n")}\n${row.label}对应的数量是几？`, answer:String(row.value)};
   }
   if (plan.transferKind === "compare" && data) {
     const a=data.b, b=data.a+(attempt ? 1 : 0);
     check = {prompt:`左边${a}，右边${b}，哪边大？一样大就说一样大。`,answer:a===b ? "一样大或相等或一样多" : a>b ? `左边或${a}` : `右边或${b}`};
+  }
+  if (plan.transferKind === "compare-value" && data) {
+    const a=data.a+1,b=data.b+1;
+    check={prompt:`${a}和${b}，${data.larger ? "较大" : "较小"}的是几？`,answer:String((data.larger ? Math.max : Math.min)(a,b))};
   }
   if (plan.transferKind === "composition" && data) {
     const total=data.total, part=(data.part+attempt)%Math.max(1,total-1)+1;
@@ -10713,7 +10853,9 @@ function createBoundRemediation(lesson, plan, attempt) {
     const cap=/^G1V1-U1/.test(lesson.sourceQuestionBankId) ? 5 : /^G1V1-U2/.test(lesson.sourceQuestionBankId) ? 10 : 0;
     if(cap && /[+\-]/.test(op) && (left>cap || (op==="+" ? left+right>cap : left<right))) {
       const candidates=Array.from({length:cap+1},(_,i)=>i).filter(n=>(n!==a || right!==b) && (op==="+" ? n+right<=cap : n>=right));
-      if(candidates.length) left=candidates[attempt%candidates.length];
+      const positiveCandidates=candidates.filter(n=>n>0);
+      const pool=positiveCandidates.length ? positiveCandidates : candidates;
+      if(pool.length) left=pool[attempt%pool.length];
       else { left=a; right=Math.max(0,b-1); }
     }
     const result=op==="+" ? left+right : op==="-" ? left-right : op==="×" ? left*right : left/right;
@@ -10729,7 +10871,8 @@ function createBoundRemediation(lesson, plan, attempt) {
     const scales = { 元角:10, 元分:100, 角分:10, 米厘米:100, 千克克:1000 };
     const scale = scales[numericUnit[2]+numericUnit[3]];
     if (scale) {
-      const value = (+numericUnit[1] + attempt) % 5 + 1;
+      const originalValue=+numericUnit[1];
+      const value = attempt === 0 ? originalValue%4+1 : originalValue===1 ? 2 : 1;
       check = { prompt:`${value}${numericUnit[2]}是几${numericUnit[3]}？`, answer:`${value*scale}${numericUnit[3]}` };
     }
   }
@@ -10739,8 +10882,11 @@ function createBoundRemediation(lesson, plan, attempt) {
     check={prompt:`线段左端对着${a}厘米刻度，右端对着${b}厘米刻度。${/起点/.test(plan.label) ? "左端对着几厘米刻度？" : "线段长几厘米？"}`,answer:`${/起点/.test(plan.label) ? a : b-a}厘米`};
   }
   if (!check && plan.answerQuestion) {
-    const candidates = getLessonQuestionBank(lesson).filter(q=>q.id!==original?.id && q.prompt!==original?.prompt && inferQuestionTeachingFamily(lesson,q)===family && Boolean(/^(对|错)$/.test(q.answer))===Boolean(/^(对|错)$/.test(original?.answer)));
+    const candidates = getLessonQuestionBank(lesson).filter(q=>q.id!==original?.id && (q.prompt!==original?.prompt || JSON.stringify(q.visualModel)!==JSON.stringify(original?.visualModel)) && inferQuestionTeachingFamily(lesson,q)===family && LezhiCoach.skill(q,family)===LezhiCoach.skill(original,family) && Boolean(/^(对|错)$/.test(q.answer))===Boolean(/^(对|错)$/.test(original?.answer)));
     if (candidates.length) check=candidates[attempt % candidates.length];
+  }
+  if (!check && family==="angle" && /顶点/.test(original.prompt)) {
+    check={prompt:"只有一条边和一个顶点，就能组成一个角。对吗？",answer:"错",explanation:"角要有一个顶点和两条边。"};
   }
   if (!check && original.followUp) check=original.followUp;
   if (!check) return null;
@@ -10827,6 +10973,7 @@ function sanitizeMicrostepExplanation(remediation, lesson) {
 }
 
 function teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal, attempt = null) {
+  coachMemory().choices = false;
   state.multipartAnswer = null;
   state.assistedQuestionIds = uniqueKeywords([...(state.assistedQuestionIds || []), lesson.activeQuestion?.id]);
   const nextAttempt = attempt === null ? Math.max(0, Number(state.remediationAttempts) || 0) : Math.max(0, Number(attempt) || 0);
@@ -10835,15 +10982,16 @@ function teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal
     state.phase = "summary";
     state.teachingState = "REVIEW_LATER";
     state.teacherReaction = "encouraging";
-    state.aiMessage = "这一步今天先练到这里，不急着过关。休息一下，下次我们从这里接着学。也可以选一个别的知识点。";
+    state.aiMessage = "这一步先留到下次，不用反复试了。你可以休息，也可以换一道容易的。";
+    coachMemory().choices = true;
     addEvidence("待复习", `${plan.label}连续需要帮助，已停止重复检查。`, "学习保护");
     saveLearningSession();
     speakCurrentMessage();
     return;
   }
   const remediation = createMicrostepExplanation(lesson, plan, nextAttempt);
-  const specificHint = String(plan?.teacherHint || "").trim();
-  const explanation = remediation.explanation || specificHint;
+  remediation.explanation = LezhiCoach.explanation(lesson, plan, nextAttempt);
+  remediation.demonstration = "";
 
   state.phase = "repair";
   state.teacherReaction = "encouraging";
@@ -10859,15 +11007,7 @@ function teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal
   state.currentAtomName = plan?.label || remediation.title;
   state.currentStep = `老师讲解：${plan?.label || remediation.title}`;
   state.aiContext = "孩子当前小步答错或请求讲解。老师先解释方法，再用一道近似题检查理解。";
-  state.aiMessage = [
-    prefix,
-    explanation,
-    remediation.demonstration ? `比如：${remediation.demonstration}` : "",
-    `现在换一道很像的小题：${remediation.checkPrompt}`,
-    remediation.responseInstruction || "只说答案就可以。",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  state.aiMessage = LezhiCoach.repair(lesson, plan, remediation, nextAttempt, coachMemory());
   state.showVisual = true;
   state.strategyIndex = Math.max(state.strategyIndex, 1);
   state.bestStrategy = "讲一步，再试一道";
@@ -11044,7 +11184,8 @@ function completeQuestionBankRound(lesson, inputType) {
   const targetPassCount = state.assessmentTargetCount || getTargetQuestionPassCount(lesson);
   const passedCount = (state.passedQuestionIds || []).length;
 
-  if (passedCount < targetPassCount && (state.assessmentAskedQuestionIds || []).length < 7 && activateNextAssessmentQuestion(lesson, assisted ? "这题是在老师帮助下完成的。换一道自己试试。" : "答对了，换个小变化。")) {
+  coachMemory().preferEasy = assisted;
+  if (passedCount < targetPassCount && (state.assessmentAskedQuestionIds || []).length < 7 && activateNextAssessmentQuestion(lesson, LezhiCoach.feedback(coachMemory(), assisted))) {
     return;
   }
 
@@ -11066,7 +11207,8 @@ function startWholeQuestionAssessment(lesson, inputType) {
   state.canExplainWhy = false;
   state.canUseOwnWords = false;
 
-  if (activateNextAssessmentQuestion(lesson, `刚才这类题，老师帮你收一下方法：${methodSummary}`)) {
+  const helped=(state.assistedQuestionIds || []).includes(originalQuestionId);
+  if (activateNextAssessmentQuestion(lesson, `${LezhiCoach.feedback(coachMemory(),helped)} 刚才的方法是：${methodSummary}`)) {
     addEvidence("老师归纳方法", `老师总结「${lesson.node}」的方法，随后开始整题检验。`, inputType === "voice" ? "语音回答" : "键盘回答");
     return;
   }
@@ -11081,16 +11223,11 @@ function activateNextAssessmentQuestion(lesson, lead = "") {
   const currentCursor = Math.max(0, Number(lesson?.questionCursor) || 0);
   let selected = null;
   let selectedCursor = -1;
+  const previousQuestion=lesson.activeQuestion;
 
-  for (let offset = 1; offset <= bank.length; offset += 1) {
-    const candidate = bank[(currentCursor + offset) % bank.length];
-    const id = candidate?.id || candidate?.prompt;
-    if (candidate && id && !asked.has(id)) {
-      selected = candidate;
-      selectedCursor = getLessonQuestionBank(lesson).findIndex((item) => item === candidate || item?.id === candidate?.id);
-      break;
-    }
-  }
+  selected = LezhiCoach.select(bank, {asked:[...asked],current:lesson.activeQuestion,passed:state.passedQuestionIds.length,assisted:coachMemory().preferEasy,seed:coachMemory().seed});
+  if (selected) selectedCursor = getLessonQuestionBank(lesson).findIndex(item=>item.id===selected.id);
+  coachMemory().preferEasy = false;
 
   if (!selected) return false;
   activateLessonQuestion(lesson, selected, selectedCursor >= 0 ? selectedCursor : currentCursor);
@@ -11107,8 +11244,7 @@ function activateNextAssessmentQuestion(lesson, lead = "") {
   state.aiContext = "老师已经归纳方法，现在用完整题检查孩子是否能独立迁移。";
   state.aiMessage = [
     lead,
-    `现在做一道完整题：${childFacingPrompt(selected.prompt || lesson.problem)}`,
-    LezhiAnswers.multipart(selected)?.instruction || "这次不用拆小步，只说最后答案。",
+    LezhiCoach.task(lesson, coachQuestion(selected), coachMemory(), "practice", LezhiAnswers.multipart(selected)?.instruction || "",previousQuestion,selected),
   ]
     .filter(Boolean)
     .join(" ");
@@ -11210,6 +11346,7 @@ function getAssessmentQuestionCandidates(lesson) {
 }
 
 function createTeacherMethodSummaryForLesson(lesson) {
+  if (LezhiCoach.profile(lesson)) return LezhiCoach.cues(lesson, createGuidedStepPlan(lesson, 0))[0];
   const family = inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null) || getLessonTeachingFamily(lesson);
   const summaries = {
     money: "元、角、分不能直接混着算，先换成同一种单位，再计算。",
@@ -11529,6 +11666,13 @@ function evaluateTeachback(text, inputType) {
 }
 
 function switchExplanation(reason) {
+  if (state.phase === "summary" && state.teachingState === "REVIEW_LATER") {
+    coachMemory().choices=true;
+    state.aiMessage="这一问先放下，不用再试同一题了。换一道简单的，还是先休息？";
+    speakCurrentMessage();
+    render();
+    return;
+  }
   const lesson = currentLesson();
   if (state.remediationCheck) evaluateRemediationCheck("我不懂", "button");
   else if (isWholeQuestionTurn()) beginAssessmentQuestionRepair(lesson, "button", "我们一起把这道题想明白。", "主动求助");
