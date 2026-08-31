@@ -54,6 +54,10 @@ assert.ok(r.html().includes("又等于多少分"),"original full question remain
 assert.ok(!r.html().includes("这次只说：几分"));
 r.evaluate('processVoiceTranscript("一百分",{confidence:.99});handleChildInput("今天天气很好","typed")');
 assert.equal(r.evaluate("pendingMultipartPrompt()"),"1元是几角？");
+assert.ok(!r.evaluate("state.aiMessage").includes("请分别"),"do not ask for already collected results after an unrelated reply");
+r.evaluate('processVoiceTranscript("今天天气很好",{confidence:.99})');
+assert.ok(!r.evaluate("state.aiMessage").includes("请分别"));
+assert.ok(r.evaluate("state.aiMessage").includes("只补这一项"));
 r.evaluate('processVoiceTranscript("十角",{confidence:.99})');
 assert.ok(r.evaluate('state.passedQuestionIds.includes("G1V2-U5-KP01-V03")'));
 r.evaluate('multipartFixture();handleChildInput("十角","typed");processVoiceTranscript("九十分",{confidence:.99})');

@@ -9437,7 +9437,7 @@ function assessVoiceTranscript(transcript, metadata = {}, context = createVoiceR
       heardText,
       submitText: "",
       reason: "not-an-answer",
-      message: `我们回到这一题：${pendingMultipartPrompt() || childFacingPrompt(context.prompt)} ${LezhiAnswers.multipart(context.answerQuestion)?.instruction || '可以说答案，也可以说“我没听懂”。'}`,
+      message: `我们回到这一题：${pendingMultipartPrompt() || childFacingPrompt(context.prompt)} ${pendingMultipartPrompt() ? '只补这一项就可以。' : LezhiAnswers.multipart(context.answerQuestion)?.instruction || '可以说答案，也可以说“我没听懂”。'}`,
     };
   }
 
@@ -10501,7 +10501,7 @@ function redirectNonAnswer(text) {
   const classification = LezhiAnswers.classify(text, question);
   if (classification.kind === "answer") return false;
   const prefix = classification.shape === "multiple" ? "这题还有一部分没有说完。" : classification.kind === "partial" ? "这句还没说完整，我们接着来。" : "我听到了。我们先看眼前这一题。";
-  state.aiMessage = `${prefix}${pendingMultipartPrompt() || childFacingPrompt(question.prompt)} ${LezhiAnswers.multipart(question)?.instruction || '可以回答，也可以说“我没听懂”。'}`;
+  state.aiMessage = `${prefix}${pendingMultipartPrompt() || childFacingPrompt(question.prompt)} ${pendingMultipartPrompt() ? '只补这一项就可以。' : LezhiAnswers.multipart(question)?.instruction || '可以回答，也可以说“我没听懂”。'}`;
   state.teacherReaction = "listening";
   state.isProcessing = false;
   state.voiceStatus = "idle";
