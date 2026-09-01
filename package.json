@@ -10,7 +10,7 @@
     "ws": "^8.18.0"
   },
   "scripts": {
-    "test": "node teaching-engine/product-regression-audit.js && node teaching-engine/v92-regression-audit.js && node teaching-engine/v93-regression-audit.js && node teaching-engine/multipart-regression-audit.js && node teaching-engine/coaching-regression-audit.js && node teaching-engine/voice-lifecycle-audit.js && node teaching-engine/source-math-audit.js && node teaching-engine/runtime-integrity-audit.js && node teaching-engine/spoken-prompt-audit.js",
+    "test": "node teaching-engine/product-regression-audit.js && node teaching-engine/v92-regression-audit.js && node teaching-engine/v93-regression-audit.js && node teaching-engine/v96-regression-audit.js && node teaching-engine/multipart-regression-audit.js && node teaching-engine/coaching-regression-audit.js && node teaching-engine/voice-lifecycle-audit.js && node teaching-engine/source-math-audit.js && node teaching-engine/runtime-integrity-audit.js && node teaching-engine/spoken-prompt-audit.js",
     "start": "node server.mjs",
     "test:browser": "node tools/browser-regression.mjs",
     "audit:teaching": "node teaching-engine/teaching-quality-audit.js",

@@ -27,14 +27,14 @@ try {
   await page.route("**/api/**",route=>route.request().method()==="GET" ? route.continue() : route.fulfill({status:503,contentType:"application/json",body:'{"error":"Provider disabled in browser regression"}'}));
   await page.goto(`http://127.0.0.1:${port}/`,{waitUntil:"domcontentloaded"});
   const results={pageErrors};
-  for(const name of ["browser-v92-audit","browser-v92-interaction-audit","browser-v93-audit","browser-multipart-audit","browser-coaching-audit"]) {
+  for(const name of ["browser-v92-audit","browser-v92-interaction-audit","browser-v93-audit","browser-multipart-audit","browser-coaching-audit","browser-v96-acceptance-audit"]) {
     const source=await readFile(new URL(`teaching-engine/${name}.js`,root),"utf8");
     results[name]=await new Script(`(${source})`,{filename:name}).runInThisContext()(page);
   }
-  await writeFile(new URL("output/playwright/v95-results.json",root),JSON.stringify(results,null,2));
+  await writeFile(new URL("output/playwright/v96-results.json",root),JSON.stringify(results,null,2));
   const failures=[...pageErrors,...Object.values(results).flatMap(result=>result && !Array.isArray(result) ? Object.entries(result).filter(([key])=>/errors$/i.test(key)).flatMap(([,items])=>items) : [])];
   if(failures.length)throw new Error(JSON.stringify(failures));
-  console.log("PASS browser: previous regressions retained; whole-curriculum coaching and responsive prompts",JSON.stringify(results["browser-coaching-audit"]));
+  console.log("PASS browser: previous regressions retained; active history, observation visuals, bounded coaching and responsive prompts",JSON.stringify(results["browser-v96-acceptance-audit"]));
 } finally {
   await browser?.close();
   if(server.exitCode===null){server.kill();await once(server,"exit");}

@@ -70,7 +70,7 @@ const choices=r.evaluate(`(() => {
 assert.equal(choices.count,13);assert.deepEqual(Array.from(choices.errors),[]);
 console.log("PASS v93 visual models: 13 source-grounded candidate diagrams, independently checked angles/views and no answer highlighting");
 
-r.evaluate(`LezhiHistory.clear();changeLesson("audit",defaultLessonIndex);handleChildInput("今天天气很好","typed");processVoiceTranscript("我不会游泳",{confidence:.99});changeLesson("audit",1);`);
+r.evaluate(`changeLesson("audit",defaultLessonIndex);LezhiHistory.clear();handleChildInput("今天天气很好","typed");processVoiceTranscript("我不会游泳",{confidence:.99});changeLesson("audit",1);`);
 assert.equal(r.evaluate("LezhiHistory.read().length"),0,"chatter-only visit is not a failed learning session");
 r.evaluate(`for(let i=0;i<10;i++)LezhiHistory.record({topic:"fixture",title:"fixture",seconds:20,completed:false});`);
 assert.equal(r.evaluate("LezhiHistory.summary(7).seconds"),200);

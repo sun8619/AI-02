@@ -70,7 +70,7 @@ async (page) => {
   }
   const duration=await page.evaluate(()=>{
     LezhiHistory.clear();for(let i=0;i<10;i++)LezhiHistory.record({topic:"fixture",title:"验收数据",seconds:20,completed:false});
-    const html=renderLearningHistory();LezhiHistory.clear();return html.includes("3分20秒")&&!html.includes("0分钟");
+    const html=renderLearningHistory();LezhiHistory.clear();return html.includes("3分20秒")&&!html.includes("今天 0分钟");
   });
   if(!duration)result.errors.push("history duration display");
   await page.evaluate(()=>{LezhiHistory.clear();changeLesson("audit",defaultLessonIndex);state.showKeyboard=false;state.showLessonPicker=false;render();});

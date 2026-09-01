@@ -5,7 +5,7 @@ const digest=async path=>createHash("sha256").update(await readFile(new URL(path
 if(process.argv[2]==="build") {
   const files=["index.html","app.js","server.mjs","styles.css","child-learning-stage.css","package.json","package-lock.json","tools/release.mjs","tools/update-server.sh","tools/browser-regression.mjs","assets/lezhi-teacher-v2.png","assets/lezhi-teacher-coach-v3.png",...(await readdir(new URL("teaching-engine/",root))).filter(f=>f.endsWith(".js")).map(f=>`teaching-engine/${f}`)];
   const hashes={};for(const path of files.sort())hashes[path]=await digest(path);
-  await writeFile(new URL("release.json",root),JSON.stringify({id:"v95-20260901",builtAt:new Date().toISOString(),hashes},null,2)+"\n");
+  await writeFile(new URL("release.json",root),JSON.stringify({id:"v96-20260901",builtAt:new Date().toISOString(),hashes},null,2)+"\n");
   console.log(`Built release manifest: ${files.length} files`);
 } else {
   const manifest=JSON.parse(await readFile(new URL("release.json",root),"utf8"));

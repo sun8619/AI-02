@@ -61,6 +61,8 @@
     if (/^(?:(?:我|我们)?(?:想|要|想要|先|去|有点|好|太|已经))*(?:喝水|喝口水|上厕所|去厕所|吃饭|休息|休息一下|休息一会|停一下|暂停|累了|困了|饿了|肚子饿了|想睡觉|睡觉|不想学了|不想做了|不想继续了|不想做这个题|不学了|不做了|不玩了|今天先到这里)(?:了|吧|好吗)?$/.test(t)) return "pause";
     if (/^(?:我)?(?:回来了|回来啦|准备好了|继续|继续做|继续学|接着做|接着学|开始吧)$/.test(t)) return "resume";
     if (/^(?:我觉得|我|这题|这个|数学)?(?:太|好|有点)?(?:无聊|没意思|不好玩|讨厌数学|不喜欢数学)(?:了|啊)?$/.test(t)) return "bored";
+    if (/^(?:我)?(?:太笨了|是不是很笨|怎么总是做错|怎么总错|总是不会|学不好数学|做不到|不行|好难过)(?:了|啊)?$/.test(t)) return "sad";
+    if (/^(?:我)?(?:生气了|好生气|讨厌你|你烦死了|别说了|不要再说了|不想听了)(?:啊|吧)?$/.test(t)) return "angry";
     if (/^(?:你|老师)?(?:是谁|叫什么|叫什么名字|几岁|多大|是人吗|是真人吗|是机器人吗|喜欢什么)(?:呀|呢|啊)?$/.test(t)) return "identity";
     if (/^(?:我们|我)?(?:为什么要学|学这个有什么用|学这个干嘛|这有什么用|有什么用)(?:呢|呀)?$/.test(t)) return "purpose";
     if (/^(?:我)?(?:想|要|想要)?(?:换一道|换一题|换道题|换题|换个问法|简单一点|来道简单的|换个简单的|换一道简单的)(?:题|吧)?$/.test(t)) return "change";
@@ -75,6 +77,8 @@
     const p=profile(lesson), target=tidy(question);
     if(kind==="pause") return "好，我们先停在这里。准备好了再回来，不用着急。";
     if(kind==="bored") return "不想一直这样做也没关系。换一道简单的，还是先休息？";
+    if(kind==="sad") return "不是你不行，是这一步还没找到合适的办法。换一道简单的，还是先休息？";
+    if(kind==="angry") return "我听到你现在很烦。我们先停一下，不追着做题。想换一道简单的，还是先休息？";
     if(kind==="identity") return `我是乐之老师，是陪你学数学的AI。${target}`;
     if(kind==="purpose") return `${p?.purpose || "数学可以帮我们把数量和形状想清楚。"}${target}`;
     if(kind==="distraction") return `可以先处理身边的事，我等你。准备好再看：${target}`;
@@ -237,11 +241,16 @@
     return question ? question[0] : full;
   }
 
-  function select(bank, {asked=[],current,passed=0,assisted=false,seed=0}={}) {
+  function select(bank, {asked=[],current,passed=0,assisted=false,level=0,seed=0}={}) {
     const seen=new Set(asked), candidates=bank.filter(q=>!seen.has(q.id||q.prompt));
     const previous=signature(current || {}),wantVariation=!assisted && passed>0;
+    const targetLevel=Math.max(-2,Math.min(2,Number(level)||0));
     return candidates.sort((a,b)=> {
-      const score=q=>(wantVariation && signature(q)!==previous ? -3 : 0)+complexity(q)*(assisted || !passed ? 2 : 0.3);
+      const score=q=>{
+        const variation=wantVariation && signature(q)!==previous ? -3 : 0;
+        const weight=assisted || targetLevel<0 || !passed ? 2 : targetLevel>0 ? -1.2 : .3;
+        return variation+complexity(q)*weight;
+      };
       return score(a)-score(b) || hash(a.id+seed)-hash(b.id+seed);
     })[0] || null;
   }

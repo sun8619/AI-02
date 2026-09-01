@@ -6221,6 +6221,14 @@ function createEmptyMasteryEvidence() {
   };
 }
 
+function createLearningSessionId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
+}
+
+function createCoachState() {
+  return {counts:{},seed:Math.random(),paused:false,choices:false,pauseStartedAt:0,pausedMs:0,difficulty:{level:0,independentStreak:0,needsHelpStreak:0,changes:[]}};
+}
+
 function recordMasteryEvidence(kind) {
   if (!state.masteryEvidence) state.masteryEvidence = createEmptyMasteryEvidence();
   if (!Object.prototype.hasOwnProperty.call(state.masteryEvidence, kind)) return;
@@ -6228,9 +6236,13 @@ function recordMasteryEvidence(kind) {
 }
 
 let state = {
-  coach: {counts:{}, seed:Math.random(), paused:false, choices:false, pauseStartedAt:0, pausedMs:0},
+  coach: createCoachState(),
+  sessionId: createLearningSessionId(),
   sessionStartedAt: Date.now(),
   voiceCounts: {accepted:0,uncertain:0},
+  responseTimesMs: [],
+  promptPresentedAt: 0,
+  promptTelemetryKey: "",
   view: "child",
   lessonIndex: defaultLessonIndex,
   phase: "guiding",
@@ -6632,6 +6644,29 @@ function render() {
     </div>
   `;
   bindEvents();
+  markCurrentPromptPresented();
+}
+
+function currentPromptTelemetryKey() {
+  if (state.view!=="child" || coachMemory().paused || coachMemory().choices) return "";
+  const question=currentAnswerQuestion();
+  return [currentLesson()?.id,question?.id || question?.prompt,state.phase,state.completedSteps,state.remediationCheck?.checkPrompt || "",pendingMultipartPrompt(),state.aiMessage].join("|");
+}
+
+function markCurrentPromptPresented() {
+  const key=currentPromptTelemetryKey();
+  if (!key || key===state.promptTelemetryKey) return;
+  state.promptTelemetryKey=key;
+  state.promptPresentedAt=Date.now();
+}
+
+function recordCurrentResponseTime() {
+  if (!state.promptPresentedAt) return;
+  const elapsed=Math.max(0,Math.min(300000,Date.now()-state.promptPresentedAt));
+  state.responseTimesMs ||= [];
+  state.responseTimesMs.push(elapsed);
+  state.responseTimesMs=state.responseTimesMs.slice(-50);
+  state.promptPresentedAt=0;
 }
 
 function renderTopbar() {
@@ -8656,6 +8691,8 @@ function getMasteryEvidenceSummary() {
 function renderParentView() {
   const lesson = currentLesson();
   const masterySummary = getMasteryEvidenceSummary();
+  const difficulty=coachMemory().difficulty || {level:0,changes:[]};
+  const difficultyLabel={"-2":"正在巩固基础","-1":"已调简单一点","0":"保持当前难度","1":"已增加一点变化","2":"正在挑战综合题"}[difficulty.level] || "保持当前难度";
   return `
     <main class="parent-page">
       ${renderLearningHistory()}
@@ -8705,6 +8742,14 @@ function renderParentView() {
             <span>掌握证据</span>
             <strong>${escapeText(masterySummary.label)}</strong>
             <p>${escapeText(masterySummary.detail)}</p>
+          </div>
+        </article>
+
+        <article class="parent-card">
+          <div class="metric-large">
+            <span>本轮难度调整</span>
+            <strong>${escapeText(difficultyLabel)}</strong>
+            <p>${difficulty.changes?.length ? escapeText(difficulty.changes.at(-1).reason) : "根据独立答对和求助情况选下一题；不因答非所问或语音不确定而调整。"}</p>
           </div>
         </article>
 
@@ -8773,14 +8818,15 @@ function renderParentView() {
   `;
 }
 
-function saveLearningSession() {
-  if(state.historyRecorded) return;
+function saveLearningSession(finalize=true) {
+  if(finalize && state.historyRecorded) return;
   const lesson=currentLesson();
   if(!state.assessmentMode && !state.lastStudentText && !(state.assistedQuestionIds?.length) && !(state.passedQuestionIds?.length)) return;
-  state.historyRecorded=true;
+  if(finalize) state.historyRecorded=true;
   const memory=coachMemory();
   const pausedMs=memory.pausedMs+(memory.paused ? Math.max(0,Date.now()-memory.pauseStartedAt) : 0);
-  window.LezhiHistory?.record({topic:lesson.sourceQuestionBankId,title:lesson.node,volume:lesson.grade,completed:state.phase==="summary",passed:state.teachingState==="MASTERED",independent:state.passedQuestionIds?.length,assisted:state.assistedQuestionIds?.length,seconds:Math.max(0,Date.now()-(state.sessionStartedAt||Date.now())-pausedMs)/1000,voice:state.voiceCounts});
+  const responseTimes=state.responseTimesMs || [];
+  window.LezhiHistory?.record({sessionId:state.sessionId,topic:lesson.sourceQuestionBankId,title:lesson.node,volume:lesson.grade,completed:state.phase==="summary",passed:state.teachingState==="MASTERED",independent:state.passedQuestionIds?.length,assisted:state.assistedQuestionIds?.length,seconds:Math.max(0,Date.now()-(state.sessionStartedAt||Date.now())-pausedMs)/1000,voice:state.voiceCounts,response:{count:responseTimes.length,totalMs:responseTimes.reduce((sum,value)=>sum+value,0)},difficulty:{level:memory.difficulty?.level,changes:memory.difficulty?.changes?.length}});
 }
 
 function advanceToReviewQuestion() {
@@ -8793,15 +8839,20 @@ function advanceToReviewQuestion() {
 
 function renderLearningHistory() {
   if(!window.LezhiHistory) return "";
-  const rows=LezhiHistory.read(),due=LezhiHistory.due(),filters=state.historyFilters || {};
+  const rows=LezhiHistory.read(),due=LezhiHistory.due(),filters=state.historyFilters || {},today=LezhiHistory.today(),goal=LezhiHistory.dailyGoal();
   const volume=r=>r.volume || lessons.find(l=>l.sourceQuestionBankId===r.topic)?.grade || "";
   const filtered=rows.filter(r=>(!filters.volume || volume(r)===filters.volume) && (!filters.topic || r.topic===filters.topic) && (!filters.outcome || r.outcome===filters.outcome));
   const options=(values,selected)=>values.map(([value,label])=>`<option value="${escapeText(value)}" ${value===selected ? "selected" : ""}>${escapeText(label)}</option>`).join("");
   const outcomes={passed:"本次通过",review:"待复习",incomplete:"未完成"};
   const showRate=value=>value===null ? "证据不足" : `${value}%`;
+  const trendMap=new Map(LezhiHistory.trends(rows).map(item=>[item.topic,item]));
+  const statusClass=status=>status?.includes("多次") ? "is-retained" : status?.includes("复测通过") || status?.includes("本次通过") ? "is-passed" : status?.includes("需要") || status?.includes("未完成") ? "is-review" : "is-new";
   return `<section class="learning-history"><h2>学习记录</h2>
-    <div class="history-periods">${[7,30].map(days=>{const s=LezhiHistory.summary(days);return `<div><h3>最近${days}天</h3><p>${s.sessions}次学习 · ${LezhiHistory.duration(s.seconds)}</p><p>独立答对${s.independent}题 · 求助过${s.assisted}题</p></div>`;}).join("")}</div>
+    <div class="history-today"><div><strong>今天 ${LezhiHistory.duration(today.seconds)}</strong><span>目标 ${goal} 分钟 · ${today.sessions}次会话 · 语音回答${today.voiceAccepted}次 · ${today.responseAverageMs===null ? "暂无可判定回答" : `平均响应${Math.max(1,Math.round(today.responseAverageMs/1000))}秒`}</span></div><label>每日学习目标<select data-history-goal>${[5,10,15,20].map(value=>`<option value="${value}" ${value===goal ? "selected" : ""}>${value}分钟</option>`).join("")}</select></label></div>
+    <div class="history-goal" role="progressbar" aria-label="今日学习时长" aria-valuemin="0" aria-valuemax="${goal*60}" aria-valuenow="${Math.min(goal*60,Math.floor(today.seconds))}"><i style="width:${Math.min(100,Math.round(today.seconds/(goal*60)*100))}%"></i></div>
+    <div class="history-periods">${[7,30].map(days=>{const s=LezhiHistory.summary(days);return `<div><h3>${days===7 ? "本周摘要" : "近30天摘要"}</h3><p>${s.sessions}次学习 · ${LezhiHistory.duration(s.seconds)}</p><p>独立答对${s.independent}题 · 求助过${s.assisted}题 · 语音回答${s.voiceAccepted}次${s.responseAverageMs===null ? "" : ` · 平均响应${Math.max(1,Math.round(s.responseAverageMs/1000))}秒`}</p></div>`;}).join("")}</div>
     <p>单次通过不代表长期掌握。记录只保存在这台设备，不保存录音或原始回答。语音直接采用率不代表识别准确率。</p>
+    <h3>42个知识点状态</h3><div class="history-heatmap">${lessons.map(lesson=>{const item=trendMap.get(lesson.sourceQuestionBankId),status=item?.status || "尚未学习";return `<div class="${statusClass(status)}" title="${escapeText(`${lesson.node}：${status}`)}"><strong>${escapeText(lesson.node)}</strong><span>${escapeText(status)}</span></div>`;}).join("")}</div>
     <div class="history-filters"><label>册别<select data-history-filter="volume"><option value="">全部册别</option>${options([...new Set(rows.map(volume))].filter(Boolean).map(v=>[v,v]),filters.volume)}</select></label><label>知识点<select data-history-filter="topic"><option value="">全部知识点</option>${options([...new Map(rows.filter(r=>!filters.volume || volume(r)===filters.volume).map(r=>[r.topic,r.title]))],filters.topic)}</select></label><label>结果<select data-history-filter="outcome"><option value="">全部结果</option>${options(Object.entries(outcomes),filters.outcome)}</select></label></div>
     <h3>跨日学习证据</h3><div class="history-trends">${LezhiHistory.trends(rows).filter(t=>filtered.some(r=>r.topic===t.topic)).map(t=>`<details><summary>${escapeText(t.title)} · ${t.status}</summary><p>隔日复测通过 ${t.delayedPassed} / ${t.delayedCount} 次${t.delayedCount ? `，通过率 ${Math.round(t.delayedPassed/t.delayedCount*100)}%` : "，尚无隔日证据"}</p><p>求助题占比：前7天 ${showRate(t.previous.help)} → 最近7天 ${showRate(t.current.help)}</p><p>语音直接采用率：前7天 ${showRate(t.previous.voice)} → 最近7天 ${showRate(t.current.voice)}</p><ol class="history-timeline">${t.history.map(r=>`<li>${new Date(r.at).toLocaleDateString("zh-CN")} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</li>`).join("")}</ol></details>`).join("") || "<p>还没有符合条件的学习记录。</p>"}</div>
     <h3>复习安排</h3>${due.filter(r=>filtered.some(f=>f.topic===r.topic)).map(r=>`<p>${escapeText(r.title)} <button data-action="review-topic" data-topic="${escapeText(r.topic)}">${r.outcome==="review" ? "再学一遍" : r.outcome==="incomplete" ? "接着练" : "隔日检验"}</button></p>`).join("") || "<p>当前筛选下没有到期的复习。</p>"}
@@ -8892,6 +8943,7 @@ function renderMascotFace() {
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-history-goal]").forEach(node=>node.addEventListener("change",()=>{LezhiHistory.setDailyGoal(node.value);render();}));
   document.querySelectorAll("[data-history-filter]").forEach(node=>node.addEventListener("change",()=>{
     state.historyFilters={...state.historyFilters,[node.dataset.historyFilter]:node.value};
     if(node.dataset.historyFilter==="volume") state.historyFilters.topic="";
@@ -8979,6 +9031,7 @@ async function handleAction(event) {
 
   if (action === "parent-view") {
     cancelSupersededInteraction();
+    saveLearningSession(false);
     state.view = "parent";
     state.showLessonPicker = false;
     render();
@@ -8991,7 +9044,12 @@ async function handleAction(event) {
     return;
   }
   if (action === "clear-history") {
-    if(window.confirm("清除这台设备上的学习记录？此操作不能撤销。")) {LezhiHistory.clear();render();}
+    if(window.confirm("清除这台设备上的学习记录？此操作不能撤销。")) {
+      LezhiHistory.clear();
+      // Do not let the already-open session recreate the records the parent just removed.
+      state.historyRecorded=true;
+      render();
+    }
     return;
   }
 
@@ -9110,6 +9168,7 @@ async function handleAction(event) {
 
 function changeLesson(reason, targetIndex = null) {
   cancelSupersededInteraction();
+  saveLearningSession(true);
   const nextIndex =
     Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex < lessons.length
       ? targetIndex
@@ -9124,7 +9183,7 @@ function changeLesson(reason, targetIndex = null) {
   }
   const starter = lesson.useQuestionBankTutor ? createGuidedStepPlan(lesson, 0) : null;
   state.lessonIndex = nextIndex;
-  state.coach = {counts:{}, seed:Math.random(), paused:false, choices:false, pauseStartedAt:0, pausedMs:0};
+  state.coach = createCoachState();
   state.phase = "guiding";
   state.initialWholeQuestion = true;
   state.assistedQuestionIds = [];
@@ -9156,8 +9215,12 @@ function changeLesson(reason, targetIndex = null) {
   state.assessmentQuestionInRepair = false;
   state.assessmentAskedQuestionIds = [];
   state.sessionStartedAt = Date.now();
+  state.sessionId = createLearningSessionId();
   state.historyRecorded = false;
   state.voiceCounts = {accepted:0,uncertain:0};
+  state.responseTimesMs = [];
+  state.promptPresentedAt = 0;
+  state.promptTelemetryKey = "";
   state.assessmentOriginQuestionId = "";
   state.assessmentTargetCount = 0;
   state.parentSignals = null;
@@ -10368,6 +10431,7 @@ function handleChildInput(text, inputType) {
     render();
     return;
   }
+  recordCurrentResponseTime();
   state.visualHelpActive = false;
   state.teacherReaction = "responding";
   state.lastStudentText = text;
@@ -10540,7 +10604,37 @@ function currentAnswerQuestion() {
 }
 
 function coachMemory() {
-  return state.coach ||= {counts:{},seed:Math.random(),paused:false,choices:false,pauseStartedAt:0,pausedMs:0};
+  return state.coach ||= createCoachState();
+}
+
+function noteDifficulty(outcome, reason = "") {
+  const memory=coachMemory();
+  const difficulty=memory.difficulty ||= {level:0,independentStreak:0,needsHelpStreak:0,changes:[]};
+  const lesson=currentLesson(),question=lesson?.activeQuestion;
+  const adjustmentKey=`${lesson?.id || lesson?.sourceQuestionBankId || ""}|${question?.id || question?.prompt || ""}`;
+  if (difficulty.lastAdjustmentKey===adjustmentKey) return difficulty.level;
+  if (!['success','help','wrong'].includes(outcome)) return difficulty.level;
+  difficulty.lastAdjustmentKey=adjustmentKey;
+  const before=difficulty.level;
+  if (outcome==='success') {
+    difficulty.independentStreak+=1;
+    difficulty.needsHelpStreak=0;
+    if (difficulty.independentStreak>=2) {
+      difficulty.level=Math.min(2,difficulty.level+1);
+      difficulty.independentStreak=0;
+    }
+  } else {
+    difficulty.independentStreak=0;
+    difficulty.needsHelpStreak+=1;
+    difficulty.level=Math.max(-2,difficulty.level-1);
+    memory.preferEasy=true;
+  }
+  if (difficulty.level!==before) {
+    const defaultReason=outcome==='success' ? '连续两道整题独立答对，下一题增加一点变化。' : outcome==='help' ? '孩子主动求助，下一题先降低一步难度。' : '这道整题未答对，讲解后先用更接近的题检验。';
+    difficulty.changes.push({at:Date.now(),from:before,to:difficulty.level,reason:reason || defaultReason});
+    difficulty.changes=difficulty.changes.slice(-8);
+  }
+  return difficulty.level;
 }
 
 function coachQuestion(question = currentAnswerQuestion()) {
@@ -10558,7 +10652,7 @@ function resumeCoaching() {
 function changeCoachingQuestion() {
   const lesson=currentLesson(),memory=coachMemory();
   const seen=uniqueKeywords([...(state.assessmentAskedQuestionIds || []),...(memory.skipped || []),lesson.activeQuestion.id]);
-  const next=seen.length >= 7 ? null : LezhiCoach.select(getAssessmentQuestionCandidates(lesson),{asked:seen,current:lesson.activeQuestion,assisted:true,seed:memory.seed});
+  const next=seen.length >= 7 ? null : LezhiCoach.select(getAssessmentQuestionCandidates(lesson),{asked:seen,current:lesson.activeQuestion,assisted:true,level:memory.difficulty?.level,seed:memory.seed});
   if (!next) {
     state.aiMessage="这轮的题先到这里。可以休息，或者选别的知识点。";
     if(!memory.paused) memory.pauseStartedAt=Date.now();
@@ -10621,7 +10715,7 @@ function handleCoachingIntent(text, inputType) {
     state.aiMessage=`好，接着刚才这一问：${pendingMultipartPrompt() || coachQuestion()}`;
     speakCurrentMessage();
     return true;
-  } else if(kind==="bored") memory.choices=true;
+  } else if(["bored","sad","angry"].includes(kind)) memory.choices=true;
   const target=memory.paused ? "准备好了再继续。" : pendingMultipartPrompt() || coachQuestion();
   state.aiMessage=LezhiCoach.social(kind,currentLesson(),target,memory);
   speakCurrentMessage();
@@ -11225,7 +11319,7 @@ function activateNextAssessmentQuestion(lesson, lead = "") {
   let selectedCursor = -1;
   const previousQuestion=lesson.activeQuestion;
 
-  selected = LezhiCoach.select(bank, {asked:[...asked],current:lesson.activeQuestion,passed:state.passedQuestionIds.length,assisted:coachMemory().preferEasy,seed:coachMemory().seed});
+  selected = LezhiCoach.select(bank, {asked:[...asked],current:lesson.activeQuestion,passed:state.passedQuestionIds.length,assisted:coachMemory().preferEasy,level:coachMemory().difficulty?.level,seed:coachMemory().seed});
   if (selected) selectedCursor = getLessonQuestionBank(lesson).findIndex(item=>item.id===selected.id);
   coachMemory().preferEasy = false;
 
@@ -11267,6 +11361,7 @@ function evaluateWholeQuestionAssessment(text, inputType) {
   const prompt = childFacingPrompt(question?.prompt || lesson?.problem || "这道题");
 
   if (isCannotAnswerText(normalized)) {
+    noteDifficulty("help");
     beginAssessmentQuestionRepair(lesson, inputType, "没关系，这一道老师拆开讲。", "整题请求讲解");
     return;
   }
@@ -11277,6 +11372,7 @@ function evaluateWholeQuestionAssessment(text, inputType) {
   }
 
   if (matchesWholeQuestionAnswer(normalized, question, lesson)) {
+    noteDifficulty("success");
     state.teacherReaction = "celebrating";
     state.aiContext = "孩子独立答对完整题。";
     addEvidence("整题答对", `孩子独立答对：${question?.prompt || lesson.problem}`, inputType === "voice" ? "语音回答" : "键盘回答");
@@ -11290,6 +11386,7 @@ function evaluateWholeQuestionAssessment(text, inputType) {
     return;
   }
 
+  noteDifficulty("wrong");
   beginAssessmentQuestionRepair(lesson, inputType, "这道整题还没答对。老师只拆这一道给你讲。", "整题答案错误");
 }
 
@@ -11675,7 +11772,10 @@ function switchExplanation(reason) {
   }
   const lesson = currentLesson();
   if (state.remediationCheck) evaluateRemediationCheck("我不懂", "button");
-  else if (isWholeQuestionTurn()) beginAssessmentQuestionRepair(lesson, "button", "我们一起把这道题想明白。", "主动求助");
+  else if (isWholeQuestionTurn()) {
+    noteDifficulty("help");
+    beginAssessmentQuestionRepair(lesson, "button", "我们一起把这道题想明白。", "主动求助");
+  }
   else teachCurrentMicrostepAndRecheck(lesson, createGuidedStepPlan(lesson, state.completedSteps), "我们先弄懂这一点。", "button", "主动求助");
   render();
 }

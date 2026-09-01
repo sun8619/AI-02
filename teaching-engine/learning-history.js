@@ -1,5 +1,5 @@
 (function(root) {
-  const key="lezhi-learning-history-v1", day=86400000;
+  const key="lezhi-learning-history-v1", goalKey="lezhi-daily-goal-minutes-v1", day=86400000;
   function read() {
     try {
       const rows=JSON.parse(localStorage.getItem(key) || "[]");
@@ -8,13 +8,21 @@
   }
   function record(entry) {
     // No recordings, transcripts, names, or provider credentials in persistent history.
-    const row={topic:String(entry.topic),title:String(entry.title),volume:String(entry.volume || ""),at:Date.now(),outcome:entry.passed ? "passed" : entry.completed===false ? "incomplete" : "review",independent:Math.max(0,Number(entry.independent)||0),assisted:Math.max(0,Number(entry.assisted)||0),seconds:Math.min(3600,Math.max(0,Number(entry.seconds)||0)),voice:{accepted:Math.max(0,entry.voice?.accepted||0),uncertain:Math.max(0,entry.voice?.uncertain||0)}};
-    try {localStorage.setItem(key,JSON.stringify([...read(),row].slice(-200)));return true;} catch {return false;}
+    const sessionId=String(entry.sessionId || "").replace(/[^a-zA-Z0-9_-]/g,"").slice(0,80);
+    const row={sessionId,topic:String(entry.topic),title:String(entry.title),volume:String(entry.volume || ""),at:Date.now(),outcome:entry.passed ? "passed" : entry.completed===false ? "incomplete" : "review",independent:Math.max(0,Number(entry.independent)||0),assisted:Math.max(0,Number(entry.assisted)||0),seconds:Math.min(3600,Math.max(0,Number(entry.seconds)||0)),voice:{accepted:Math.max(0,entry.voice?.accepted||0),uncertain:Math.max(0,entry.voice?.uncertain||0)},response:{count:Math.max(0,Number(entry.response?.count)||0),totalMs:Math.max(0,Number(entry.response?.totalMs)||0)},difficulty:{level:Math.max(-2,Math.min(2,Number(entry.difficulty?.level)||0)),changes:Math.max(0,Number(entry.difficulty?.changes)||0)}};
+    try {
+      const rows=read(),index=sessionId ? rows.findIndex(item=>item.sessionId===sessionId) : -1;
+      if(index>=0) rows[index]={...rows[index],...row,at:rows[index].at || row.at};
+      else rows.push(row);
+      localStorage.setItem(key,JSON.stringify(rows.slice(-200)));
+      return true;
+    } catch {return false;}
   }
   function summary(days) {
     const rows=read().filter(r=>r.at>=Date.now()-days*day);
     const seconds=rows.reduce((s,r)=>s+(Number.isFinite(r.seconds) ? Math.max(0,r.seconds) : 0),0);
-    return {sessions:rows.length,independent:rows.reduce((s,r)=>s+r.independent,0),assisted:rows.reduce((s,r)=>s+r.assisted,0),seconds,minutes:Math.round(seconds/60)};
+    const responseCount=rows.reduce((s,r)=>s+(r.response?.count||0),0),responseTotalMs=rows.reduce((s,r)=>s+(r.response?.totalMs||0),0);
+    return {sessions:rows.length,independent:rows.reduce((s,r)=>s+r.independent,0),assisted:rows.reduce((s,r)=>s+r.assisted,0),seconds,minutes:Math.round(seconds/60),voiceAccepted:rows.reduce((s,r)=>s+(r.voice?.accepted||0),0),voiceUncertain:rows.reduce((s,r)=>s+(r.voice?.uncertain||0),0),responseCount,responseAverageMs:responseCount ? Math.round(responseTotalMs/responseCount) : null};
   }
   function duration(seconds) {
     if(seconds>0 && seconds<1) return "少于1秒";
@@ -24,6 +32,19 @@
   function due() {
     const latest=new Map(); for(const row of read()) latest.set(row.topic,row);
     return [...latest.values()].filter(r=>r.outcome==="review" || Date.now()-r.at>=day).sort((a,b)=>a.at-b.at);
+  }
+  function today() {
+    const start=new Date();start.setHours(0,0,0,0);
+    const rows=read().filter(row=>row.at>=start.getTime()),seconds=rows.reduce((sum,row)=>sum+(row.seconds||0),0);
+    const responseCount=rows.reduce((sum,row)=>sum+(row.response?.count||0),0),responseTotalMs=rows.reduce((sum,row)=>sum+(row.response?.totalMs||0),0);
+    return {sessions:rows.length,seconds,minutes:Math.floor(seconds/60),independent:rows.reduce((sum,row)=>sum+row.independent,0),voiceAccepted:rows.reduce((sum,row)=>sum+(row.voice?.accepted||0),0),responseCount,responseAverageMs:responseCount ? Math.round(responseTotalMs/responseCount) : null};
+  }
+  function dailyGoal() {
+    try {const value=Number(localStorage.getItem(goalKey));return [5,10,15,20].includes(value) ? value : 10;} catch {return 10;}
+  }
+  function setDailyGoal(value) {
+    const next=[5,10,15,20].includes(Number(value)) ? Number(value) : 10;
+    try {localStorage.setItem(goalKey,String(next));return next;} catch {return dailyGoal();}
   }
   function trends(rows=read()) {
     const groups=new Map();
@@ -40,5 +61,5 @@
       return {topic,title:latest.title,volume:latest.volume || "",status,delayedCount:delayed.length,delayedPassed:delayed.filter(r=>r.outcome==="passed").length,current,previous,history};
     });
   }
-  root.LezhiHistory={read,record,summary,duration,due,trends,clear(){try{localStorage.removeItem(key);return true;}catch{return false;}}};
+  root.LezhiHistory={read,record,summary,duration,due,today,dailyGoal,setDailyGoal,trends,clear(){try{localStorage.removeItem(key);return true;}catch{return false;}}};
 })(window);
