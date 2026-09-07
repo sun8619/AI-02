@@ -207,6 +207,32 @@
     return `${lead} ${explanation(lesson,plan,attempt)} 现在看这道小题：${remediation.checkPrompt}`;
   }
 
+  // Split only at spoken boundaries; never cut a number, equation or condition.
+  function spokenParts(text, limit=60) {
+    const sentences=tidy(text).match(/[^。！？!?；;]+[。！？!?；;]?/g) || [];
+    const parts=[];
+    for(const sentence of sentences) {
+      const units=Array.from(sentence).length>limit ? sentence.match(/[^，,]+[，,]?/g) || [sentence] : [sentence];
+      for(const unit of units) {
+        const value=unit.trim();
+        if(!value) continue;
+        const last=parts.at(-1);
+        if(last && Array.from(last+value).length<=limit) parts[parts.length-1]=last+value;
+        else parts.push(value);
+      }
+    }
+    return parts;
+  }
+
+  function repairParts(lesson, plan, remediation, attempt) {
+    const workedExample=worked(plan,attempt);
+    const explanationText=workedExample || explanation(lesson,plan,attempt);
+    return [
+      ...spokenParts(explanationText).map(text=>({kind:"explain",text})),
+      ...spokenParts(`你来试试。${remediation.checkPrompt}`).map(text=>({kind:"check",text})),
+    ];
+  }
+
   function signature(q) {
     const t=tidy(q.prompt);
     if(q.visualModel) return "picture-choice";
@@ -255,5 +281,5 @@
     })[0] || null;
   }
 
-  root.LezhiCoach=Object.freeze({profiles,profile,intent,social,task,feedback,cues,explanation,repair,worked,signature,skill,complexity,select,fresh,target});
+  root.LezhiCoach=Object.freeze({profiles,profile,intent,social,task,feedback,cues,explanation,repair,repairParts,spokenParts,worked,signature,skill,complexity,select,fresh,target});
 })(globalThis);

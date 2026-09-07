@@ -1,0 +1,432 @@
+{
+  "release": "v97-20260907",
+  "coverage": {
+    "steps": 668,
+    "frames": 4098,
+    "max": 59,
+    "topics": [
+      {
+        "id": "G1V1-U1-KP01",
+        "title": "1~5的认识与大小比较",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 16,
+        "explanationVersions": 48,
+        "maxSegmentChars": 49
+      },
+      {
+        "id": "G1V1-U1-KP02",
+        "title": "5以内数的组成",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 45
+      },
+      {
+        "id": "G1V1-U1-KP03",
+        "title": "5以内加减法与看图列式",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 24
+      },
+      {
+        "id": "G1V1-U2-KP01",
+        "title": "6~10的组成与数序",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 17,
+        "explanationVersions": 51,
+        "maxSegmentChars": 49
+      },
+      {
+        "id": "G1V1-U2-KP02",
+        "title": "10以内加减法和连算",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 16,
+        "explanationVersions": 48,
+        "maxSegmentChars": 45
+      },
+      {
+        "id": "G1V1-U2-KP03",
+        "title": "10以内加减法应用",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 46
+      },
+      {
+        "id": "G1V1-U3-KP01",
+        "title": "辨认长方体、正方体、圆柱和球",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 58
+      },
+      {
+        "id": "G1V1-U4-KP01",
+        "title": "11~20的组成与数位",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 17,
+        "explanationVersions": 51,
+        "maxSegmentChars": 37
+      },
+      {
+        "id": "G1V1-U4-KP02",
+        "title": "11~20大小比较与简单计算",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 16,
+        "explanationVersions": 48,
+        "maxSegmentChars": 53
+      },
+      {
+        "id": "G1V1-U5-KP01",
+        "title": "凑十法和20以内进位加法",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 22,
+        "explanationVersions": 66,
+        "maxSegmentChars": 32
+      },
+      {
+        "id": "G1V2-U1-KP01",
+        "title": "辨认平面图形与简单拼组",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 58
+      },
+      {
+        "id": "G1V2-U2-KP01",
+        "title": "十几减几的口算",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 22,
+        "explanationVersions": 66,
+        "maxSegmentChars": 41
+      },
+      {
+        "id": "G1V2-U2-KP02",
+        "title": "比较多少的实际问题",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 14,
+        "explanationVersions": 42,
+        "maxSegmentChars": 38
+      },
+      {
+        "id": "G1V2-U3-KP01",
+        "title": "按标准分类并读表",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 20,
+        "explanationVersions": 60,
+        "maxSegmentChars": 47
+      },
+      {
+        "id": "G1V2-U4-KP01",
+        "title": "100以内数的组成与读写",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 16,
+        "explanationVersions": 48,
+        "maxSegmentChars": 58
+      },
+      {
+        "id": "G1V2-U4-KP02",
+        "title": "100以内数的比较与估计",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 17,
+        "explanationVersions": 51,
+        "maxSegmentChars": 53
+      },
+      {
+        "id": "G1V2-U5-KP01",
+        "title": "元角分单位关系与换算",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 26,
+        "explanationVersions": 78,
+        "maxSegmentChars": 51
+      },
+      {
+        "id": "G1V2-U5-KP02",
+        "title": "简单购物与找零",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 24,
+        "explanationVersions": 72,
+        "maxSegmentChars": 47
+      },
+      {
+        "id": "G1V2-U6-KP01",
+        "title": "整十数和两位数加减法",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 33
+      },
+      {
+        "id": "G1V2-U7-KP01",
+        "title": "图形规律和数字规律",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 18,
+        "explanationVersions": 54,
+        "maxSegmentChars": 59
+      },
+      {
+        "id": "G2V1-U1-KP01",
+        "title": "厘米、米与长度测量",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 17,
+        "explanationVersions": 51,
+        "maxSegmentChars": 59
+      },
+      {
+        "id": "G2V1-U2-KP01",
+        "title": "两位数加减法笔算",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 33
+      },
+      {
+        "id": "G2V1-U2-KP02",
+        "title": "连续运算与比较问题",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 16,
+        "explanationVersions": 48,
+        "maxSegmentChars": 33
+      },
+      {
+        "id": "G2V1-U3-KP01",
+        "title": "角的特征与大小判断",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 54
+      },
+      {
+        "id": "G2V1-U4-KP01",
+        "title": "乘法意义和口诀应用",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 31
+      },
+      {
+        "id": "G2V1-U4-KP02",
+        "title": "乘加、乘减与应用",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 17,
+        "explanationVersions": 51,
+        "maxSegmentChars": 36
+      },
+      {
+        "id": "G2V1-U5-KP01",
+        "title": "从不同方向观察物体",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 57
+      },
+      {
+        "id": "G2V1-U6-KP01",
+        "title": "7~9的乘法口诀",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 32
+      },
+      {
+        "id": "G2V1-U7-KP01",
+        "title": "读钟面和写时间",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 27,
+        "explanationVersions": 81,
+        "maxSegmentChars": 56
+      },
+      {
+        "id": "G2V1-U7-KP02",
+        "title": "时间顺序和经过时间",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 51
+      },
+      {
+        "id": "G2V1-U8-KP01",
+        "title": "简单搭配与排列",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 55
+      },
+      {
+        "id": "G2V2-U1-KP01",
+        "title": "调查记录和统计表阅读",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 19,
+        "explanationVersions": 57,
+        "maxSegmentChars": 55
+      },
+      {
+        "id": "G2V2-U2-KP01",
+        "title": "平均分和除法意义",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 37
+      },
+      {
+        "id": "G2V2-U2-KP02",
+        "title": "用乘法口诀求商",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 31
+      },
+      {
+        "id": "G2V2-U3-KP01",
+        "title": "轴对称、平移和旋转",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 41
+      },
+      {
+        "id": "G2V2-U5-KP01",
+        "title": "混合运算顺序",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 20,
+        "explanationVersions": 60,
+        "maxSegmentChars": 34
+      },
+      {
+        "id": "G2V2-U6-KP01",
+        "title": "有余数除法与竖式",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 23,
+        "explanationVersions": 69,
+        "maxSegmentChars": 42
+      },
+      {
+        "id": "G2V2-U6-KP02",
+        "title": "进一法和去尾法",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 29,
+        "explanationVersions": 87,
+        "maxSegmentChars": 49
+      },
+      {
+        "id": "G2V2-U7-KP01",
+        "title": "万以内数的组成与读写",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 20,
+        "explanationVersions": 60,
+        "maxSegmentChars": 46
+      },
+      {
+        "id": "G2V2-U7-KP02",
+        "title": "万以内数的大小比较与口算",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 16,
+        "explanationVersions": 48,
+        "maxSegmentChars": 55
+      },
+      {
+        "id": "G2V2-U8-KP01",
+        "title": "克、千克与质量估测",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 16,
+        "explanationVersions": 48,
+        "maxSegmentChars": 46
+      },
+      {
+        "id": "G2V2-U9-KP01",
+        "title": "简单排除法推理",
+        "curriculumLayers": 5,
+        "sourceSubsteps": 7,
+        "questions": 11,
+        "boundSteps": 11,
+        "explanationVersions": 33,
+        "maxSegmentChars": 56
+      }
+    ],
+    "errors": []
+  },
+  "segmentedCheckRoutes": 668
+}

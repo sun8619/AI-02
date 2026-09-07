@@ -6256,6 +6256,9 @@ let state = {
   showLessonPicker: false,
   lessonPickerGrade: defaultLesson.grade,
   showKeyboard: false,
+  typedDraft: "",
+  emptyInputNotice: false,
+  teacherTurn: null,
   showVisual: true,
   visualHelpActive: false,
   strategyIndex: 0,
@@ -6637,6 +6640,9 @@ function createLessonStartMessage(lesson, starter, reason = "") {
 }
 
 function render() {
+  const activeInput=document.activeElement;
+  const editing=activeInput?.matches?.('[data-form="typed-answer"] input');
+  const selection=editing ? [activeInput.selectionStart,activeInput.selectionEnd] : null;
   app.innerHTML = `
     <div class="app-shell ${state.view === "child" ? "is-child" : "is-parent"}">
       ${renderTopbar()}
@@ -6644,10 +6650,16 @@ function render() {
     </div>
   `;
   bindEvents();
+  if(editing && state.showKeyboard) {
+    const input=document.querySelector('[data-form="typed-answer"] input');
+    input?.focus({preventScroll:true});
+    if(input && selection) input.setSelectionRange(...selection);
+  }
   markCurrentPromptPresented();
 }
 
 function currentPromptTelemetryKey() {
+  if(currentTeacherFrame()?.kind==="explain") return "";
   if (state.view!=="child" || coachMemory().paused || coachMemory().choices) return "";
   const question=currentAnswerQuestion();
   return [currentLesson()?.id,question?.id || question?.prompt,state.phase,state.completedSteps,state.remediationCheck?.checkPrompt || "",pendingMultipartPrompt(),state.aiMessage].join("|");
@@ -6810,7 +6822,8 @@ function renderKidQuestionBubble(lesson) {
     state.phase === "summary"
       ? "这一步学会了。你可以换下一个知识点，也可以再练一题。"
       : `看这题：${problem} ${shortPrompt}`;
-  const message = naturalizeChildQuestion(
+  const frame=currentTeacherFrame();
+  const message = frame ? naturalizeChildQuestion(frame.text) : naturalizeChildQuestion(
     ensureTeacherMessageHasAnswerTarget(state.aiMessage || fallbackMessage, lesson, plan),
   );
   const messageLength = Array.from(message).length;
@@ -6820,6 +6833,7 @@ function renderKidQuestionBubble(lesson) {
     <section class="kid-speech-bubble ${lengthClass}" aria-label="老师提问" aria-live="polite" aria-atomic="true">
       <div class="kid-speaker-row"><span class="kid-speaker-label">乐之老师</span><button class="kid-replay" data-action="repeat" aria-label="重听老师这一句话" title="重听这一句">${icon("repeat")}</button></div>
       <p>${escapeText(message)}</p>
+      ${renderTeacherTurnControls()}
       ${state.lastStudentText ? `<div class="kid-last-answer"><span>刚才你说</span><strong>${escapeText(state.lastStudentText)}</strong></div>` : ""}
     </section>
   `;
@@ -6853,7 +6867,8 @@ function renderKidCurrentProblem(lesson) {
     ? assessmentNumber
     : Math.min(ladder.length || 1, Math.max(1, Number(plan?.index ?? state.completedSteps) + 1));
   const totalSteps = wholeQuestionMode ? assessmentTotal : ladder.length || 1;
-  const currentLabel = wholeQuestionMode
+  const explaining = currentTeacherFrame()?.kind === "explain";
+  const currentLabel = explaining ? plan?.label || "一起看这一步" : wholeQuestionMode
     ? pendingMultipartPrompt() || "直接答整题"
     : state.remediationCheck?.checkPrompt || plan?.label || state.currentAtomName || "看清题目";
   const countUnit = wholeQuestionMode ? "题" : "步";
@@ -6864,7 +6879,7 @@ function renderKidCurrentProblem(lesson) {
         <strong>${escapeText(question)}</strong>
       </div>
       <div class="kid-task-step">
-        <span>${wholeQuestionMode ? state.initialWholeQuestion ? "先试一题" : "整题检验" : state.remediationCheck ? "讲完马上试" : "这一小步"}</span>
+        <span>${explaining ? "老师讲这一点" : wholeQuestionMode ? state.initialWholeQuestion ? "先试一题" : "整题检验" : state.remediationCheck ? "讲完马上试" : "这一小步"}</span>
         <strong>${escapeText(LezhiCoach.target(currentLabel,lesson.activeQuestionFamily))}</strong>
       </div>
       <div class="kid-task-count" aria-label="第 ${currentNumber} ${countUnit}，共 ${totalSteps} ${countUnit}">
@@ -6898,6 +6913,7 @@ function renderKidVoicePanel() {
 }
 
 function renderAnswerChoices() {
+  if(currentTeacherFrame()?.kind==="explain") return "";
   if (state.coach?.paused || state.coach?.choices) return "";
   if (state.phase === "summary") return "";
   const question = state.remediationCheck?.answerQuestion || (isWholeQuestionTurn() ? currentLesson().activeQuestion : getCurrentVisualPlan()?.answerQuestion);
@@ -6940,6 +6956,7 @@ function renderKidHelpButtons() {
 }
 
 function getKidBoardStageLabel() {
+  if(currentTeacherFrame()?.kind==="explain") return "先看老师讲";
   if (isWholeQuestionTurn()) return state.initialWholeQuestion ? "先试一题" : "整题检验";
   if (state.remediationCheck) return "讲完马上试";
   return "这一小步";
@@ -7491,8 +7508,9 @@ function renderKeyboardComposer() {
   const locked = state.isProcessing || state.voiceStatus === "processing" || state.recording;
   return `
     <form class="keyboard-composer" data-form="typed-answer">
-      <input name="answer" aria-label="打字回答" autocomplete="off" placeholder="也可以打字，例如：我想换知识点" ${locked ? "disabled" : ""} />
+      <input name="answer" aria-label="打字回答" autocomplete="off" value="${escapeText(state.typedDraft || "")}" placeholder="在这里写答案" ${locked ? "disabled" : ""} />
       <button class="btn btn-primary" data-action="send-text" type="submit" ${locked ? "disabled" : ""}>${locked ? "老师在想" : "发送"}</button>
+      ${state.emptyInputNotice ? '<p role="status" class="keyboard-notice">还没写答案，可以打字，也可以说给老师听。</p>' : ""}
     </form>
   `;
 }
@@ -7525,6 +7543,7 @@ function renderLearningVisual() {
 
 function getVisualRevealMode(lesson = currentLesson()) {
   if (!lesson) return "question";
+  if(currentTeacherFrame()?.kind==="explain") return "hint";
   if (state.visualHelpActive) return "hint";
   if (lesson.useQuestionBankTutor) return state.phase === "summary" ? "solution" : "question";
   if (state.remediationCheck) return "question";
@@ -7569,6 +7588,13 @@ function getVisualPanelLabel(lesson) {
 }
 
 function createActiveVisualLesson(lesson) {
+  const frame=currentTeacherFrame(),turn=state.teacherTurn;
+  if(frame?.kind==="explain" && turn.exampleQuestion) {
+    return {...lesson,activeQuestion:turn.exampleQuestion,problem:turn.exampleQuestion.prompt,
+      activeQuestionFamily:turn.family,sourceQuestionFamily:turn.family,
+      visualType:visualTypeForTeachingFamily(turn.family,lesson.visualType),
+      visualTitle:"一起看刚才这一步",visualContextKey:`${lesson.id}|example|${turn.exampleQuestion.prompt}|${turn.index}`};
+  }
   const remediation = state.remediationCheck;
   if (remediation) {
     const family = remediation.family || inferActiveQuestionFamily(lesson, lesson?.activeQuestion || null);
@@ -7618,6 +7644,7 @@ function createActiveVisualLesson(lesson) {
 
 function getCurrentVisualPlan(lesson = currentLesson()) {
   if (!lesson) return null;
+  if(currentTeacherFrame()?.kind==="explain") return state.teacherTurn.plan;
   if (state.remediationCheck) {
     return {
       index: Number(state.remediationCheck.originalPlanIndex) || 0,
@@ -8957,9 +8984,17 @@ function bindEvents() {
     node.addEventListener("click", toggleVoiceInput);
   });
   document.querySelectorAll("[data-form='typed-answer']").forEach((form) => {
+    form.querySelector('input[name="answer"]')?.addEventListener("compositionstart",stopTeacherSpeech);
+    form.querySelector('input[name="answer"]')?.addEventListener("input",event=>{
+      stopTeacherSpeech();
+      state.typedDraft=event.target.value;
+      state.emptyInputNotice=false;
+      form.querySelector('[role="status"]')?.remove();
+    });
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const value = new FormData(form).get("answer");
+      state.typedDraft="";
       form.reset();
       handleChildInput(String(value || "").trim(), "typed");
     });
@@ -9016,6 +9051,10 @@ function showCurrentStepVisual() {
 
 async function handleAction(event) {
   const action = event.currentTarget.dataset.action;
+  if(action==="teacher-next" || action==="teacher-try") {
+    advanceTeacherPart(action==="teacher-try");
+    return;
+  }
 
   if (action === "coach-resume" || action === "coach-pause" || action === "coach-change") {
     handleChildInput({"coach-resume":"我准备好了","coach-pause":"先休息","coach-change":"换一道简单的"}[action], "button");
@@ -9086,6 +9125,7 @@ async function handleAction(event) {
   }
 
   if (action === "toggle-keyboard") {
+    stopTeacherSpeech();
     state.showKeyboard = !state.showKeyboard;
     render();
     if (state.showKeyboard) {
@@ -9195,6 +9235,9 @@ function changeLesson(reason, targetIndex = null) {
   state.isProcessing = false;
   state.showLessonPicker = false;
   state.showKeyboard = false;
+  state.typedDraft = "";
+  state.emptyInputNotice = false;
+  state.teacherTurn = null;
   state.strategyIndex = 0;
   state.visualHelpActive = false;
   state.mastery = 60;
@@ -10390,6 +10433,8 @@ function handleChildInput(text, inputType) {
   }
 
   if (!text) {
+    state.emptyInputNotice=true;
+    render();
     toastMessage("先说一句或打几个字，我再继续。");
     return;
   }
@@ -10429,6 +10474,10 @@ function handleChildInput(text, inputType) {
   }
   if (redirectNonAnswer(text)) {
     render();
+    return;
+  }
+  if(currentTeacherFrame()?.kind==="explain") {
+    advanceTeacherPart(true);
     return;
   }
   recordCurrentResponseTime();
@@ -11094,6 +11143,7 @@ function teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal
     ...remediation,
     originalPlanIndex: Number(plan?.index) || 0,
     originalPlanLabel: plan?.label || "当前小步",
+    originalPlan: plan,
   };
   recordGuidedRepairAttempt(lesson, plan);
   state.mastery = Math.max(48, state.mastery - 1);
@@ -11102,6 +11152,7 @@ function teachCurrentMicrostepAndRecheck(lesson, plan, prefix, inputType, signal
   state.currentStep = `老师讲解：${plan?.label || remediation.title}`;
   state.aiContext = "孩子当前小步答错或请求讲解。老师先解释方法，再用一道近似题检查理解。";
   state.aiMessage = LezhiCoach.repair(lesson, plan, remediation, nextAttempt, coachMemory());
+  state.remediationCheck.presentationMessage=state.aiMessage;
   state.showVisual = true;
   state.strategyIndex = Math.max(state.strategyIndex, 1);
   state.bestStrategy = "讲一步，再试一道";
@@ -11780,18 +11831,70 @@ function switchExplanation(reason) {
   render();
 }
 
+function currentTeacherFrame() {
+  const turn=state.teacherTurn;
+  if(!turn || turn.message!==state.aiMessage || turn.lessonId!==currentLesson().id) return null;
+  return turn.frames[turn.index] || null;
+}
+
+function prepareTeacherTurn() {
+  if(currentTeacherFrame()) return;
+  state.teacherTurn=null;
+  const repair=state.remediationCheck;
+  if(!repair?.originalPlan || state.coach?.paused || state.coach?.choices) return;
+  // Social replies and repeats must not restart the worked example.
+  if(state.aiMessage!==repair.presentationMessage) return;
+  const plan=repair.originalPlan,lesson=currentLesson();
+  const question=plan.answerQuestion || lesson.activeQuestion;
+  const family=inferActiveQuestionFamily(lesson,question);
+  state.teacherTurn={message:state.aiMessage,lessonId:lesson.id,index:0,plan,
+    frames:LezhiCoach.repairParts(lesson,plan,repair,state.remediationAttempts),
+    exampleQuestion:{...question,visualPrompt:["time","data","measure"].includes(family) ? lesson.activeQuestion.prompt : question.prompt},
+    family};
+}
+
+function renderTeacherTurnControls() {
+  if(!currentTeacherFrame()) return "";
+  const turn=state.teacherTurn;
+  if(turn.index>=turn.frames.length-1) return "";
+  return `<div class="teacher-turn-controls" aria-label="讲解进度"><span>${turn.index+1} / ${turn.frames.length}</span><button type="button" data-action="teacher-next" title="继续听下一句" aria-label="继续听下一句">${icon("arrowRight") || "→"}</button>${currentTeacherFrame().kind==="explain" ? '<button type="button" data-action="teacher-try">我来试试</button>' : ""}</div>`;
+}
+
+function advanceTeacherPart(toQuestion=false) {
+  if(!currentTeacherFrame()) return;
+  const turn=state.teacherTurn;
+  const next=toQuestion ? turn.frames.findIndex(frame=>frame.kind==="check") : turn.index+1;
+  if(next<0 || next>=turn.frames.length) return;
+  stopTeacherSpeech();
+  turn.index=next;
+  state.visualHelpActive=false;
+  state.emptyInputNotice=false;
+  state.promptTelemetryKey="";
+  render();
+  void speakCurrentMessage();
+}
+
 async function speakCurrentMessage() {
-  const text = toSpokenText(state.aiMessage.trim());
+  prepareTeacherTurn();
+  const frame=currentTeacherFrame();
+  const text = toSpokenText((frame?.text || state.aiMessage).trim());
   stopTeacherSpeech();
   if (!text) return;
   const playbackGeneration = ttsGeneration;
+  const turn=state.teacherTurn,part=turn?.index;
+  const finished=()=>{
+    if(playbackGeneration!==ttsGeneration) return;
+    setTeacherLiveMood(getKidTeacherMood());
+    if(currentTeacherFrame() && state.teacherTurn===turn && turn.index===part && part<turn.frames.length-1) advanceTeacherPart();
+  };
+  if(frame) render();
   setTeacherLiveMood("thinking");
 
   if (window.location.protocol !== "file:") {
     const requestController = new AbortController();
     currentTtsRequest = requestController;
     let timedOut = false;
-    const slowNotice = window.setTimeout(()=>{if(playbackGeneration===ttsGeneration) toastMessage("声音还在准备，你可以先看文字回答，或点重听重新播放。");},5000);
+    const slowNotice = window.setTimeout(()=>{if(playbackGeneration===ttsGeneration) toastMessage(currentTeacherFrame()?.kind === "explain" ? "声音还在准备，可以先看这一句，或点箭头继续。" : "声音还在准备，可以先看题目，想好了就回答。");},3000);
     const timeout = window.setTimeout(() => { timedOut = true; requestController.abort(); }, 20000);
     try {
       const response = await fetch("/api/speech/synthesis", {
@@ -11816,7 +11919,7 @@ async function speakCurrentMessage() {
         audio.onended = () => {
           audio.removeAttribute("src");audio.load();
           if (currentAudio === audio) currentAudio = null;
-          if (playbackGeneration === ttsGeneration) setTeacherLiveMood(getKidTeacherMood());
+          finished();
         };
         audio.onerror = () => {
           audio.onended=null;audio.onerror=null;audio.removeAttribute("src");audio.load();
@@ -11859,7 +11962,7 @@ async function speakCurrentMessage() {
     if (playbackGeneration === ttsGeneration) setTeacherLiveMood("speaking");
   };
   utterance.onend = () => {
-    if (playbackGeneration === ttsGeneration) setTeacherLiveMood(getKidTeacherMood());
+    finished();
   };
   window.speechSynthesis.speak(utterance);
 }

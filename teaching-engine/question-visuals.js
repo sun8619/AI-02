@@ -20,6 +20,7 @@
     return drawing + (label ? text(x, 190, name, 'text-anchor="middle"') : "");
   };
   const shapeTile = name => `<svg class="math-shape-tile" viewBox="185 30 150 135" role="img" aria-label="${escape(name)}">${shape(name,260,false,false)}</svg>`;
+  const pictureChoice=(choice,drawing,note="")=>`<figure data-visual-choice="${escape(choice.label)}"><button type="button" class="math-picture-answer" data-action="answer-choice" data-answer="${escape(choice.text)}" aria-label="选择${escape(choice.label)} ${escape(choice.text)}">${drawing}</button><figcaption><b>${escape(choice.label)}</b> ${escape(choice.text)}</figcaption>${note ? `<p>${escape(note)}</p>` : ""}</figure>`;
   function angleTile(degrees, hint=false, label="这个角") {
     const rad=degrees*Math.PI/180,x=90+65*Math.cos(rad),y=98-65*Math.sin(rad);
     return `<svg class="math-reference-tile" viewBox="0 0 190 125" role="img" aria-label="${escape(label)}" data-angle-degrees="${degrees}"><path d="M166 98H90L${x} ${y}" fill="none" stroke="#345768" stroke-width="4" stroke-linecap="round"/>${hint ? '<path d="M90 28v70h76 M90 80h18v18" fill="none" stroke="#a76a15" stroke-width="2" stroke-dasharray="5 3"/>' : ''}<circle cx="90" cy="98" r="3" fill="#345768"/></svg>`;
@@ -51,13 +52,13 @@
     const hint = mode === "hint" || mode === "step" || mode === "solution";
     const numbers = [...prompt.matchAll(/\d+/g)].map(m => Number(m[0]));
     if (question.choices?.length && family === "angle" && question.visualModel?.kind==="angle") {
-      return `<div class="math-reference-task"><figure class="math-target-figure"><figcaption>题目中的角</figcaption>${angleTile(question.visualModel.degrees,hint)}${hint ? '<p>虚线是直角：顶点和一条边对齐，再比张口。</p>' : ''}</figure><div class="math-choice-figures has-three">${question.choices.map(c=>`<figure data-visual-choice="${escape(c.label)}">${angleTile({直角:90,锐角:45,钝角:125}[c.text],false,c.text)}<figcaption><b>${escape(c.label)}</b> ${escape(c.text)}</figcaption></figure>`).join('')}</div></div>`;
+      return `<div class="math-reference-task"><figure class="math-target-figure"><figcaption>题目中的角</figcaption>${angleTile(question.visualModel.degrees,hint)}${hint ? '<p>虚线是直角：顶点和一条边对齐，再比张口。</p>' : ''}</figure><div class="math-choice-figures has-three">${question.choices.map(c=>pictureChoice(c,angleTile({直角:90,锐角:45,钝角:125}[c.text],false,c.text))).join('')}</div></div>`;
     }
     if (question.choices?.length && family === "observation" && question.visualModel?.kind==="observation") {
-      return `<div class="math-reference-task"><div class="math-object-scene"><figure><figcaption>同一个小屋</figcaption>${observationReference(hint)}</figure><figure><figcaption>看到的样子</figcaption>${viewTile(question.visualModel.view,"题目中的观察结果")}</figure></div><div class="math-choice-figures has-three">${question.choices.map(c=>`<figure data-visual-choice="${escape(c.label)}">${viewTile({正面:"front",侧面:"side",上面:"top"}[c.text],c.text)}<figcaption><b>${escape(c.label)}</b> ${escape(c.text)}</figcaption></figure>`).join('')}</div>${hint ? '<p>先找门前、旁边和上方的位置，再比较各自看到的轮廓。</p>' : ''}</div>`;
+      return `<div class="math-reference-task"><div class="math-object-scene"><figure><figcaption>同一个小屋</figcaption>${observationReference(hint)}</figure><figure><figcaption>看到的样子</figcaption>${viewTile(question.visualModel.view,"题目中的观察结果")}</figure></div><div class="math-choice-figures has-three">${question.choices.map(c=>pictureChoice(c,viewTile({正面:"front",侧面:"side",上面:"top"}[c.text],c.text))).join('')}</div>${hint ? '<p>先找门前、旁边和上方的位置，再比较各自看到的轮廓。</p>' : ''}</div>`;
     }
     if (question.choices?.length && family === "shape") {
-      return `<div class="math-choice-figures">${question.choices.map(choice=>`<figure data-visual-choice="${escape(choice.label)}">${shapeTile(choice.text)}<figcaption><b>${escape(choice.label)}</b> ${escape(choice.text)}</figcaption>${hint ? `<p>${escape(features[choice.text] || "沿着轮廓看一圈，比较题目说的特征。")}</p>` : ""}</figure>`).join("")}</div>`;
+      return `<div class="math-choice-figures">${question.choices.map(choice=>pictureChoice(choice,shapeTile(choice.text),hint ? features[choice.text] || "沿着轮廓看一圈，比较题目说的特征。" : "")).join("")}</div>`;
     }
     const toTen=prompt.match(/(\d+)再加几就是10/);
     if(toTen) return `<div class="math-quantity"><strong>${toTen[1]} + ? = 10</strong><div class="math-ten-frame">${Array.from({length:10},(_,i)=>`<i class="math-dot ${i>=+toTen[1] ? `is-empty ${hint ? "is-emphasized" : ""}` : ""}"></i>`).join("")}</div>${hint ? "<p>一个空格放一个，数数还空着几格。</p>" : ""}</div>`;
@@ -182,7 +183,15 @@
       }
     }
     if (family === "money" && !/对错|比.*多|一共多少钱/.test(prompt)) {
-      const left = prompt.split(/等于|是几|=|换成/)[0].replace(/^.*?填空[:：]/, "");
+      const premise = prompt.split(/等于|是几|=|换成/)[0].replace(/^.*?填空[:：]/, "");
+      // A repeated amount in an introductory clause is not an extra amount to add.
+      const clauses = premise.split(/[，,。；;：:]/).filter(part=>/\d+\s*(元|角|分)/.test(part));
+      const last = clauses.at(-1) || "";
+      const priorAmounts = clauses.slice(0,-1).join(" ").match(/\d+\s*(?:元|角|分)/g) || [];
+      const focusAmounts = last.match(/\d+\s*(?:元|角|分)/g) || [];
+      const repeatedFocus = clauses.length>1 && /^(?:先看|先把|把|看)?\s*\d/.test(last)
+        && !/和|加|再|又|另|一共/.test(last) && focusAmounts.every(value=>priorAmounts.includes(value));
+      const left = repeatedFocus ? last : premise;
       const quantities = [...left.matchAll(/(\d+)\s*(元|角|分)/g)].filter(m=>+m[1]>0);
       const target=[...prompt.matchAll(/(?:多少|几|_{2,})\s*(元|角|分)/g)].at(-1)?.[1];
       const targets = root.LezhiAnswers?.multipart(question)?.slots.map(s => s.unit).filter(Boolean);
