@@ -1,0 +1,218 @@
+{
+  "release": "v98-20260909",
+  "topics": [
+    {
+      "id": "G1V1-U1-KP01",
+      "steps": 16,
+      "interruptions": 96
+    },
+    {
+      "id": "G1V1-U1-KP02",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G1V1-U1-KP03",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G1V1-U2-KP01",
+      "steps": 17,
+      "interruptions": 102
+    },
+    {
+      "id": "G1V1-U2-KP02",
+      "steps": 16,
+      "interruptions": 96
+    },
+    {
+      "id": "G1V1-U2-KP03",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G1V1-U3-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G1V1-U4-KP01",
+      "steps": 17,
+      "interruptions": 102
+    },
+    {
+      "id": "G1V1-U4-KP02",
+      "steps": 16,
+      "interruptions": 96
+    },
+    {
+      "id": "G1V1-U5-KP01",
+      "steps": 22,
+      "interruptions": 132
+    },
+    {
+      "id": "G1V2-U1-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G1V2-U2-KP01",
+      "steps": 22,
+      "interruptions": 132
+    },
+    {
+      "id": "G1V2-U2-KP02",
+      "steps": 14,
+      "interruptions": 84
+    },
+    {
+      "id": "G1V2-U3-KP01",
+      "steps": 20,
+      "interruptions": 120
+    },
+    {
+      "id": "G1V2-U4-KP01",
+      "steps": 16,
+      "interruptions": 96
+    },
+    {
+      "id": "G1V2-U4-KP02",
+      "steps": 17,
+      "interruptions": 102
+    },
+    {
+      "id": "G1V2-U5-KP01",
+      "steps": 26,
+      "interruptions": 156
+    },
+    {
+      "id": "G1V2-U5-KP02",
+      "steps": 24,
+      "interruptions": 144
+    },
+    {
+      "id": "G1V2-U6-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G1V2-U7-KP01",
+      "steps": 18,
+      "interruptions": 108
+    },
+    {
+      "id": "G2V1-U1-KP01",
+      "steps": 17,
+      "interruptions": 102
+    },
+    {
+      "id": "G2V1-U2-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V1-U2-KP02",
+      "steps": 16,
+      "interruptions": 96
+    },
+    {
+      "id": "G2V1-U3-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V1-U4-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V1-U4-KP02",
+      "steps": 17,
+      "interruptions": 102
+    },
+    {
+      "id": "G2V1-U5-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V1-U6-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V1-U7-KP01",
+      "steps": 27,
+      "interruptions": 162
+    },
+    {
+      "id": "G2V1-U7-KP02",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V1-U8-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V2-U1-KP01",
+      "steps": 19,
+      "interruptions": 114
+    },
+    {
+      "id": "G2V2-U2-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V2-U2-KP02",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V2-U3-KP01",
+      "steps": 11,
+      "interruptions": 66
+    },
+    {
+      "id": "G2V2-U5-KP01",
+      "steps": 20,
+      "interruptions": 120
+    },
+    {
+      "id": "G2V2-U6-KP01",
+      "steps": 23,
+      "interruptions": 138
+    },
+    {
+      "id": "G2V2-U6-KP02",
+      "steps": 29,
+      "interruptions": 174
+    },
+    {
+      "id": "G2V2-U7-KP01",
+      "steps": 20,
+      "interruptions": 120
+    },
+    {
+      "id": "G2V2-U7-KP02",
+      "steps": 16,
+      "interruptions": 96
+    },
+    {
+      "id": "G2V2-U8-KP01",
+      "steps": 16,
+      "interruptions": 96
+    },
+    {
+      "id": "G2V2-U9-KP01",
+      "steps": 11,
+      "interruptions": 66
+    }
+  ],
+  "interruptions": 4008,
+  "resumedCorrectChecks": 4008,
+  "errors": []
+}

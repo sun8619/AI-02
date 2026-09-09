@@ -6432,6 +6432,9 @@ function getQuestionBankSample(lesson = currentLesson()) {
 
 function activateLessonQuestion(lesson, question, cursor = 0) {
   if (!lesson || !question) return false;
+  state.typedDraft = "";
+  state.emptyInputNotice = false;
+  state.teacherTurn = null;
   state.multipartAnswer = null;
   clearRemediationCheck();
   lesson.activeQuestion = question;
@@ -6659,7 +6662,7 @@ function render() {
 }
 
 function currentPromptTelemetryKey() {
-  if(currentTeacherFrame()?.kind==="explain") return "";
+  if(presentedTeacherFrame()?.kind==="explain") return "";
   if (state.view!=="child" || coachMemory().paused || coachMemory().choices) return "";
   const question=currentAnswerQuestion();
   return [currentLesson()?.id,question?.id || question?.prompt,state.phase,state.completedSteps,state.remediationCheck?.checkPrompt || "",pendingMultipartPrompt(),state.aiMessage].join("|");
@@ -6823,7 +6826,7 @@ function renderKidQuestionBubble(lesson) {
       ? "这一步学会了。你可以换下一个知识点，也可以再练一题。"
       : `看这题：${problem} ${shortPrompt}`;
   const frame=currentTeacherFrame();
-  const message = frame ? naturalizeChildQuestion(frame.text) : naturalizeChildQuestion(
+  const message = frame ? naturalizeChildQuestion(frame.text) : activeTeacherTurn()?.interrupted ? naturalizeChildQuestion(state.aiMessage) : naturalizeChildQuestion(
     ensureTeacherMessageHasAnswerTarget(state.aiMessage || fallbackMessage, lesson, plan),
   );
   const messageLength = Array.from(message).length;
@@ -6831,10 +6834,12 @@ function renderKidQuestionBubble(lesson) {
 
   return `
     <section class="kid-speech-bubble ${lengthClass}" aria-label="老师提问" aria-live="polite" aria-atomic="true">
+      <div class="kid-message-content">
       <div class="kid-speaker-row"><span class="kid-speaker-label">乐之老师</span><button class="kid-replay" data-action="repeat" aria-label="重听老师这一句话" title="重听这一句">${icon("repeat")}</button></div>
       <p>${escapeText(message)}</p>
-      ${renderTeacherTurnControls()}
       ${state.lastStudentText ? `<div class="kid-last-answer"><span>刚才你说</span><strong>${escapeText(state.lastStudentText)}</strong></div>` : ""}
+      </div>
+      ${renderTeacherTurnControls()}
     </section>
   `;
 }
@@ -6867,7 +6872,7 @@ function renderKidCurrentProblem(lesson) {
     ? assessmentNumber
     : Math.min(ladder.length || 1, Math.max(1, Number(plan?.index ?? state.completedSteps) + 1));
   const totalSteps = wholeQuestionMode ? assessmentTotal : ladder.length || 1;
-  const explaining = currentTeacherFrame()?.kind === "explain";
+  const explaining = presentedTeacherFrame()?.kind === "explain";
   const currentLabel = explaining ? plan?.label || "一起看这一步" : wholeQuestionMode
     ? pendingMultipartPrompt() || "直接答整题"
     : state.remediationCheck?.checkPrompt || plan?.label || state.currentAtomName || "看清题目";
@@ -6913,7 +6918,7 @@ function renderKidVoicePanel() {
 }
 
 function renderAnswerChoices() {
-  if(currentTeacherFrame()?.kind==="explain") return "";
+  if(presentedTeacherFrame()?.kind==="explain") return "";
   if (state.coach?.paused || state.coach?.choices) return "";
   if (state.phase === "summary") return "";
   const question = state.remediationCheck?.answerQuestion || (isWholeQuestionTurn() ? currentLesson().activeQuestion : getCurrentVisualPlan()?.answerQuestion);
@@ -6956,7 +6961,7 @@ function renderKidHelpButtons() {
 }
 
 function getKidBoardStageLabel() {
-  if(currentTeacherFrame()?.kind==="explain") return "先看老师讲";
+  if(presentedTeacherFrame()?.kind==="explain") return "先看老师讲";
   if (isWholeQuestionTurn()) return state.initialWholeQuestion ? "先试一题" : "整题检验";
   if (state.remediationCheck) return "讲完马上试";
   return "这一小步";
@@ -7543,7 +7548,7 @@ function renderLearningVisual() {
 
 function getVisualRevealMode(lesson = currentLesson()) {
   if (!lesson) return "question";
-  if(currentTeacherFrame()?.kind==="explain") return "hint";
+  if(presentedTeacherFrame()?.kind==="explain") return "hint";
   if (state.visualHelpActive) return "hint";
   if (lesson.useQuestionBankTutor) return state.phase === "summary" ? "solution" : "question";
   if (state.remediationCheck) return "question";
@@ -7588,7 +7593,7 @@ function getVisualPanelLabel(lesson) {
 }
 
 function createActiveVisualLesson(lesson) {
-  const frame=currentTeacherFrame(),turn=state.teacherTurn;
+  const frame=presentedTeacherFrame(),turn=activeTeacherTurn();
   if(frame?.kind==="explain" && turn.exampleQuestion) {
     return {...lesson,activeQuestion:turn.exampleQuestion,problem:turn.exampleQuestion.prompt,
       activeQuestionFamily:turn.family,sourceQuestionFamily:turn.family,
@@ -7644,7 +7649,7 @@ function createActiveVisualLesson(lesson) {
 
 function getCurrentVisualPlan(lesson = currentLesson()) {
   if (!lesson) return null;
-  if(currentTeacherFrame()?.kind==="explain") return state.teacherTurn.plan;
+  if(presentedTeacherFrame()?.kind==="explain") return state.teacherTurn.plan;
   if (state.remediationCheck) {
     return {
       index: Number(state.remediationCheck.originalPlanIndex) || 0,
@@ -9041,7 +9046,11 @@ function showCurrentStepVisual() {
   state.aiContext = "老师不重复口头提示，改为引导孩子观察当前图示。";
   state.currentAtomName = plan.label;
   state.currentStep = `小台阶 ${plan.index + 1}：${plan.label}`;
-  state.aiMessage = `${help.cue} ${boardQuestion}`;
+  if (presentedTeacherFrame()?.kind === "explain") interruptTeacherTurn(help.cue);
+  else {
+    interruptTeacherTurn();
+    state.aiMessage = `${help.cue} ${boardQuestion}`;
+  }
   state.bestStrategy = "画图";
   addEvidence("看图辅助", `孩子改用图观察「${plan.label}」，老师只追问图下方问题。`, "画图");
   resetGeneratedVisualForTurn();
@@ -9051,6 +9060,7 @@ function showCurrentStepVisual() {
 
 async function handleAction(event) {
   const action = event.currentTarget.dataset.action;
+  if(action==="teacher-resume") {resumeTeacherTurn();return;}
   if(action==="teacher-next" || action==="teacher-try") {
     advanceTeacherPart(action==="teacher-try");
     return;
@@ -9377,7 +9387,9 @@ function createVoiceRecognitionContext() {
   // Voice validation must follow the question the child can currently see.
   // Mixing the final exercise answer into an earlier micro-step makes valid
   // replies such as "右边" look like invalid comparison-symbol answers.
-  const expectedAnswers = state.remediationCheck
+  const expectedAnswers = presentedTeacherFrame()?.kind === "explain"
+    ? uniqueKeywords([answerQuestion?.answer, ...(answerQuestion?.answerKeywords || [])].filter(Boolean))
+    : state.remediationCheck
     ? [state.remediationCheck.answer, ...(state.remediationCheck.answerKeywords || [])]
     : wholeQuestionMode
     ? questionExpectedAnswers
@@ -10476,7 +10488,8 @@ function handleChildInput(text, inputType) {
     render();
     return;
   }
-  if(currentTeacherFrame()?.kind==="explain") {
+  if(presentedTeacherFrame()?.kind==="explain") {
+    if(activeTeacherTurn()?.interrupted) {resumeTeacherTurn();return;}
     advanceTeacherPart(true);
     return;
   }
@@ -10646,6 +10659,7 @@ function applyGatewayTutor(payload, inputType) {
 }
 
 function currentAnswerQuestion() {
+  if (presentedTeacherFrame()?.kind === "explain") return activeTeacherTurn().exampleQuestion;
   const lesson = currentLesson();
   if (state.remediationCheck) return {...state.remediationCheck.answerQuestion, prompt:state.remediationCheck.checkPrompt, answer:state.remediationCheck.answer};
   if (isWholeQuestionTurn()) return lesson.activeQuestion;
@@ -10738,6 +10752,7 @@ function handleCoachingIntent(text, inputType) {
   if (!kind) {
     if ((memory.paused || memory.choices) && LezhiAnswers.classify(text,currentAnswerQuestion()).kind === "answer") resumeCoaching();
     else if(memory.paused) {
+      interruptTeacherTurn();
       state.aiMessage="我们还停在刚才的地方。准备好了，可以说‘我准备好了’。";
       speakCurrentMessage();
       return true;
@@ -10751,6 +10766,7 @@ function handleCoachingIntent(text, inputType) {
   if(kind==="repeat") {speakCurrentMessage();return true;}
   if(kind==="help") {resumeCoaching();switchExplanation("");return true;}
   if(kind==="change") {changeCoachingQuestion();return true;}
+  interruptTeacherTurn();
   if(kind==="pause") {
     memory.choices=false;
     if(!memory.paused) memory.pauseStartedAt=Date.now();
@@ -10761,12 +10777,13 @@ function handleCoachingIntent(text, inputType) {
       return true;
     }
     resumeCoaching();
+    if(resumeTeacherTurn()) return true;
     state.aiMessage=`好，接着刚才这一问：${pendingMultipartPrompt() || coachQuestion()}`;
     speakCurrentMessage();
     return true;
   } else if(["bored","sad","angry"].includes(kind)) memory.choices=true;
-  const target=memory.paused ? "准备好了再继续。" : pendingMultipartPrompt() || coachQuestion();
-  state.aiMessage=LezhiCoach.social(kind,currentLesson(),target,memory);
+  const target=memory.paused ? "准备好了再继续。" : presentedTeacherFrame()?.kind === "explain" ? "我们接着看刚才这一步。" : pendingMultipartPrompt() || coachQuestion();
+  state.aiMessage=LezhiCoach.social(kind,currentLesson(),target,memory,{explaining:presentedTeacherFrame()?.kind === "explain"});
   speakCurrentMessage();
   return true;
 }
@@ -10777,9 +10794,11 @@ function redirectNonAnswer(text) {
   const question = currentAnswerQuestion();
   const classification = LezhiAnswers.classify(text, question);
   if (classification.kind === "answer") return false;
-  const target = pendingMultipartPrompt() || coachQuestion(question);
-  state.aiMessage = classification.kind === "partial" ? `这句还没说完，我接着听。${target}` : LezhiCoach.social("redirect", currentLesson(), target, coachMemory());
-  if (!pendingMultipartPrompt() && LezhiAnswers.multipart(question)) state.aiMessage += ` ${LezhiAnswers.multipart(question).instruction}`;
+  interruptTeacherTurn();
+  const explaining = presentedTeacherFrame()?.kind === "explain";
+  const target = explaining ? "我们接着看刚才这一步。" : pendingMultipartPrompt() || coachQuestion(question);
+  state.aiMessage = classification.kind === "partial" ? `这句还没说完，我接着听。${target}` : LezhiCoach.social("redirect", currentLesson(), target, coachMemory(), {explaining});
+  if (!explaining && !pendingMultipartPrompt() && LezhiAnswers.multipart(question)) state.aiMessage += ` ${LezhiAnswers.multipart(question).instruction}`;
   state.teacherReaction = "listening";
   state.isProcessing = false;
   state.voiceStatus = "idle";
@@ -11831,14 +11850,44 @@ function switchExplanation(reason) {
   render();
 }
 
-function currentTeacherFrame() {
+function activeTeacherTurn() {
   const turn=state.teacherTurn;
-  if(!turn || turn.message!==state.aiMessage || turn.lessonId!==currentLesson().id) return null;
-  return turn.frames[turn.index] || null;
+  if(!turn || turn.lessonId!==currentLesson().id || turn.repair!==state.remediationCheck) return null;
+  if(!turn.interrupted && turn.message!==state.aiMessage) return null;
+  return turn;
+}
+
+// The displayed example survives a social aside; the unseen check is not active yet.
+function presentedTeacherFrame() {
+  const turn=activeTeacherTurn();
+  return turn?.frames[turn.index] || null;
+}
+
+function currentTeacherFrame() {
+  const turn=activeTeacherTurn();
+  return turn && !turn.interrupted ? presentedTeacherFrame() : null;
+}
+
+function interruptTeacherTurn(message) {
+  const turn=activeTeacherTurn();
+  if(!turn) return false;
+  turn.interrupted=true;
+  if(message) state.aiMessage=message;
+  return true;
+}
+
+function resumeTeacherTurn() {
+  const turn=activeTeacherTurn();
+  if(!turn?.interrupted || state.coach?.paused || state.coach?.choices) return false;
+  turn.interrupted=false;
+  state.aiMessage=turn.message;
+  render();
+  void speakCurrentMessage();
+  return true;
 }
 
 function prepareTeacherTurn() {
-  if(currentTeacherFrame()) return;
+  if(activeTeacherTurn()) return;
   state.teacherTurn=null;
   const repair=state.remediationCheck;
   if(!repair?.originalPlan || state.coach?.paused || state.coach?.choices) return;
@@ -11847,13 +11896,14 @@ function prepareTeacherTurn() {
   const plan=repair.originalPlan,lesson=currentLesson();
   const question=plan.answerQuestion || lesson.activeQuestion;
   const family=inferActiveQuestionFamily(lesson,question);
-  state.teacherTurn={message:state.aiMessage,lessonId:lesson.id,index:0,plan,
+  state.teacherTurn={message:state.aiMessage,lessonId:lesson.id,index:0,plan,repair,interrupted:false,
     frames:LezhiCoach.repairParts(lesson,plan,repair,state.remediationAttempts),
     exampleQuestion:{...question,visualPrompt:["time","data","measure"].includes(family) ? lesson.activeQuestion.prompt : question.prompt},
     family};
 }
 
 function renderTeacherTurnControls() {
+  if(activeTeacherTurn()?.interrupted && !state.coach?.paused && !state.coach?.choices) return '<div class="teacher-turn-controls"><button type="button" data-action="teacher-resume">继续刚才这一步</button></div>';
   if(!currentTeacherFrame()) return "";
   const turn=state.teacherTurn;
   if(turn.index>=turn.frames.length-1) return "";
@@ -11885,6 +11935,7 @@ async function speakCurrentMessage() {
   const finished=()=>{
     if(playbackGeneration!==ttsGeneration) return;
     setTeacherLiveMood(getKidTeacherMood());
+    if(activeTeacherTurn()===turn && turn?.interrupted && turn.index===part) {resumeTeacherTurn();return;}
     if(currentTeacherFrame() && state.teacherTurn===turn && turn.index===part && part<turn.frames.length-1) advanceTeacherPart();
   };
   if(frame) render();

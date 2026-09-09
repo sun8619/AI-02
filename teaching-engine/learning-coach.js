@@ -73,7 +73,7 @@
     return "";
   }
 
-  function social(kind, lesson, question, memory) {
+  function social(kind, lesson, question, memory, {explaining=false}={}) {
     const p=profile(lesson), target=tidy(question);
     if(kind==="pause") return "好，我们先停在这里。准备好了再回来，不用着急。";
     if(kind==="bored") return "不想一直这样做也没关系。换一道简单的，还是先休息？";
@@ -81,7 +81,8 @@
     if(kind==="angry") return "我听到你现在很烦。我们先停一下，不追着做题。想换一道简单的，还是先休息？";
     if(kind==="identity") return `我是乐之老师，是陪你学数学的AI。${target}`;
     if(kind==="purpose") return `${p?.purpose || "数学可以帮我们把数量和形状想清楚。"}${target}`;
-    if(kind==="distraction") return `可以先处理身边的事，我等你。准备好再看：${target}`;
+    if(kind==="distraction") return explaining ? "听到了。需要停一下，可以说‘先休息’。" : `听到了。需要停一下，可以说‘先休息’。${target}`;
+    if(explaining) return fresh(memory,"lecture-redirect",["我听到了。接着看刚才这一步。","这句先记下，我们回到刚才的图。","刚才讲到这里，我们接着看。"]);
     return `${fresh(memory,"redirect",["我听到了。我们接着看这一问：","这句我还没明白。我们先看看题目：","题目还在这里，我们接着试试："])}${target}`;
   }
 
