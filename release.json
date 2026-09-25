@@ -1,6 +1,6 @@
 {
-  "id": "v98-20260909",
-  "builtAt": "2026-09-09T02:41:03.013Z",
+  "id": "release-20260925T060826Z",
+  "builtAt": "2026-09-25T06:08:26.532Z",
   "hashes": {
     "app.js": "c3a581a1a72b27c5887ea849421a2cbafefcca8a2b5fa4c43b7c2c9ea4530744",
     "assets/lezhi-teacher-coach-v3.png": "7f76394021d0bf30d002ad7aeb406f11905179c63abee19d82a141fbfbc77629",
@@ -8,10 +8,11 @@
     "child-learning-stage.css": "b8420ca6316680b6c4a28629fdce46f38b4b3d63f059facf43450137aaf9d078",
     "index.html": "60ddca9fcf547466a439b7fdf17fbc75eb064b9690b829f1f61ea972c00702b7",
     "package-lock.json": "d8fefc73aa70c6e9df42c0565a91eedc3f1839ae099cae784182cdd6b6e878ce",
-    "package.json": "6aa763569213ec0e301b900153feea90dbdf32632174f1ce1b7dfeb3befb8e2a",
+    "package.json": "bc671477edc8c8b87199c71fc93a9f05349390bbb3c58489865f6c87ed1fbcd0",
     "server.mjs": "e13b363ba9018c8049d3cedc66befa97e2486f117f1b65759d49bbffdc788e91",
     "styles.css": "05878d2c3a0c121b0bb9a9474dbe47ec02045e0c706efcbd2290fa9344d85a80",
     "teaching-engine/answer-contract.js": "ebc97dd4ef8d95d972f68e668f8ec7210bf22a8d2c64da7f44a7d97ce5ae4c13",
+    "teaching-engine/app.js": "acff5561caf82b8656e37913452fe5d27174a9d8f8a06efce78abcdb9a49d2b9",
     "teaching-engine/browser-coaching-audit.js": "5b3054e8f4f8e265d540fdb744b6593480f806797fd3aeb8765ffe641e32f204",
     "teaching-engine/browser-multipart-audit.js": "fb482293d05fcde53d55bb90486dc956a2d500742651783057e7677b5a57c571",
     "teaching-engine/browser-v91-audit.js": "362bff54d3d5e9a8fdaa777deae0f8147e66c02a9270a11b06181fe3789c8df3",
@@ -62,7 +63,11 @@
     "teaching-engine/v98-regression-audit.js": "dafb5359c12e90b69538a8caba776fa681beac6c61de389a51358ace04196556",
     "teaching-engine/voice-lifecycle-audit.js": "3f52e856481c0a53fa0d14f0a7d7757d8b89ac718f4031636bbbdaa0aadc0772",
     "tools/browser-regression.mjs": "45ce71a90b74160162fa3f4ced36cb60422e42083af9dc4d9e6237e62d69f5e3",
-    "tools/release.mjs": "96a3bed2447de8a4ab4a734f98e1a533e934ea39888ce7c87302ff507ef881e0",
+    "tools/deploy-local.sh": "5b70598b04f78ff8cc37df82040cce84b4373e1919427bc970e73485c4eddd8e",
+    "tools/deploy-regression-audit.mjs": "d1056ed4b839460a9cfda7f11e1a06fe6db484dc4c609c6b36d0ab975851f3c0",
+    "tools/install-deploy-access.sh": "4580016385012ccde21e22a3ee07501fb3c7c1b1d713d5a15d2a548eebd42748",
+    "tools/release.mjs": "a954b5761c15d20ce016bdfa36318dd9ed412f81873c9c82795d35a1ee878c8b",
+    "tools/server-deploy-gateway.sh": "3d2e203d8209be342e80569916a08ce5ffd40b1074e909a17551396ee27999b3",
     "tools/update-server.sh": "7ebcf03ca524eacda205cc486b3f8de2e11cca54e83d3e75a171b9f596e550a4"
   }
 }

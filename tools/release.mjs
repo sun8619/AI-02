@@ -2,11 +2,27 @@ import {readFile,writeFile,readdir} from "node:fs/promises";
 import {createHash} from "node:crypto";
 const root=new URL("../",import.meta.url);
 const digest=async path=>createHash("sha256").update(await readFile(new URL(path,root))).digest("hex");
+const walk=async directory=>{
+  const entries=await readdir(new URL(directory,root),{withFileTypes:true});
+  const files=[];
+  for(const entry of entries){
+    const path=`${directory}${entry.name}`;
+    if(entry.isDirectory())files.push(...await walk(`${path}/`));
+    else if(entry.isFile())files.push(path);
+  }
+  return files;
+};
 if(process.argv[2]==="build") {
-  const files=["index.html","app.js","server.mjs","styles.css","child-learning-stage.css","package.json","package-lock.json","tools/release.mjs","tools/update-server.sh","tools/browser-regression.mjs","assets/lezhi-teacher-v2.png","assets/lezhi-teacher-coach-v3.png",...(await readdir(new URL("teaching-engine/",root))).filter(f=>f.endsWith(".js")).map(f=>`teaching-engine/${f}`)];
-  const hashes={};for(const path of files.sort())hashes[path]=await digest(path);
-  await writeFile(new URL("release.json",root),JSON.stringify({id:"v98-20260909",builtAt:new Date().toISOString(),hashes},null,2)+"\n");
-  console.log(`Built release manifest: ${files.length} files`);
+  const topLevel=["index.html","app.js","server.mjs","styles.css","child-learning-stage.css","package.json","package-lock.json"];
+  const discovered=[...await walk("assets/"),...await walk("teaching-engine/"),...await walk("tools/")]
+    .filter(path=>/\.(?:js|mjs|sh|png|jpg|jpeg|svg)$/.test(path));
+  const files=[...new Set([...topLevel,...discovered])].sort();
+  const hashes={};for(const path of files)hashes[path]=await digest(path);
+  const now=new Date();
+  const stamp=now.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");
+  const id=`release-${stamp}`;
+  await writeFile(new URL("release.json",root),JSON.stringify({id,builtAt:now.toISOString(),hashes},null,2)+"\n");
+  console.log(id);
 } else {
   const manifest=JSON.parse(await readFile(new URL("release.json",root),"utf8"));
   for(const [path,hash] of Object.entries(manifest.hashes)) {

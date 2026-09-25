@@ -21,7 +21,11 @@
     "audit:microsteps": "node teaching-engine/microstep-explanation-audit.js",
     "audit:routing": "node teaching-engine/guided-step-routing-audit.js",
     "audit:families": "node teaching-engine/family-contamination-audit.js",
-    "audit:speech": "node teaching-engine/spoken-prompt-audit.js"
+    "audit:speech": "node teaching-engine/spoken-prompt-audit.js",
+    "release:check": "bash tools/deploy-local.sh check",
+    "deploy": "bash tools/deploy-local.sh deploy",
+    "deploy:status": "bash tools/deploy-local.sh status",
+    "deploy:logs": "bash tools/deploy-local.sh logs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

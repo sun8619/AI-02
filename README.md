@@ -65,6 +65,29 @@ npm run audit:page
 - `audit:paths` 模拟真实孩子路径，确认每个知识点不会因为空白、跑题、短答案、敷衍复述而误推进。
 - `audit:page` 从页面体验角度检查老师回复是否明确告诉孩子“现在答什么”、图示是否跟当前小台阶同步、是否疑似提前泄露答案、同一路径是否过于机械重复。
 
+## 本地接管与生产发布
+
+生产代码目录固定为 `/opt/qibu-ai`，systemd 服务固定为 `qibu-ai`。同一台服务器上的 `/opt/executive-assistant-native`（“靠谱”）不在本项目发布脚本的操作范围内。
+
+首次接管只需在服务器执行一次部署访问安装。它会给指定 SSH 公钥添加强制命令，只允许：
+
+- `deploy <full-commit-sha>`：部署指定提交；
+- `status`：查看 `qibu-ai` 状态与健康接口；
+- `logs [1-500]`：查看 `qibu-ai` 日志。
+
+本地发布命令：
+
+```bash
+npm run release:check
+npm run deploy -- "本次更新说明"
+npm run deploy:status
+npm run deploy:logs -- 100
+```
+
+`npm run deploy` 会顺序执行：安装锁定依赖、全量代码回归、浏览器回归、部署回滚演练、生成不可变发布清单、提交并推送 GitHub、通过专用 SSH 命令部署、检查 systemd 与健康接口。服务器更新会保留 `.env`、`data/`、`uploads/`、`logs/` 和 `backups/`；新版本不健康时自动恢复上一版本。
+
+默认 SSH 目标是 `ai02-prod`，可用 `AI02_SSH_TARGET` 覆盖。若有公网健康地址，可设置 `AI02_PUBLIC_HEALTH_URL`，发布完成后再做一次公网检查。密钥和服务器凭据不得提交到仓库。
+
 ## Railway 环境变量
 
 如果用 Railway，在 Railway 的 Variables 里添加：
