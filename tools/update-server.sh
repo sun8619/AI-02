@@ -3,7 +3,8 @@ set -Eeuo pipefail
 REV="${1:?Pass the full GitHub commit SHA}"
 [[ "$REV" =~ ^[a-f0-9]{40}$ ]] || { echo "Invalid commit SHA"; exit 1; }
 APP=/opt/qibu-ai
-for command in curl unzip rsync node npm systemctl; do command -v "$command" >/dev/null; done
+GATEWAY_PATH="${AI02_GATEWAY_INSTALL_PATH:-/usr/local/sbin/ai02-deploy-gateway}"
+for command in curl unzip rsync node npm systemctl install; do command -v "$command" >/dev/null; done
 node -e 'if(Number(process.versions.node.split(".")[0])<20)process.exit(1)'
 test -d "$APP"
 TMP=$(mktemp -d /tmp/lezhi-update.XXXXXX)
@@ -52,6 +53,7 @@ for i in {1..30}; do
   if curl -fsS --max-time 2 http://127.0.0.1:4173/api/health 2>/dev/null |
     node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{try{const r=JSON.parse(s);process.exit(r.ok&&r.release===process.argv[1]?0:1)}catch{process.exit(1)}})' "$EXPECTED"; then
     finished=1
+    install -m 0755 "$APP/tools/server-deploy-gateway.sh" "$GATEWAY_PATH"
     echo "Ready: $EXPECTED ($REV). Refresh the website."
     exit 0
   fi

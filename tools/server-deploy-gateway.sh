@@ -6,6 +6,12 @@ readonly REPO="sun8619/AI-02"
 readonly SERVICE="qibu-ai"
 readonly HEALTH_URL="http://127.0.0.1:4173/api/health"
 readonly LOCK_FILE="/run/lock/ai02-deploy.lock"
+updater=""
+
+cleanup() {
+  [[ -z "$updater" ]] || rm -f "$updater"
+}
+trap cleanup EXIT
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -25,9 +31,7 @@ deploy_revision() {
   exec 9>"$LOCK_FILE"
   flock -n 9 || fail "another AI-02 deployment is already running"
 
-  local updater
   updater="$(mktemp /tmp/ai02-update.XXXXXX.sh)"
-  trap 'rm -f "$updater"' EXIT
 
   curl -fL --retry 5 --connect-timeout 20 --max-time 120 \
     "https://raw.githubusercontent.com/${REPO}/${revision}/tools/update-server.sh" \

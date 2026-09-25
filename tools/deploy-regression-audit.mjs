@@ -26,6 +26,7 @@ try {
     writeFileSync(join(packageDir,"package.json"), '{"private":true}\n');
     writeFileSync(join(packageDir,"release.json"), JSON.stringify({id:"v91-test",hashes:{"app.js":createHash("sha256").update(newCode).digest("hex")}}));
     writeFileSync(join(packageDir,"tools","release.mjs"), readFileSync(new URL("./release.mjs", import.meta.url)));
+    writeFileSync(join(packageDir,"tools","server-deploy-gateway.sh"), "#!/usr/bin/env bash\nexit 0\n", {mode:0o755});
     const zip = spawnSync("zip", ["-qr", archive, `AI-02-${sha}`], {cwd:dir});
     assert.equal(zip.status,0,"zip fixture failed");
     const curl = [
@@ -53,7 +54,7 @@ try {
       .replace("sleep 1", "sleep 0.01");
     const result = spawnSync("bash", ["-s", "--", sha], {
       input:script, encoding:"utf8", timeout:60000,
-      env:{...process.env,PATH:`${bin}:${process.env.PATH}`,ARCHIVE:archive,SCENARIO:scenario},
+      env:{...process.env,PATH:`${bin}:${process.env.PATH}`,ARCHIVE:archive,SCENARIO:scenario,AI02_GATEWAY_INSTALL_PATH:join(dir,"installed-gateway")},
     });
     assert.equal(result.error,undefined,`${scenario}: updater harness timed out or failed to launch`);
     if(scenario==="success") assert.equal(result.status,0,result.stderr || result.stdout);
