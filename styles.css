@@ -11622,3 +11622,136 @@ body:has(.app-shell.is-child) {
     max-height: 158px;
   }
 }
+
+
+/* Parent privacy boundary and boot fallback. */
+.boot-failure,
+.parent-lock-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f7fbff;
+  color: #17324d;
+}
+
+.boot-failure section,
+.parent-lock-card {
+  width: min(520px, 100%);
+  padding: 30px;
+  background: #fff;
+  border: 1px solid #d7e7f4;
+  border-radius: 18px;
+  box-shadow: 0 14px 36px rgba(48, 103, 145, 0.12);
+}
+
+.boot-failure h1,
+.parent-lock-card h1 {
+  margin: 18px 0 10px;
+  font-size: clamp(26px, 5vw, 36px);
+}
+
+.boot-failure p,
+.parent-lock-card > p,
+.parent-lock-help {
+  color: var(--muted, #5f7385);
+  line-height: 1.7;
+}
+
+.boot-failure button {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 22px;
+  background: #19b77b;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.parent-lock-card form {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.parent-lock-card label {
+  display: grid;
+  gap: 8px;
+  font-weight: 850;
+}
+
+.parent-lock-card input {
+  min-height: 48px;
+  border: 1px solid var(--line, #cdddea);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 22px;
+  letter-spacing: 0.18em;
+}
+
+.parent-lock-card input:focus {
+  outline: 3px solid rgba(25, 183, 123, 0.2);
+  border-color: #19b77b;
+}
+
+.parent-lock-help strong {
+  color: #a63838;
+}
+
+.parent-privacy-notice {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+  gap: 18px;
+  margin: 0 0 18px;
+  padding: 20px;
+  border: 1px solid #b9ddcf;
+  border-radius: 16px;
+  background: #f2fbf7;
+}
+
+.parent-privacy-notice h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+}
+
+.parent-privacy-notice p {
+  margin: 8px 0 0;
+  color: #405f58;
+  line-height: 1.7;
+}
+
+.parent-privacy-notice ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.parent-privacy-notice li {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.parent-privacy-notice li span {
+  color: #587068;
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .parent-privacy-notice {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+  .parent-lock-page {
+    padding: 14px;
+  }
+  .parent-lock-card {
+    padding: 22px;
+  }
+}

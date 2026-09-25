@@ -1,0 +1,2 @@
+﻿case_id,device,browser,os,microphone_permission,recording,asr_result,keyboard_recovery,background_resume,tts_autoplay,layout_ok,status,notes
+DEVICE-001,iPhone,Safari,iOS,pass,pass,pass,pass,pass,pass,pass,approved,

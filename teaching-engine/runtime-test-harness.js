@@ -24,7 +24,7 @@ export function loadChildRuntime({ audio = false, overrides = {} } = {}) {
   });
   context.window = context;
   const html = readFileSync(new URL("index.html", root), "utf8");
-  for (const match of html.matchAll(/<script src="\.\/([^"?]+)(?:\?[^"]*)?"/g)) {
+  for (const match of html.matchAll(/<script\b[^>]*\bsrc="\.\/([^"?]+)(?:\?[^"]*)?"[^>]*><\/script>/g)) {
     vm.runInContext(readFileSync(new URL(match[1], root), "utf8"), context, { filename: match[1] });
   }
   // No audio or external services in deterministic state-transition tests.

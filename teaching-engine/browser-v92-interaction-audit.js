@@ -21,6 +21,11 @@ async (page) => {
     return points.map(l=>({topic:l.sourceQuestionBankId,volume:l.grade}));
   });
   await page.getByRole("button",{name:"家长进展",exact:true}).click();
+  if(!await page.getByRole("heading",{name:"首次设置家长 PIN",exact:true}).isVisible())errors.push("parent PIN setup not shown");
+  await page.getByLabel("家长 PIN",{exact:true}).fill("2468");
+  await page.getByLabel("再次输入",{exact:true}).fill("2468");
+  await page.getByRole("button",{name:"设置并进入",exact:true}).click();
+  if(!await page.getByText("儿童语音与学习记录说明",{exact:true}).isVisible())errors.push("parent privacy notice missing");
   await page.getByRole("combobox",{name:"册别",exact:true}).selectOption(fixtures[0].volume);
   if(await page.locator(".history-trends details").count()!==1)errors.push("volume filter did not narrow topics");
   await page.getByRole("combobox",{name:"知识点",exact:true}).selectOption(fixtures[0].topic);
@@ -31,7 +36,13 @@ async (page) => {
   await page.setViewportSize({width:375,height:667});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))errors.push("parent history horizontal overflow");
   await page.screenshot({path:"output/playwright/v92-parent-history.png",fullPage:true});
-  await page.evaluate(()=>{LezhiHistory.clear();state.historyFilters={};state.view="child";changeLesson("audit",defaultLessonIndex);render();});
+  await page.getByRole("button",{name:"清除本机学习记录",exact:true}).click();
+  if(!await page.getByRole("heading",{name:"再次验证后清除记录",exact:true}).isVisible())errors.push("delete PIN verification missing");
+  await page.getByLabel("家长 PIN",{exact:true}).fill("2468");
+  await page.getByRole("button",{name:"确认清除",exact:true}).click();
+  const remaining=await page.evaluate(()=>LezhiHistory.read().length);
+  if(remaining!==0)errors.push("history remained after verified deletion");
+  await page.evaluate(()=>{localStorage.removeItem("lezhi-parent-pin-v1");state.historyFilters={};state.view="child";changeLesson("audit",defaultLessonIndex);render();});
   await page.setViewportSize({width:1433,height:738});
   return {errors,historyFilters:3,helpToggle:true,teacherAccessible:true,fixtureNotice:"Synthetic local history only; cleared after test. Not child trial data."};
 }

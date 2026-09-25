@@ -17,8 +17,11 @@ fail() {
 run_checks() {
   npm ci
   npm test
+  npm run test:performance
+  npm run test:security
   npx playwright install chromium
   npm run test:browser
+  npm run audit:human
   node tools/deploy-regression-audit.mjs
   bash -n tools/update-server.sh
   bash -n tools/server-deploy-gateway.sh

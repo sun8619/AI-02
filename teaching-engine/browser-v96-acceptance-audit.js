@@ -21,7 +21,7 @@ async (page) => {
   await page.evaluate(()=>{
     changeLesson("audit",defaultLessonIndex);LezhiHistory.clear();
     state.sessionId="browser-active-session";state.sessionStartedAt=Date.now()-301000;state.lastStudentText="二十九";state.responseTimesMs=[4000,6000];state.historyRecorded=false;
-    saveLearningSession(false);state.view="parent";render();
+    saveLearningSession(false);state.parentAccess={mode:"unlocked",error:"",unlockedUntil:Date.now()+60000,pendingAction:""};state.view="parent";render();
   });
   if(await page.locator(".learning-history").count()!==1)result.errors.push("active history view missing");
   if(!/今天 5分/.test(await page.locator(".history-today").innerText()))result.errors.push("active five-minute session still displays as zero");

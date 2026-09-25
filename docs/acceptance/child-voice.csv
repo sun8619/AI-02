@@ -1,0 +1,2 @@
+﻿sample_id,child_code,age,device,environment,accent_group,expected_text,recognized_text,confidence,accepted_directly,false_accept,safety_issue,latency_ms,consent_recorded,notes
+SAMPLE-001,C001,7,iPhone Safari,安静家庭,普通话,示例答案,示例答案,0.95,true,false,false,1200,true,

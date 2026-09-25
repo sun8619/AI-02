@@ -3,50 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#19b77b" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <link rel="manifest" href="./manifest.webmanifest?v=1" />
     <title>乐之老师｜AI 语音陪练</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23dff2ff'/%3E%3Ccircle cx='32' cy='26' r='15' fill='%23fff1e8'/%3E%3Cpath d='M18 48c3-10 25-10 28 0' fill='%2363b7f6'/%3E%3Cpath d='M24 27c2 5 14 5 16 0' fill='none' stroke='%23182938' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./styles.css?v=28" />
+    <link rel="stylesheet" href="./styles.css?v=29" />
     <link rel="stylesheet" href="./child-learning-stage.css?v=41" />
   </head>
   <body>
     <div id="app"></div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script>
-      (() => {
-        let failed = false;
-        const showBootFailure = () => {
-          if (failed) return;
-          failed = true;
-          const root = document.getElementById("app");
-          if (!root || root.children.length) return;
-          root.innerHTML = `
-            <main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#f7fbff;font-family:system-ui,-apple-system,'PingFang SC',sans-serif;color:#17324d">
-              <section style="width:min(520px,100%);padding:32px;text-align:center;background:#fff;border:1px solid #d7e7f4;border-radius:16px;box-shadow:0 14px 36px rgba(48,103,145,.12)">
-                <h1 style="margin:0 0 12px;font-size:24px">页面没有加载完整</h1>
-                <p style="margin:0 0 22px;line-height:1.7;color:#5f7385">请点一下重新加载。仍然打不开时，请告诉家长联系乐之老师处理。</p>
-                <button type="button" onclick="location.reload()" style="border:0;border-radius:10px;padding:12px 22px;background:#19b77b;color:#fff;font-size:18px;font-weight:700;cursor:pointer">重新加载</button>
-              </section>
-            </main>`;
-        };
-        window.addEventListener("error", showBootFailure, true);
-        window.setTimeout(() => {
-          const root = document.getElementById("app");
-          if (!root || !root.children.length) showBootFailure();
-        }, 2500);
-      })();
-    </script>
-    <script src="./teaching-engine/grade1-2-question-bank.js?v=6"></script>
-    <script src="./teaching-engine/grade1-2-knowledge-cards.js?v=8"></script>
-    <script src="./teaching-engine/knowledge-point-teaching-overlays.js?v=2"></script>
-    <script src="./teaching-engine/family-teaching-strategies.js?v=7"></script>
-    <script src="./teaching-engine/microstep-quality-profiles.js?v=1"></script>
-    <script src="./teaching-engine/microstep-explanation-library.js?v=5"></script>
-    <script src="./teaching-engine/question-family-guard.js?v=3"></script>
-    <script src="./teaching-engine/child-language.js?v=2"></script>
-    <script src="./teaching-engine/learning-history.js?v=4"></script>
-    <script src="./teaching-engine/answer-contract.js?v=4"></script>
-    <script src="./teaching-engine/question-visuals.js?v=5"></script>
-    <script src="./teaching-engine/learning-coach.js?v=4"></script>
-    <script src="./app.js?v=98"></script>
+    <script defer src="./boot.js?v=2"></script>
+    <script defer src="./teaching-engine/grade1-2-question-bank.js?v=6"></script>
+    <script defer src="./teaching-engine/grade1-2-knowledge-cards.js?v=8"></script>
+    <script defer src="./teaching-engine/knowledge-point-teaching-overlays.js?v=2"></script>
+    <script defer src="./teaching-engine/family-teaching-strategies.js?v=7"></script>
+    <script defer src="./teaching-engine/microstep-quality-profiles.js?v=1"></script>
+    <script defer src="./teaching-engine/microstep-explanation-library.js?v=5"></script>
+    <script defer src="./teaching-engine/question-family-guard.js?v=3"></script>
+    <script defer src="./teaching-engine/child-language.js?v=2"></script>
+    <script defer src="./teaching-engine/learning-history.js?v=4"></script>
+    <script defer src="./teaching-engine/answer-contract.js?v=4"></script>
+    <script defer src="./teaching-engine/question-visuals.js?v=5"></script>
+    <script defer src="./teaching-engine/learning-coach.js?v=4"></script>
+    <script defer src="./app.js?v=99"></script>
   </body>
 </html>

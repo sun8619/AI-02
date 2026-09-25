@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { extname, join, normalize } from "node:path";
+import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { WebSocket, WebSocketServer } from "ws";
@@ -24,37 +25,99 @@ const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
   ".svg": "image/svg+xml",
 };
 
 const transientAudioFiles = new Map();
 const transientAudioTtlMs = 5 * 60 * 1000;
+const requestBuckets = new Map();
+const activeRequests = new Map();
+const activeRealtimeByIp = new Map();
+const ttsCache = new Map();
+const ttsCacheTtlMs = 5 * 60 * 1000;
+const staticTopLevelAllowlist = new Set(["index.html", "boot.js", "app.js", "styles.css", "child-learning-stage.css", "robots.txt", "manifest.webmanifest"]);
+const staticTeachingAllowlist = new Set([
+  "grade1-2-question-bank.js",
+  "grade1-2-knowledge-cards.js",
+  "knowledge-point-teaching-overlays.js",
+  "family-teaching-strategies.js",
+  "microstep-quality-profiles.js",
+  "microstep-explanation-library.js",
+  "question-family-guard.js",
+  "child-language.js",
+  "learning-history.js",
+  "answer-contract.js",
+  "question-visuals.js",
+  "learning-coach.js",
+]);
+const apiPolicies = {
+  "/api/images/generations": { windowMs: 60_000, max: 3, concurrent: 1, globalMax: 30, globalConcurrent: 3 },
+  "/api/learning/turn": { windowMs: 60_000, max: 30, concurrent: 4, globalMax: 300, globalConcurrent: 24 },
+  "/api/speech/transcriptions": { windowMs: 60_000, max: 20, concurrent: 2, globalMax: 180, globalConcurrent: 12 },
+  "/api/speech/synthesis": { windowMs: 60_000, max: 30, concurrent: 3, globalMax: 300, globalConcurrent: 18 },
+};
+const securityHeaders = {
+  "Content-Security-Policy": "default-src 'self'; img-src 'self' data: https:; media-src 'self' data: blob:; connect-src 'self' https: wss:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Permissions-Policy": "camera=(), geolocation=(), payment=(), usb=()",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+};
 
 const server = createServer(async (request, response) => {
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  response.setHeader("X-Request-Id", requestId);
+  applySecurityHeaders(response, request);
+  response.on("finish", () => {
+    logEvent("http_request", {
+      requestId,
+      method: request.method,
+      path: safeRequestPath(request.url),
+      status: response.statusCode,
+      durationMs: Date.now() - startedAt,
+      ip: clientKey(request),
+    });
+  });
   try {
     const url = new URL(request.url || "/", `http://${request.headers.host}`);
 
-    if (request.method === "POST" && url.pathname === "/api/images/generations") {
-      await handleImageGeneration(request, response);
+    const policy = request.method === "POST" ? apiPolicies[url.pathname] : null;
+    if (policy && !String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
+      sendJson(response, 415, { error: "Content-Type must be application/json" });
       return;
     }
+    if (policy && !enterApiPolicy(request, response, url.pathname, policy)) return;
+    try {
+      if (request.method === "POST" && url.pathname === "/api/images/generations") {
+        await handleImageGeneration(request, response);
+        return;
+      }
 
-    if (request.method === "POST" && url.pathname === "/api/learning/turn") {
-      await handleLearningTurn(request, response);
-      return;
-    }
+      if (request.method === "POST" && url.pathname === "/api/learning/turn") {
+        await handleLearningTurn(request, response);
+        return;
+      }
 
-    if (request.method === "POST" && url.pathname === "/api/speech/transcriptions") {
-      await handleSpeechTranscription(request, response);
-      return;
-    }
+      if (request.method === "POST" && url.pathname === "/api/speech/transcriptions") {
+        await handleSpeechTranscription(request, response);
+        return;
+      }
 
-    if (request.method === "POST" && url.pathname === "/api/speech/synthesis") {
-      await handleSpeechSynthesis(request, response);
-      return;
+      if (request.method === "POST" && url.pathname === "/api/speech/synthesis") {
+        await handleSpeechSynthesis(request, response);
+        return;
+      }
+    } finally {
+      if (policy) leaveApiPolicy(url.pathname, clientKey(request));
     }
 
     if (request.method === "GET" && url.pathname === "/api/models/config") {
@@ -68,7 +131,6 @@ const server = createServer(async (request, response) => {
         app: "qibu-ai-learning-companion",
         release: release.id,
         ...getPublicModelConfig(),
-        hasApiKey: Boolean(process.env.ARK_API_KEY),
       });
       return;
     }
@@ -83,23 +145,39 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    await serveStatic(url.pathname, response, request.method === "HEAD");
+    await serveStatic(url.pathname, response, request.method === "HEAD", url.searchParams.has("v"), request);
   } catch (error) {
     if(response.destroyed || response.writableEnded) return;
-    sendJson(response, error.code==="SPEECH_TIMEOUT" ? 504 : 500, { error: "Local server error", detail: sanitizeMessage(error) });
+    const status = error.code === "REQUEST_TOO_LARGE" ? 413 : error.name === "AbortError" || error.code === "UPSTREAM_TIMEOUT" || error.code === "SPEECH_TIMEOUT" ? 504 : error.code === "INVALID_INPUT" ? 400 : 500;
+    logEvent("request_error", { requestId, status, path: safeRequestPath(request.url), error: sanitizeMessage(error) });
+    sendJson(response, status, { error: status === 413 ? "Request body too large" : status === 400 ? "Invalid request" : status === 504 ? "Upstream timeout" : "Local server error", detail: sanitizeMessage(error) });
   }
 });
 
-const realtimeVoiceServer = new WebSocketServer({ noServer: true });
+const realtimeVoiceServer = new WebSocketServer({ noServer: true, maxPayload: 1_200_000, clientTracking: true });
 
 server.on("upgrade", (request, socket, head) => {
   const url = new URL(request.url || "/", `http://${request.headers.host}`);
-  if (url.pathname !== "/api/realtime/voice") {
+  if (url.pathname !== "/api/realtime/voice" || !isAllowedOrigin(request) || !consumeRateLimit(`ws:${clientKey(request)}`, 60_000, 10)) {
+    socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+  const ip = clientKey(request);
+  const active = activeRealtimeByIp.get(ip) || 0;
+  if (active >= 2) {
+    socket.write("HTTP/1.1 429 Too Many Requests\r\nRetry-After: 30\r\nConnection: close\r\n\r\n");
     socket.destroy();
     return;
   }
 
   realtimeVoiceServer.handleUpgrade(request, socket, head, (websocket) => {
+    activeRealtimeByIp.set(ip, active + 1);
+    websocket.once("close", () => {
+      const next = Math.max(0, (activeRealtimeByIp.get(ip) || 1) - 1);
+      if (next) activeRealtimeByIp.set(ip, next);
+      else activeRealtimeByIp.delete(ip);
+    });
     realtimeVoiceServer.emit("connection", websocket, request);
   });
 });
@@ -115,49 +193,68 @@ server.listen(port, host, () => {
 
 function handleRealtimeVoiceConnection(client) {
   let asrSession = null;
+  let receivedAudioBytes = 0;
+  let started = false;
+  const maxAudioBytes = Number(process.env.REALTIME_MAX_AUDIO_BYTES || 640_000);
+  const connectionTimer = setTimeout(() => {
+    sendRealtime(client, { type: "error", message: "这次录音时间有点长，请重新说一遍。" });
+    client.close(1008, "voice session timeout");
+  }, Number(process.env.REALTIME_MAX_CONNECTION_MS || 15_000));
 
   client.on("message", async (raw) => {
     let message;
     try {
-      message = JSON.parse(String(raw));
+      const messageText = String(raw);
+      if (Buffer.byteLength(messageText) > 1_150_000) throw new Error("Realtime message too large");
+      message = JSON.parse(messageText);
     } catch {
       sendRealtime(client, { type: "error", message: "语音通道收到的消息格式不对。" });
+      client.close(1008, "invalid message");
       return;
     }
 
     try {
       if (message.type === "start") {
-        if (asrSession) asrSession.close();
+        if (started) throw new Error("Realtime session already started");
+        started = true;
         asrSession = new StreamingAsrSession(client, normalizeAsrContext(message.context));
         await asrSession.start();
         return;
       }
 
       if (message.type === "audio") {
-        const audio = Buffer.from(String(message.audioBase64 || ""), "base64");
+        const audio = decodeRealtimeAudio(message.audioBase64);
+        receivedAudioBytes += audio.length;
+        if (receivedAudioBytes > maxAudioBytes) throw new Error("Realtime audio too large");
         if (audio.length && asrSession) asrSession.sendAudio(audio, false);
         return;
       }
 
       if (message.type === "stop") {
-        const audio = Buffer.from(String(message.audioBase64 || ""), "base64");
+        const audio = decodeRealtimeAudio(message.audioBase64);
+        receivedAudioBytes += audio.length;
+        if (receivedAudioBytes > maxAudioBytes) throw new Error("Realtime audio too large");
         if (asrSession) asrSession.finish(audio.length ? audio : null);
         return;
       }
+      throw new Error("Unsupported realtime message type");
     } catch (error) {
       sendRealtime(client, {
         type: "error",
-        message: "实时语音识别没有接通，已切回备用识别。",
+        message: /too large|already started|Unsupported/.test(String(error?.message)) ? "这次语音数据不符合要求，请重新说一遍。" : "实时语音识别没有接通，已切回备用识别。",
         detail: sanitizeMessage(error),
       });
+      if (/too large|already started|Unsupported/.test(String(error?.message))) client.close(1008, "voice policy violation");
     }
   });
 
   client.on("close", () => {
+    clearTimeout(connectionTimer);
     if (asrSession) asrSession.close();
   });
 
   client.on("error", () => {
+    clearTimeout(connectionTimer);
     if (asrSession) asrSession.close();
   });
 }
@@ -171,6 +268,7 @@ class StreamingAsrSession {
     this.lastTranscript = "";
     this.finalSent = false;
     this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
     this.finalTimer = null;
     this.context = context;
     this.confidence = null;
@@ -195,7 +293,9 @@ class StreamingAsrSession {
       this.upstream.send(buildAsrFullRequestPacket(createStreamingAsrPayload(this.context)));
       sendRealtime(this.client, { type: "ready", mode: "volc-stream-asr", connectId });
       while (this.pendingAudio.length) {
-        this.upstream.send(this.pendingAudio.shift());
+        const packet = this.pendingAudio.shift();
+        this.pendingAudioBytes = Math.max(0, this.pendingAudioBytes - packet.length);
+        this.upstream.send(packet);
       }
     });
     this.upstream.on("message", (data) => this.handleUpstreamMessage(Buffer.from(data)));
@@ -220,6 +320,10 @@ class StreamingAsrSession {
     if (this.ready && this.upstream?.readyState === WebSocket.OPEN) {
       this.upstream.send(packet);
     } else {
+      this.pendingAudioBytes += packet.length;
+      if (this.pendingAudio.length >= 32 || this.pendingAudioBytes > 750_000) {
+        throw new Error("Realtime pending audio too large");
+      }
       this.pendingAudio.push(packet);
     }
   }
@@ -304,30 +408,27 @@ async function handleImageGeneration(request, response) {
   }
 
   const input = await readJsonBody(request);
-  const prompt = String(input.prompt || "").trim();
-  if (!prompt) {
-    sendJson(response, 400, { error: "Missing prompt" });
-    return;
-  }
+  const prompt = validateText(input.prompt, "prompt", 1200, { required: true });
+  const size = ["1K", "2K"].includes(String(input.size || "")) ? String(input.size) : "2K";
 
   const upstreamPayload = {
     model: process.env.ARK_IMAGE_MODEL || "doubao-seedream-5-0-260128",
     prompt,
     sequential_image_generation: "disabled",
     response_format: "url",
-    size: input.size || "2K",
+    size,
     stream: false,
     watermark: input.watermark ?? true,
   };
 
-  const upstreamResponse = await fetch("https://ark.cn-beijing.volces.com/api/v3/images/generations", {
+  const upstreamResponse = await fetchWithTimeout("https://ark.cn-beijing.volces.com/api/v3/images/generations", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(upstreamPayload),
-  });
+  }, Number(process.env.ARK_IMAGE_TIMEOUT_MS || 30_000), response);
 
   const contentType = upstreamResponse.headers.get("content-type") || "";
   const payload = contentType.includes("application/json")
@@ -348,12 +449,18 @@ async function handleImageGeneration(request, response) {
 async function handleLearningTurn(request, response) {
   const apiKey = process.env.ARK_API_KEY;
   const input = await readJsonBody(request);
-  const phase = String(input.phase || "guiding");
+  const allowedPhases = new Set(["guiding", "teachback", "repair", "summary", "assessment"]);
+  const phase = allowedPhases.has(String(input.phase || "")) ? String(input.phase) : "guiding";
   const model = selectLearningModel(phase);
-  const userText = String(input.text || "").trim();
-  const context = String(input.context || "");
-  const step = String(input.step || "");
-  const lesson = input.lesson && typeof input.lesson === "object" ? input.lesson : {};
+  const userText = validateText(input.text, "text", 300, { required: true });
+  const context = validateText(input.context, "context", 2400);
+  const step = validateText(input.step, "step", 240);
+  const lesson = input.lesson && typeof input.lesson === "object" && !Array.isArray(input.lesson) ? input.lesson : {};
+  if (JSON.stringify(lesson).length > 80_000 || JSON.stringify(input.engineSession || {}).length > 20_000) {
+    const error = new Error("lesson or engineSession is too large");
+    error.code = "INVALID_INPUT";
+    throw error;
+  }
   const engineTurn = runTeachingTurn({
     graph: teachingGraph,
     lesson,
@@ -446,14 +553,14 @@ async function handleLearningTurn(request, response) {
   };
 
   const baseUrl = process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
-  const upstream = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+  const upstream = await fetchWithTimeout(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(payload),
-  });
+  }, Number(process.env.ARK_TEXT_TIMEOUT_MS || 15_000), response);
 
   const upstreamPayload = await upstream.json().catch(async () => ({ message: await upstream.text().catch(() => "") }));
   if (!upstream.ok) {
@@ -488,11 +595,16 @@ async function handleLearningTurn(request, response) {
 
 async function handleSpeechTranscription(request, response) {
   const input = await readJsonBody(request);
-  const audioData = String(input.audioData || "").trim();
-  const audioUrl = String(input.audioUrl || "").trim();
-  const mimeType = String(input.mimeType || "").trim();
+  const audioData = validateAudioData(input.audioData);
+  const audioUrl = "";
+  const mimeType = validateAudioMimeType(input.mimeType, audioData);
   const context = normalizeAsrContext(input.context);
   const apiKey = getSpeechApiKey("ASR");
+
+  if (!audioData) {
+    sendJson(response, 400, { error: "Missing audioData" });
+    return;
+  }
 
   if (!apiKey) {
     sendJson(response, 200, {
@@ -500,11 +612,6 @@ async function handleSpeechTranscription(request, response) {
       transcript: "",
       message: "未配置语音识别 Key，请让孩子再说一次或改用键盘输入。",
     });
-    return;
-  }
-
-  if (!audioData && !audioUrl) {
-    sendJson(response, 400, { error: "Missing audioData or audioUrl" });
     return;
   }
 
@@ -536,11 +643,11 @@ async function handleSpeechTranscription(request, response) {
     }, context),
   };
 
-  const upstream = await fetch(process.env.ARK_ASR_URL || "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash", {
+  const upstream = await fetchWithTimeout(process.env.ARK_ASR_URL || "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash", {
     method: "POST",
     headers: buildSpeechHeaders("ASR", apiKey),
     body: JSON.stringify(payload),
-  });
+  }, Number(process.env.ARK_ASR_TIMEOUT_MS || 15_000), response);
 
   const upstreamPayload = await upstream.json().catch(async () => ({ message: await upstream.text().catch(() => "") }));
   const statusCode = upstream.headers.get("X-Api-Status-Code");
@@ -591,11 +698,11 @@ async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey,
 
   const submitUrl = process.env.ARK_ASR_SUBMIT_URL || process.env.ARK_ASR_URL || "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit";
   const queryUrl = process.env.ARK_ASR_QUERY_URL || submitUrl.replace(/\/submit$/, "/query");
-  const submit = await fetch(submitUrl, {
+  const submit = await fetchWithTimeout(submitUrl, {
     method: "POST",
     headers: buildSpeechHeaders("ASR", apiKey, { requestId: taskId, resourceId }),
     body: JSON.stringify(payload),
-  });
+  }, Number(process.env.ARK_ASR_TIMEOUT_MS || 15_000), response);
   const submitStatus = submit.headers.get("X-Api-Status-Code");
   if (!submit.ok || (submitStatus && submitStatus !== "20000000")) {
     const submitPayload = await submit.json().catch(async () => ({ message: await submit.text().catch(() => "") }));
@@ -611,11 +718,11 @@ async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey,
   let lastStatus = "";
   for (let attempt = 0; attempt < 12; attempt += 1) {
     await wait(attempt === 0 ? 250 : attempt < 4 ? 450 : 900);
-    const query = await fetch(queryUrl, {
+    const query = await fetchWithTimeout(queryUrl, {
       method: "POST",
       headers: buildSpeechHeaders("ASR", apiKey, { requestId: taskId, resourceId }),
       body: "{}",
-    });
+    }, Number(process.env.ARK_ASR_TIMEOUT_MS || 15_000), response);
     lastStatus = query.headers.get("X-Api-Status-Code") || "";
     lastPayload = await query.json().catch(async () => ({ message: await query.text().catch(() => "") }));
 
@@ -659,7 +766,16 @@ async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey,
 
 async function handleSpeechSynthesis(request, response) {
   const input = await readJsonBody(request);
-  const text = naturalizeSpeechText(String(input.text || "").trim());
+  const text = naturalizeSpeechText(validateText(input.text, "text", 500, { required: true }));
+  const format = process.env.ARK_TTS_FORMAT || "mp3";
+  const cacheKey = createHash("sha256").update(JSON.stringify({text,format,speaker:process.env.ARK_TTS_SPEAKER || "zh_female_vv_uranus_bigtts",rate:process.env.ARK_TTS_SPEECH_RATE || "-4",loudness:process.env.ARK_TTS_LOUDNESS_RATE || "2"})).digest("hex");
+  const cached = ttsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    logEvent("tts_cache_hit", { bytes: cached.payload.audioBase64.length });
+    sendJson(response, 200, cached.payload);
+    return;
+  }
+  if (cached) ttsCache.delete(cacheKey);
   const apiKey = getSpeechApiKey("TTS");
   if (!apiKey) {
     sendJson(response, 503, {
@@ -674,7 +790,6 @@ async function handleSpeechSynthesis(request, response) {
     return;
   }
 
-  const format = process.env.ARK_TTS_FORMAT || "mp3";
   const payload = {
     user: { uid: process.env.ARK_TTS_UID || "qibu-child" },
     req_params: {
@@ -728,13 +843,19 @@ async function handleSpeechSynthesis(request, response) {
     return;
   }
 
-  sendJson(response, 200, {
+  const audioBase64 = chunks.join("");
+  const responsePayload = {
     mode: "ark-tts",
     format,
-    audioBase64: chunks.join(""),
-    audioDataUrl: `data:audio/${format};base64,${chunks.join("")}`,
+    audioBase64,
+    audioDataUrl: `data:audio/${format};base64,${audioBase64}`,
     logId: upstream.headers.get("X-Tt-Logid") || "",
-  });
+  };
+  if (audioBase64.length <= 2_000_000) {
+    if (ttsCache.size >= 20) ttsCache.delete(ttsCache.keys().next().value);
+    ttsCache.set(cacheKey, { payload: responsePayload, expiresAt: Date.now() + ttsCacheTtlMs });
+  }
+  sendJson(response, 200, responsePayload);
 }
 
 function getModelConfig() {
@@ -756,28 +877,11 @@ function getModelConfig() {
 function getPublicModelConfig() {
   const config = getModelConfig();
   return {
-    arkBaseUrl: config.arkBaseUrl,
-    modelRoles: {
-      tutor: config.tutorModel,
-      reasoning: config.reasoningModel,
-      evaluation: config.evaluationModel,
-      summary: config.summaryModel,
-      asr: config.asrModel,
-      tts: config.ttsResourceId,
-      image: config.imageModel,
-    },
-    voice: {
-      asrResourceId: config.asrResourceId,
-      asrStreamResourceId: config.asrStreamResourceId,
-      ttsResourceId: config.ttsResourceId,
-      ttsSpeaker: config.ttsSpeaker,
-    },
     configured: {
-      arkApiKey: Boolean(process.env.ARK_API_KEY),
-      speechApiKey: Boolean(getSpeechApiKey("ASR") || getSpeechApiKey("TTS")),
-      tutor: Boolean(config.tutorModel),
-      reasoning: Boolean(config.reasoningModel),
-      evaluation: Boolean(config.evaluationModel),
+      tutor: Boolean(config.tutorModel && process.env.ARK_API_KEY),
+      reasoning: Boolean(config.reasoningModel && process.env.ARK_API_KEY),
+      evaluation: Boolean(config.evaluationModel && process.env.ARK_API_KEY),
+      summary: Boolean(config.summaryModel && process.env.ARK_API_KEY),
       asr: Boolean(getSpeechApiKey("ASR")),
       tts: Boolean(getSpeechApiKey("TTS")),
       image: Boolean(config.imageModel && process.env.ARK_API_KEY),
@@ -1135,13 +1239,190 @@ class JsonStreamDecoder {
   }
 }
 
-async function serveStatic(pathname, response, headOnly) {
-  const cleanPath = pathname === "/" ? "/index.html" : pathname;
-  const normalized = normalize(decodeURIComponent(cleanPath)).replace(/^(\.\.[/\\])+/, "");
-  const filePath = join(root, normalized);
+function applySecurityHeaders(response, request) {
+  Object.entries(securityHeaders).forEach(([name, value]) => response.setHeader(name, value));
+  const proto = String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  if (proto === "https" || request.socket?.encrypted) {
+    response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+}
 
-  if (!filePath.startsWith(root)) {
-    sendJson(response, 403, { error: "Forbidden" });
+function safeRequestPath(value) {
+  try {
+    return new URL(value || "/", "http://localhost").pathname.slice(0, 300);
+  } catch {
+    return "/invalid";
+  }
+}
+
+function clientKey(request) {
+  const remote = String(request.socket?.remoteAddress || "unknown").replace(/^::ffff:/, "").slice(0, 120);
+  const trustedProxy = remote === "127.0.0.1" || remote === "::1";
+  const forwarded = String(request.headers["x-forwarded-for"] || "").split(",").map((item) => item.trim()).filter(Boolean);
+  const raw = trustedProxy ? String(request.headers["x-real-ip"] || "").trim() || forwarded.at(-1) || remote : remote;
+  return createHash("sha256").update(`${process.env.RATE_LIMIT_SALT || "lezhi-local"}:${raw}`).digest("hex").slice(0, 16);
+}
+
+function consumeRateLimit(key, windowMs, max) {
+  const now = Date.now();
+  const previous = requestBuckets.get(key);
+  const bucket = !previous || previous.resetAt <= now ? { count: 0, resetAt: now + windowMs } : previous;
+  bucket.count += 1;
+  requestBuckets.set(key, bucket);
+  if (requestBuckets.size > 5000) {
+    for (const [itemKey, item] of requestBuckets.entries()) {
+      if (item.resetAt <= now) requestBuckets.delete(itemKey);
+    }
+  }
+  return bucket.count <= max;
+}
+
+function enterApiPolicy(request, response, pathname, policy) {
+  const ip = clientKey(request);
+  const multiplier = Math.max(0.1, Number(process.env.API_RATE_LIMIT_MULTIPLIER || 1));
+  const key = `${pathname}:${ip}`;
+  const globalKey = `${pathname}:global`;
+  if (!consumeRateLimit(key, policy.windowMs, Math.max(1, Math.floor(multiplier * policy.max))) || !consumeRateLimit(globalKey, policy.windowMs, Math.max(1, Math.floor(multiplier * policy.globalMax)))) {
+    response.setHeader("Retry-After", String(Math.ceil(policy.windowMs / 1000)));
+    logEvent("rate_limited", { path: pathname, ip });
+    sendJson(response, 429, { error: "Too many requests", message: "请求有点多，请稍后再试。" });
+    return false;
+  }
+  const activeKey = `${pathname}:${ip}`;
+  const globalActiveKey = `${pathname}:global`;
+  const active = activeRequests.get(activeKey) || 0;
+  const globalActive = activeRequests.get(globalActiveKey) || 0;
+  if (active >= policy.concurrent || globalActive >= policy.globalConcurrent) {
+    response.setHeader("Retry-After", "2");
+    logEvent("concurrency_limited", { path: pathname, ip, active, globalActive });
+    sendJson(response, 429, { error: "Too many concurrent requests", message: "老师正在处理上一条，请稍等一下。" });
+    return false;
+  }
+  activeRequests.set(activeKey, active + 1);
+  activeRequests.set(globalActiveKey, globalActive + 1);
+  return true;
+}
+
+function leaveApiPolicy(pathname, ip) {
+  for (const key of [`${pathname}:${ip}`, `${pathname}:global`]) {
+    const next = Math.max(0, (activeRequests.get(key) || 1) - 1);
+    if (next) activeRequests.set(key, next);
+    else activeRequests.delete(key);
+  }
+}
+
+function isAllowedOrigin(request) {
+  const origin = String(request.headers.origin || "").trim();
+  if (!origin) return process.env.ALLOW_ORIGINLESS_WS === "true";
+  try {
+    const parsed = new URL(origin);
+    const requestHost = String(request.headers["x-forwarded-host"] || request.headers.host || "").split(",")[0].trim().toLowerCase();
+    const configured = String(process.env.ALLOWED_ORIGINS || process.env.PUBLIC_BASE_URL || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => new URL(item).origin);
+    return parsed.host.toLowerCase() === requestHost || configured.includes(parsed.origin);
+  } catch {
+    return false;
+  }
+}
+
+function decodeRealtimeAudio(value) {
+  const text = String(value || "");
+  if (!text) return Buffer.alloc(0);
+  if (text.length > 1_100_000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text) || text.length % 4 !== 0) {
+    throw new Error("Realtime audio too large or invalid");
+  }
+  return Buffer.from(text, "base64");
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15_000, response = null) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const onClose = () => controller.abort();
+  response?.once?.("close", onClose);
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+  try {
+    if (response?.destroyed) controller.abort();
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (timedOut) {
+      const timeoutError = new Error("Upstream request timed out");
+      timeoutError.code = "UPSTREAM_TIMEOUT";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    response?.off?.("close", onClose);
+  }
+}
+
+function validateAudioData(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (text.length > 950_000 || !/^data:audio\/(?:wav|wave|webm|ogg|mpeg|mp3)(?:;[^,]*)?;base64,[A-Za-z0-9+/\r\n]+={0,2}$/i.test(text)) {
+    const error = new Error("audioData must be a supported audio data URL below the size limit");
+    error.code = "INVALID_INPUT";
+    throw error;
+  }
+  return text;
+}
+
+function validateAudioMimeType(value, audioData) {
+  const fromData = String(audioData || "").match(/^data:([^;,]+)/i)?.[1] || "";
+  const mime = String(value || fromData || "audio/wav").split(";")[0].toLowerCase();
+  if (!new Set(["audio/wav", "audio/wave", "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp3"]).has(mime)) {
+    const error = new Error("Unsupported audio MIME type");
+    error.code = "INVALID_INPUT";
+    throw error;
+  }
+  return mime;
+}
+
+function validateText(value, name, maxLength, { required = false } = {}) {
+  const text = String(value || "").trim();
+  if ((required && !text) || text.length > maxLength || /[\u0000\u000b\u000c\u007f]/.test(text)) {
+    const error = new Error(`${name} must be ${required ? "non-empty and " : ""}no longer than ${maxLength} characters`);
+    error.code = "INVALID_INPUT";
+    throw error;
+  }
+  return text;
+}
+
+function logEvent(type, payload = {}) {
+  const safe = JSON.parse(JSON.stringify(payload, (_key, value) => {
+    if (typeof value !== "string") return value;
+    return value.replace(/Bearer\s+[\w.-]+/gi, "Bearer [hidden]").slice(0, 500);
+  }));
+  console.log(JSON.stringify({ ts: new Date().toISOString(), type, ...safe }));
+}
+
+function isAllowedStaticPath(relativePath) {
+  if (staticTopLevelAllowlist.has(relativePath)) return true;
+  if (relativePath.startsWith("assets/")) return /\.(?:png|jpe?g|webp|avif|svg)$/i.test(relativePath);
+  if (relativePath.startsWith("teaching-engine/")) {
+    const name = relativePath.slice("teaching-engine/".length);
+    return !name.includes("/") && staticTeachingAllowlist.has(name);
+  }
+  return false;
+}
+
+async function serveStatic(pathname, response, headOnly, versioned = false, request = null) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname === "/" ? "/index.html" : pathname);
+  } catch {
+    sendJson(response, 400, { error: "Invalid path" });
+    return;
+  }
+  const normalized = normalize(decoded).replace(/^[/\\]+/, "");
+  const filePath = join(root, normalized);
+  const relativePath = relative(root, filePath).replaceAll("\\", "/");
+
+  if (!relativePath || relativePath.startsWith("../") || !isAllowedStaticPath(relativePath)) {
+    sendJson(response, 404, { error: "Not found" });
     return;
   }
 
@@ -1149,38 +1430,63 @@ async function serveStatic(pathname, response, headOnly) {
     sendJson(response, 404, { error: "Not found" });
     return;
   }
+  const resolvedRoot = await realpath(root);
+  const resolvedFile = await realpath(filePath);
+  if (resolvedFile !== resolvedRoot && !resolvedFile.startsWith(`${resolvedRoot}/`)) {
+    sendJson(response, 404, { error: "Not found" });
+    return;
+  }
 
   const ext = extname(filePath);
+  const immutable = relativePath !== "index.html" && versioned;
+  const raw = await readFile(filePath);
+  const canGzip = /\.(?:html|css|js|json|svg)$/i.test(ext) && raw.length >= 1024 && /(?:^|,)\s*gzip\s*(?:,|$)/i.test(String(request?.headers?.["accept-encoding"] || ""));
+  const body = canGzip ? gzipSync(raw, { level: 6 }) : raw;
   response.writeHead(200, {
     "Content-Type": mimeTypes[ext] || "application/octet-stream",
-    "Cache-Control": "no-store",
+    "Content-Length": body.length,
+    "Cache-Control": relativePath === "index.html" ? "no-cache" : immutable ? "public, max-age=31536000, immutable" : "public, max-age=3600",
+    ...(canGzip ? { "Content-Encoding": "gzip", Vary: "Accept-Encoding" } : {}),
   });
 
-  if (!headOnly) {
-    response.end(await readFile(filePath));
-  } else {
-    response.end();
-  }
+  if (!headOnly) response.end(body);
+  else response.end();
 }
 
 function readJsonBody(request) {
   return new Promise((resolve, reject) => {
     let body = "";
+    let settled = false;
+    const limit = Number(process.env.MAX_JSON_BODY_BYTES || 1_000_000);
+    const rejectOnce = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
     request.on("data", (chunk) => {
+      if (settled) return;
       body += chunk;
-      if (body.length > 1_000_000) {
-        reject(new Error("Request body too large"));
-        request.destroy();
+      if (Buffer.byteLength(body) > limit) {
+        const error = new Error("Request body too large");
+        error.code = "REQUEST_TOO_LARGE";
+        rejectOnce(error);
+        request.resume();
       }
     });
     request.on("end", () => {
+      if (settled) return;
       try {
-        resolve(body ? JSON.parse(body) : {});
+        const parsed = body ? JSON.parse(body) : {};
+        settled = true;
+        resolve(parsed);
       } catch {
-        reject(new Error("Invalid JSON body"));
+        const error = new Error("Invalid JSON body");
+        error.code = "INVALID_INPUT";
+        rejectOnce(error);
       }
     });
-    request.on("error", reject);
+    request.on("error", rejectOnce);
+    request.on("aborted", () => rejectOnce(new Error("Client aborted request")));
   });
 }
 

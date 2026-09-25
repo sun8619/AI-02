@@ -12,8 +12,8 @@ const icons = {
   arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
 };
 
-const TEACHER_AVATAR_SRC = "./assets/lezhi-teacher-v2.png?v=1";
-const TEACHER_STAGE_SRC = "./assets/lezhi-teacher-coach-v3.png?v=1";
+const TEACHER_AVATAR_SRC = "./assets/lezhi-teacher-v2.webp?v=2";
+const TEACHER_STAGE_SRC = "./assets/lezhi-teacher-coach-v3.webp?v=2";
 
 const USE_BROWSER_SPEECH_RECOGNITION = false;
 const USE_REALTIME_ASR = true;
@@ -6244,6 +6244,7 @@ let state = {
   promptPresentedAt: 0,
   promptTelemetryKey: "",
   view: "child",
+  parentAccess: {mode:"locked",error:"",unlockedUntil:0,pendingAction:""},
   lessonIndex: defaultLessonIndex,
   phase: "guiding",
   initialWholeQuestion: true,
@@ -6309,6 +6310,7 @@ let tutorGeneration = 0;
 let voiceGeneration = 0;
 let currentAsrRequest = null;
 let pendingHelpTimer = null;
+let parentLockTimer = null;
 
 function stopTeacherSpeech() {
   ttsGeneration += 1;
@@ -6643,13 +6645,17 @@ function createLessonStartMessage(lesson, starter, reason = "") {
 }
 
 function render() {
+  if ((state.view === "parent" || state.view === "summary") && Number(state.parentAccess?.unlockedUntil) <= Date.now()) {
+    state.parentAccess={mode:getStoredParentPin()?"unlock":"setup",error:"",unlockedUntil:0,pendingAction:""};
+    state.view="parent-lock";
+  }
   const activeInput=document.activeElement;
   const editing=activeInput?.matches?.('[data-form="typed-answer"] input');
   const selection=editing ? [activeInput.selectionStart,activeInput.selectionEnd] : null;
   app.innerHTML = `
     <div class="app-shell ${state.view === "child" ? "is-child" : "is-parent"}">
       ${renderTopbar()}
-      ${state.view === "parent" ? renderParentView() : state.view === "summary" ? renderSummaryView() : renderChildView()}
+      ${state.view === "parent" ? renderParentView() : state.view === "parent-lock" ? renderParentLockView() : state.view === "summary" ? renderSummaryView() : renderChildView()}
     </div>
   `;
   bindEvents();
@@ -8720,6 +8726,102 @@ function getMasteryEvidenceSummary() {
   };
 }
 
+const PARENT_PIN_STORAGE_KEY="lezhi-parent-pin-v1";
+const PARENT_UNLOCK_MS=15*60*1000;
+
+function getStoredParentPin(){
+  try{return JSON.parse(localStorage.getItem(PARENT_PIN_STORAGE_KEY)||"null");}catch{return null;}
+}
+
+async function hashParentPin(pin,salt){
+  const bytes=new TextEncoder().encode(`${salt}:${pin}`);
+  const digest=await crypto.subtle.digest("SHA-256",bytes);
+  return Array.from(new Uint8Array(digest)).map(value=>value.toString(16).padStart(2,"0")).join("");
+}
+
+function scheduleParentRelock(){
+  window.clearTimeout(parentLockTimer);
+  const remaining=Math.max(0,Number(state.parentAccess?.unlockedUntil)-Date.now());
+  if(!remaining)return;
+  parentLockTimer=window.setTimeout(()=>{
+    if(state.view==="parent" || state.view==="summary"){
+      state.parentAccess={mode:"unlock",error:"",unlockedUntil:0,pendingAction:""};
+      state.view="parent-lock";
+      render();
+    }
+  },remaining);
+}
+
+function requestParentAccess(){
+  cancelSupersededInteraction();
+  saveLearningSession(false);
+  if(Number(state.parentAccess?.unlockedUntil)>Date.now()){
+    state.view="parent";
+    state.showLessonPicker=false;
+    scheduleParentRelock();
+    render();
+    return;
+  }
+  state.parentAccess={mode:getStoredParentPin()?"unlock":"setup",error:"",unlockedUntil:0,pendingAction:""};
+  state.view="parent-lock";
+  state.showLessonPicker=false;
+  render();
+}
+
+function renderParentLockView(){
+  const access=state.parentAccess||{};
+  const setup=access.mode==="setup";
+  const deleting=access.mode==="verify-delete";
+  const title=setup?"首次设置家长 PIN":deleting?"再次验证后清除记录":"家长验证";
+  const hint=setup?"请设置4至6位数字。PIN只以加盐哈希保存在这台设备，不会发送到服务器。":deleting?"清除后不能恢复。请输入家长PIN确认这是家长操作。":"请输入家长PIN。验证后15分钟内可查看本机学习记录。";
+  return `
+    <main class="parent-lock-page">
+      <section class="parent-lock-card" aria-labelledby="parent-lock-title">
+        <button class="btn btn-soft" data-action="child-home">${icon("arrow")}返回孩子学习</button>
+        <h1 id="parent-lock-title">${title}</h1>
+        <p>${hint}</p>
+        <form data-form="parent-pin" autocomplete="off">
+          <label>家长 PIN<input name="pin" inputmode="numeric" pattern="[0-9]{4,6}" minlength="4" maxlength="6" required autocomplete="off" aria-describedby="parent-pin-help" /></label>
+          ${setup?'<label>再次输入<input name="confirmPin" inputmode="numeric" pattern="[0-9]{4,6}" minlength="4" maxlength="6" required autocomplete="off" /></label>':""}
+          <p id="parent-pin-help" class="parent-lock-help">${access.error?`<strong role="alert">${escapeText(access.error)}</strong>`:"PIN用于把孩子学习区与家长记录区分开。忘记PIN时，可清除此站点的本机数据后重新设置。"}</p>
+          <button class="btn btn-primary" type="submit">${setup?"设置并进入":deleting?"确认清除":"验证并进入"}</button>
+        </form>
+      </section>
+    </main>`;
+}
+
+async function submitParentPin(form){
+  const data=new FormData(form);
+  const pin=String(data.get("pin")||"").trim();
+  const confirmPin=String(data.get("confirmPin")||"").trim();
+  if(!/^\d{4,6}$/.test(pin)){
+    state.parentAccess={...state.parentAccess,error:"请输入4至6位数字PIN。"};render();return;
+  }
+  const stored=getStoredParentPin();
+  if(state.parentAccess.mode==="setup"){
+    if(pin!==confirmPin){state.parentAccess={...state.parentAccess,error:"两次输入不一致，请重新输入。"};render();return;}
+    const salt=crypto.getRandomValues(new Uint8Array(16));
+    const saltText=Array.from(salt).map(value=>value.toString(16).padStart(2,"0")).join("");
+    localStorage.setItem(PARENT_PIN_STORAGE_KEY,JSON.stringify({salt:saltText,hash:await hashParentPin(pin,saltText),version:1}));
+  }else if(!stored?.salt || !stored?.hash || await hashParentPin(pin,stored.salt)!==stored.hash){
+    state.parentAccess={...state.parentAccess,error:"PIN不正确，请重新输入。"};render();return;
+  }
+  if(state.parentAccess.mode==="verify-delete"){
+    LezhiHistory.clear();
+    state.historyRecorded=true;
+    state.parentAccess={mode:"unlocked",error:"",unlockedUntil:Date.now()+PARENT_UNLOCK_MS,pendingAction:""};
+    state.view="parent";
+    scheduleParentRelock();
+    render();
+    toastMessage("本机学习记录已清除");
+    return;
+  }
+  state.parentAccess={mode:"unlocked",error:"",unlockedUntil:Date.now()+PARENT_UNLOCK_MS,pendingAction:""};
+  state.view="parent";
+  scheduleParentRelock();
+  render();
+}
+
 function renderParentView() {
   const lesson = currentLesson();
   const masterySummary = getMasteryEvidenceSummary();
@@ -8734,6 +8836,21 @@ function renderParentView() {
           <p>孩子端只保留师生对话；这里记录知识点拆分、换讲法、看图辅助、整题检验和错题补救结果。</p>
         </div>
         <button class="btn btn-primary" data-action="summary-view">${icon("book")}查看本题总结</button>
+      </section>
+
+      <section class="parent-privacy-notice" aria-labelledby="privacy-title">
+        <div>
+          <h2 id="privacy-title">儿童语音与学习记录说明</h2>
+          <p>孩子主动点击麦克风后，本次语音会发送给已配置的语音识别服务，用于把回答转成文字；服务端只在内存中临时保存转写所需音频，约5分钟后自动删除，不写入学习记录。</p>
+          <p>学习记录只保存在当前浏览器，最多保留200条且只读取最近90天；记录知识点、完成情况、答题与求助次数、学习时长和响应耗时，不保存姓名、录音、原始转写或服务商密钥。</p>
+          <p>家长可以在本页清除本机学习记录。若不同意语音处理，孩子可始终使用“打字回答”；停止使用并清除本机记录即可撤回本设备上的记录授权。</p>
+        </div>
+        <ul>
+          <li><strong>处理目的</strong><span>识别数学回答、生成自然语音反馈</span></li>
+          <li><strong>第三方处理</strong><span>由服务器当前配置的模型与语音服务处理；具体服务商留存规则以其正式协议为准</span></li>
+          <li><strong>账号同步</strong><span>当前没有账号系统，也不跨设备同步学习记录</span></li>
+          <li><strong>联系方式</strong><span>请由产品运营方在正式公开前补充可核验的隐私联系渠道</span></li>
+        </ul>
       </section>
 
       <section class="parent-grid">
@@ -8975,6 +9092,7 @@ function renderMascotFace() {
 }
 
 function bindEvents() {
+  document.querySelectorAll('[data-form="parent-pin"]').forEach(form=>form.addEventListener("submit",event=>{event.preventDefault();submitParentPin(form);}));
   document.querySelectorAll("[data-history-goal]").forEach(node=>node.addEventListener("change",()=>{LezhiHistory.setDailyGoal(node.value);render();}));
   document.querySelectorAll("[data-history-filter]").forEach(node=>node.addEventListener("change",()=>{
     state.historyFilters={...state.historyFilters,[node.dataset.historyFilter]:node.value};
@@ -9072,6 +9190,8 @@ async function handleAction(event) {
   }
 
   if (action === "child-home") {
+    window.clearTimeout(parentLockTimer);
+    state.parentAccess={...state.parentAccess,mode:getStoredParentPin()?"unlock":"setup",unlockedUntil:0,error:""};
     state.view = "child";
     state.showLessonPicker = false;
     render();
@@ -9079,11 +9199,7 @@ async function handleAction(event) {
   }
 
   if (action === "parent-view") {
-    cancelSupersededInteraction();
-    saveLearningSession(false);
-    state.view = "parent";
-    state.showLessonPicker = false;
-    render();
+    requestParentAccess();
     return;
   }
 
@@ -9093,12 +9209,9 @@ async function handleAction(event) {
     return;
   }
   if (action === "clear-history") {
-    if(window.confirm("清除这台设备上的学习记录？此操作不能撤销。")) {
-      LezhiHistory.clear();
-      // Do not let the already-open session recreate the records the parent just removed.
-      state.historyRecorded=true;
-      render();
-    }
+    state.parentAccess={...state.parentAccess,mode:"verify-delete",error:"",pendingAction:"clear-history"};
+    state.view="parent-lock";
+    render();
     return;
   }
 

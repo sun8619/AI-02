@@ -1,0 +1,2 @@
+﻿trial_id,child_code,knowledge_point,baseline_correct,immediate_correct,next_day_correct,day7_correct,help_count,completion_seconds,frustration_exit,guardian_observer_only,consent_recorded,notes
+TRIAL-001,C001,示例知识点,false,true,true,true,1,180,false,true,true,

@@ -1,0 +1,10 @@
+{
+  "name": "乐之老师",
+  "short_name": "乐之老师",
+  "description": "面向小学低年级孩子的数学语音陪练",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7fbff",
+  "theme_color": "#19b77b"
+}

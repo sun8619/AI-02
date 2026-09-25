@@ -12,6 +12,8 @@
   "scripts": {
     "test": "node teaching-engine/product-regression-audit.js && node teaching-engine/v92-regression-audit.js && node teaching-engine/v93-regression-audit.js && node teaching-engine/v96-regression-audit.js && node teaching-engine/v97-regression-audit.js && node teaching-engine/v98-regression-audit.js && node teaching-engine/multipart-regression-audit.js && node teaching-engine/coaching-regression-audit.js && node teaching-engine/voice-lifecycle-audit.js && node teaching-engine/source-math-audit.js && node teaching-engine/runtime-integrity-audit.js && node teaching-engine/spoken-prompt-audit.js",
     "start": "node server.mjs",
+    "test:performance": "node tools/performance-budget.mjs",
+    "test:security": "node tools/security-regression.mjs",
     "test:browser": "node tools/browser-regression.mjs",
     "audit:teaching": "node teaching-engine/teaching-quality-audit.js",
     "audit:scenarios": "node teaching-engine/teaching-scenario-audit.js",
@@ -22,6 +24,8 @@
     "audit:routing": "node teaching-engine/guided-step-routing-audit.js",
     "audit:families": "node teaching-engine/family-contamination-audit.js",
     "audit:speech": "node teaching-engine/spoken-prompt-audit.js",
+    "audit:human": "node tools/human-acceptance.mjs report",
+    "audit:public-ready": "node tools/human-acceptance.mjs report --strict",
     "release:check": "bash tools/deploy-local.sh check",
     "deploy": "bash tools/deploy-local.sh deploy",
     "deploy:status": "bash tools/deploy-local.sh status",

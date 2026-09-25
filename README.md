@@ -9,7 +9,9 @@
 - 换讲法与程序精准绘图
 - 说“换知识点”“想学人民币换算”等自然表达后自动切换题目、步骤和右侧图示
 - Ark 图片生成入口
-- 家长进展页、本机学习时间线与隔日复测记录
+- 受家长PIN保护的进展页、本机学习时间线与隔日复测记录
+- 静态文件白名单、接口限流、WebSocket来源校验、上游超时和结构化请求日志
+- WebP教师形象、gzip传输与版本化静态缓存
 
 ## 课程设计
 
@@ -43,8 +45,10 @@ http://127.0.0.1:4173
 ```bash
 npm ci
 npm test
+npm run test:security
 npx playwright install chromium
 npm run test:browser
+npm run audit:human
 node tools/release.mjs verify
 node tools/deploy-regression-audit.mjs
 ```
@@ -64,6 +68,17 @@ npm run audit:page
 - `audit:scenarios` 检查答对、答错、不会、跑题、变式、讲给老师听六类场景。
 - `audit:paths` 模拟真实孩子路径，确认每个知识点不会因为空白、跑题、短答案、敷衍复述而误推进。
 - `audit:page` 从页面体验角度检查老师回复是否明确告诉孩子“现在答什么”、图示是否跟当前小台阶同步、是否疑似提前泄露答案、同一路径是否过于机械重复。
+
+
+## 公开儿童服务验收
+
+当前受密码保护的生产环境可用于内部预览。转为公开儿童服务前，必须把匿名真实数据填写到 `docs/acceptance/` 的四份CSV，并执行：
+
+```bash
+npm run audit:public-ready
+```
+
+该门禁要求完成462题教师签审、至少100条真实童声、iOS Safari/Android Chrome/微信内浏览器真机测试，以及至少10名儿童的即时、隔日和7日保持实验。自动测试不会伪装成这些真人证据。详细口径见 `docs/acceptance/README.md`。
 
 ## 本地接管与生产发布
 
@@ -88,94 +103,8 @@ npm run deploy:logs -- 100
 
 默认 SSH 目标是 `ai02-prod`，可用 `AI02_SSH_TARGET` 覆盖。若有公网健康地址，可设置 `AI02_PUBLIC_HEALTH_URL`，发布完成后再做一次公网检查。密钥和服务器凭据不得提交到仓库。
 
-## Railway 环境变量
+## 生产环境变量
 
-如果用 Railway，在 Railway 的 Variables 里添加：
+当前唯一支持的生产方式是 Ubuntu 22.04 + systemd `qibu-ai`，配置保存在服务器 `/opt/qibu-ai/.env`，由受限发布链路保留。至少需要文本模型、ASR、TTS和图片模型对应凭据；不得将任何密钥提交到仓库。
 
-```text
-ARK_API_KEY=你的火山 Ark API Key
-ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-ARK_TEXT_MODEL=默认文本模型或接入点 ID
-ARK_TUTOR_MODEL=讲解回复模型或接入点 ID
-ARK_REASONING_MODEL=思考/拆知识点模型或接入点 ID
-ARK_EVALUATION_MODEL=复述评估模型或接入点 ID
-ARK_SUMMARY_MODEL=总结模型或接入点 ID
-ARK_SPEECH_API_KEY=火山语音服务 API Key，新版控制台用这个
-ARK_SPEECH_APP_ID=火山语音 APP ID，旧版控制台用这个
-ARK_SPEECH_ACCESS_KEY=火山语音 Access Token，旧版控制台用这个
-ARK_ASR_MODEL=bigmodel
-ARK_ASR_RESOURCE_ID=volc.bigasr.auc_turbo
-ARK_TTS_RESOURCE_ID=seed-tts-2.0
-ARK_TTS_SPEAKER=zh_female_vv_uranus_bigtts
-ARK_IMAGE_MODEL=doubao-seedream-5-0-260128
-```
-
-模型分工：
-
-- `ARK_REASONING_MODEL`：思考、拆知识点、判断下一步。
-- `ARK_TUTOR_MODEL`：生成给孩子听的讲解。
-- `ARK_EVALUATION_MODEL`：判断孩子“讲给老师听”是否讲明白。
-- `ARK_SUMMARY_MODEL`：生成家长总结。
-- `ARK_ASR_MODEL` / `ARK_ASR_RESOURCE_ID`：把孩子语音转成文字。
-- `ARK_TTS_RESOURCE_ID` / `ARK_TTS_SPEAKER`：把 AI 回复合成语音。
-- `ARK_IMAGE_MODEL`：生成生活类比图。
-
-语音输入优先级：
-
-1. 点击开始录音，再点击结束；通过配置的火山 ASR 识别。
-2. 接口、权限或网络失败时保留当前问题，允许重试或打字，不编造孩子回答。
-
-浏览器自带实时语音识别默认关闭，因为在部分环境里会明显卡顿。
-
-语音输出优先级：
-
-1. 火山 TTS，只朗读老师对孩子说的话，不朗读内部判断和上下文。
-2. 失败时保留文字并提供重播，不自动切换浏览器机械音。
-
-语音自然度主要取决于 `ARK_TTS_SPEAKER` 对应的音色。代码会把数学符号改成口语读法，并使用稍慢语速；如果仍然机械，优先在火山里换一个更自然的 SeedTTS 音色，再把新的音色 ID 填到 Railway Variables。
-
-如果火山页面给你的是 APP ID、Access Token、Secret Key 三个值：
-
-- APP ID 填到 `ARK_SPEECH_APP_ID`
-- Access Token 填到 `ARK_SPEECH_ACCESS_KEY`
-- Secret Key 先不要填，本项目当前语音接口不用它
-- `ARK_SPEECH_API_KEY` 可以留空；如果你已经有新版 API Key，也可以只填 `ARK_SPEECH_API_KEY`
-
-如果你不知道怎么选，最简单是先把 `ARK_TEXT_MODEL`、`ARK_TUTOR_MODEL`、`ARK_REASONING_MODEL`、`ARK_EVALUATION_MODEL`、`ARK_SUMMARY_MODEL` 都填成同一个 Ark 文本模型/接入点 ID，先跑通；以后再拆成不同模型。
-
-`ARK_TEXT_MODEL` 是默认兜底。
-`ARK_IMAGE_MODEL` 用于“AI 画生活例子”的图片生成。
-
-后续接入真实语音时再添加：
-
-```text
-ARK_TEXT_MODEL=你的文本模型名
-ARK_ASR_MODEL=你的语音识别模型名
-ARK_TTS_MODEL=你的语音合成模型名
-ARK_TTS_SPEECH_RATE=-4
-ARK_TTS_LOUDNESS_RATE=2
-ARK_TTS_STYLE=请用温和、自然、像真人老师一样的语气说给低年级孩子听。
-```
-
-Railway 会自动提供 `PORT`，不要手动设置 `PORT`。
-
-## 更简单的 Vercel 部署
-
-如果 Railway 构建失败，可以改用 Vercel：
-
-1. 把本项目上传到 GitHub。
-2. 打开 Vercel，选择 Add New Project。
-3. Import 刚才的 GitHub 仓库。
-4. Framework Preset 选择 Other。
-5. Environment Variables 添加：
-
-```text
-ARK_API_KEY=你的火山 Ark API Key
-ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-ARK_TEXT_MODEL=你在火山 Ark 里选择的文本模型或接入点 ID
-ARK_IMAGE_MODEL=doubao-seedream-5-0-260128
-```
-
-6. 点击 Deploy。
-
-Vercel 不需要配置端口，也不需要 Docker。
+常用运行参数包括接口限流倍率、文本/图片/ASR超时、实时语音累计字节与连接时长、允许的WebSocket Origin。未配置时使用代码中的保守默认值。
