@@ -167,7 +167,14 @@ const server = createServer(async (request, response) => {
     if(response.destroyed || response.writableEnded) return;
     const status = error.code === "REQUEST_TOO_LARGE" ? 413 : error.name === "AbortError" || error.code === "UPSTREAM_TIMEOUT" || error.code === "SPEECH_TIMEOUT" ? 504 : error.code === "INVALID_INPUT" ? 400 : 500;
     logEvent("request_error", { requestId, status, path: safeRequestPath(request.url), error: sanitizeMessage(error) });
-    sendJson(response, status, { error: status === 413 ? "Request body too large" : status === 400 ? "Invalid request" : status === 504 ? "Upstream timeout" : "Local server error", detail: sanitizeMessage(error) });
+    const message = status === 413
+      ? "提交的内容太多，请缩短后再试。"
+      : status === 400
+        ? "提交的内容不符合要求，请检查后再试。"
+        : status === 504
+          ? "这次等待时间有点长，请稍后再试。"
+          : "服务暂时没有响应，请稍后再试。";
+    sendJson(response, status, { error: "Request failed", message });
   }
 });
 
@@ -256,10 +263,10 @@ function handleRealtimeVoiceConnection(client) {
       }
       throw new Error("Unsupported realtime message type");
     } catch (error) {
+      logEvent("realtime_voice_error", { error: sanitizeMessage(error) });
       sendRealtime(client, {
         type: "error",
-        message: /too large|already started|Unsupported/.test(String(error?.message)) ? "这次语音数据不符合要求，请重新说一遍。" : "实时语音识别没有接通，已切回备用识别。",
-        detail: sanitizeMessage(error),
+        message: /too large|already started|Unsupported/.test(String(error?.message)) ? "这次语音数据不符合要求，请重新说一遍。" : "语音暂时没有接通，我会换一种方式来听。",
       });
       if (/too large|already started|Unsupported/.test(String(error?.message))) client.close(1008, "voice policy violation");
     }
@@ -308,7 +315,7 @@ class StreamingAsrSession {
     this.upstream.on("open", () => {
       this.ready = true;
       this.upstream.send(buildAsrFullRequestPacket(createStreamingAsrPayload(this.context)));
-      sendRealtime(this.client, { type: "ready", mode: "volc-stream-asr", connectId });
+      sendRealtime(this.client, { type: "ready" });
       while (this.pendingAudio.length) {
         const packet = this.pendingAudio.shift();
         this.pendingAudioBytes = Math.max(0, this.pendingAudioBytes - packet.length);
@@ -317,10 +324,10 @@ class StreamingAsrSession {
     });
     this.upstream.on("message", (data) => this.handleUpstreamMessage(Buffer.from(data)));
     this.upstream.on("error", (error) => {
+      logEvent("realtime_voice_upstream_error", { error: sanitizeMessage(error) });
       sendRealtime(this.client, {
         type: "error",
-        message: "火山流式语音识别连接失败。",
-        detail: sanitizeMessage(error),
+        message: "语音暂时没有接通，我会换一种方式来听。",
       });
     });
     this.upstream.on("close", () => {
@@ -359,18 +366,18 @@ class StreamingAsrSession {
     try {
       packet = parseAsrPacket(buffer);
     } catch (error) {
+      logEvent("realtime_voice_parse_error", { error: sanitizeMessage(error) });
       sendRealtime(this.client, {
         type: "error",
-        message: "火山流式识别返回内容无法解析。",
-        detail: sanitizeMessage(error),
+        message: "这次没有听清，我会换一种方式来听。",
       });
       return;
     }
     if (packet.error) {
+      logEvent("realtime_voice_provider_error", { error: sanitizeMessage(packet.error) });
       sendRealtime(this.client, {
         type: "error",
-        message: "火山流式识别返回错误。",
-        detail: packet.error,
+        message: "这次没有听清，我会换一种方式来听。",
       });
       return;
     }
@@ -417,9 +424,10 @@ function sendRealtime(client, payload) {
 async function handleImageGeneration(request, response) {
   const apiKey = process.env.ARK_API_KEY;
   if (!apiKey) {
-    sendJson(response, 500, {
-      error: "Missing ARK_API_KEY",
-      detail: "请先在本地环境变量或 .env 文件中配置 ARK_API_KEY，再启动服务。",
+    logEvent("image_generation_unavailable", { reason: "missing_credentials" });
+    sendJson(response, 503, {
+      error: "Image unavailable",
+      message: "生活图暂时没有画出来，请稍后再试。",
     });
     return;
   }
@@ -453,9 +461,10 @@ async function handleImageGeneration(request, response) {
     : { message: await upstreamResponse.text() };
 
   if (!upstreamResponse.ok) {
-    sendJson(response, upstreamResponse.status, {
-      error: "Image generation failed",
-      detail: summarizeUpstreamError(payload),
+    logEvent("image_generation_failed", { status: upstreamResponse.status, error: summarizeUpstreamError(payload) });
+    sendJson(response, 502, {
+      error: "Image unavailable",
+      message: "生活图暂时没有画出来，请稍后再试。",
     });
     return;
   }
@@ -505,7 +514,7 @@ async function handleLearningTurn(request, response) {
   if (!apiKey || !model) {
     sendJson(response, 200, {
       mode: "mock",
-      message: "本地模拟 AI 已接管。部署后配置 ARK_API_KEY 和对应教学模型，就会使用火山 Ark 真实模型。",
+      message: "老师暂时没有回应，请稍后再试。",
       nextPhase: "mock",
     });
     return;
@@ -581,9 +590,10 @@ async function handleLearningTurn(request, response) {
 
   const upstreamPayload = await upstream.json().catch(async () => ({ message: await upstream.text().catch(() => "") }));
   if (!upstream.ok) {
+    logEvent("learning_response_failed", { status: upstream.status, error: summarizeUpstreamError(upstreamPayload) });
     sendJson(response, 502, {
-      error: "AI Gateway failed",
-      detail: summarizeUpstreamError(upstreamPayload),
+      error: "Learning response unavailable",
+      message: "老师暂时没有回应，请稍后再试。",
     });
     return;
   }
@@ -598,14 +608,14 @@ async function handleLearningTurn(request, response) {
       aiMessage: content.slice(0, 220) || "先看分母是不是一样。",
       nextPhase: phase,
       feynmanStatus: "",
-      evidenceSignal: "模型回复",
-      evidenceText: "AI Gateway 返回了非 JSON 回复，已做保守处理。",
+      evidenceSignal: "学习反馈",
+      evidenceText: "已根据孩子的回答调整下一步练习。",
       bestStrategy: "拆步骤",
     };
   }
 
   sendJson(response, 200, {
-    mode: "ark",
+    mode: "service",
     ...parsed,
   });
 }
@@ -627,7 +637,7 @@ async function handleSpeechTranscription(request, response) {
     sendJson(response, 200, {
       mode: "mock",
       transcript: "",
-      message: "未配置语音识别 Key，请让孩子再说一次或改用键盘输入。",
+      message: "暂时没有听清，请再说一次或改用打字回答。",
     });
     return;
   }
@@ -669,16 +679,20 @@ async function handleSpeechTranscription(request, response) {
   const upstreamPayload = await upstream.json().catch(async () => ({ message: await upstream.text().catch(() => "") }));
   const statusCode = upstream.headers.get("X-Api-Status-Code");
   if (!upstream.ok || (statusCode && statusCode !== "20000000")) {
-    sendJson(response, 502, {
-      error: "ASR failed",
-      detail: upstream.headers.get("X-Api-Message") || summarizeUpstreamError(upstreamPayload),
+    logEvent("speech_transcription_failed", {
+      status: upstream.status,
+      error: upstream.headers.get("X-Api-Message") || summarizeUpstreamError(upstreamPayload),
       logId: upstream.headers.get("X-Tt-Logid") || "",
+    });
+    sendJson(response, 502, {
+      error: "Speech unavailable",
+      message: "暂时没有听清，请再说一次或改用打字回答。",
     });
     return;
   }
 
   sendJson(response, 200, {
-    mode: "ark-asr",
+    mode: "service",
     transcript: upstreamPayload?.result?.text || "",
     utterances: upstreamPayload?.result?.utterances || [],
     duration: upstreamPayload?.audio_info?.duration || 0,
@@ -723,10 +737,14 @@ async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey,
   const submitStatus = submit.headers.get("X-Api-Status-Code");
   if (!submit.ok || (submitStatus && submitStatus !== "20000000")) {
     const submitPayload = await submit.json().catch(async () => ({ message: await submit.text().catch(() => "") }));
-    sendJson(response, 502, {
-      error: "ASR submit failed",
-      detail: submit.headers.get("X-Api-Message") || summarizeUpstreamError(submitPayload),
+    logEvent("speech_transcription_submit_failed", {
+      status: submit.status,
+      error: submit.headers.get("X-Api-Message") || summarizeUpstreamError(submitPayload),
       logId: submit.headers.get("X-Tt-Logid") || "",
+    });
+    sendJson(response, 502, {
+      error: "Speech unavailable",
+      message: "暂时没有听清，请再说一次或改用打字回答。",
     });
     return;
   }
@@ -744,17 +762,21 @@ async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey,
     lastPayload = await query.json().catch(async () => ({ message: await query.text().catch(() => "") }));
 
     if (!query.ok) {
-      sendJson(response, 502, {
-        error: "ASR query failed",
-        detail: query.headers.get("X-Api-Message") || summarizeUpstreamError(lastPayload),
+      logEvent("speech_transcription_query_failed", {
+        status: query.status,
+        error: query.headers.get("X-Api-Message") || summarizeUpstreamError(lastPayload),
         logId: query.headers.get("X-Tt-Logid") || "",
+      });
+      sendJson(response, 502, {
+        error: "Speech unavailable",
+        message: "暂时没有听清，请再说一次或改用打字回答。",
       });
       return;
     }
 
     if (lastStatus === "20000000" || lastPayload?.result?.text) {
       sendJson(response, 200, {
-        mode: "ark-asr",
+        mode: "service",
         transcript: lastPayload?.result?.text || "",
         utterances: lastPayload?.result?.utterances || [],
         duration: lastPayload?.audio_info?.duration || lastPayload?.result?.additions?.duration || 0,
@@ -765,19 +787,23 @@ async function handleSpeechTranscriptionSubmitQuery({ request, response, apiKey,
     }
 
     if (lastStatus && lastStatus !== "20000001" && lastStatus !== "20000002") {
-      sendJson(response, 502, {
-        error: "ASR failed",
-        detail: query.headers.get("X-Api-Message") || summarizeUpstreamError(lastPayload),
+      logEvent("speech_transcription_provider_failed", {
+        status: lastStatus,
+        error: query.headers.get("X-Api-Message") || summarizeUpstreamError(lastPayload),
         logId: query.headers.get("X-Tt-Logid") || "",
+      });
+      sendJson(response, 502, {
+        error: "Speech unavailable",
+        message: "暂时没有听清，请再说一次或改用打字回答。",
       });
       return;
     }
   }
 
+  logEvent("speech_transcription_timeout", { status: lastStatus, error: summarizeUpstreamError(lastPayload) });
   sendJson(response, 504, {
-    error: "ASR timeout",
-    detail: `语音识别仍在处理中，最后状态：${lastStatus || "unknown"}`,
-    lastPayload,
+    error: "Speech timeout",
+    message: "这次等待时间有点长，请再说一次或改用打字回答。",
   });
 }
 
@@ -795,10 +821,10 @@ async function handleSpeechSynthesis(request, response) {
   if (cached) ttsCache.delete(cacheKey);
   const apiKey = getSpeechApiKey("TTS");
   if (!apiKey) {
+    logEvent("speech_synthesis_unavailable", { reason: "missing_credentials" });
     sendJson(response, 503, {
-      error: "TTS not configured",
-      message: "未配置火山豆包语音合成 Key，已停止使用浏览器机械朗读。",
-      hint: "请在服务器环境变量里配置 ARK_TTS_API_KEY 或 ARK_SPEECH_API_KEY，并确认 ARK_TTS_RESOURCE_ID 与 ARK_TTS_SPEAKER 有权限。",
+      error: "Voice unavailable",
+      message: "老师的声音暂时不可用，可以先看文字回答。",
     });
     return;
   }
@@ -836,12 +862,14 @@ async function handleSpeechSynthesis(request, response) {
     body: JSON.stringify(payload),
   }, response);
   if (!upstream.ok) {
-    const hint = createTtsErrorHint(raw);
-    sendJson(response, 502, {
-      error: "TTS failed",
-      detail: raw.slice(0, 500),
-      hint,
+    logEvent("speech_synthesis_failed", {
+      status: upstream.status,
+      error: raw.slice(0, 500),
       logId: upstream.headers.get("X-Tt-Logid") || "",
+    });
+    sendJson(response, 502, {
+      error: "Voice unavailable",
+      message: "老师的声音暂时不可用，可以先看文字回答。",
     });
     return;
   }
@@ -851,22 +879,23 @@ async function handleSpeechSynthesis(request, response) {
     .filter((item) => typeof item === "string" && item.length > 0);
 
   if (!chunks.length) {
-    sendJson(response, 502, {
-      error: "TTS returned no audio",
-      detail: raw.slice(0, 500),
-      hint: createTtsErrorHint(raw),
+    logEvent("speech_synthesis_empty", {
+      error: raw.slice(0, 500),
       logId: upstream.headers.get("X-Tt-Logid") || "",
+    });
+    sendJson(response, 502, {
+      error: "Voice unavailable",
+      message: "老师的声音暂时不可用，可以先看文字回答。",
     });
     return;
   }
 
   const audioBase64 = chunks.join("");
   const responsePayload = {
-    mode: "ark-tts",
+    mode: "service",
     format,
     audioBase64,
     audioDataUrl: `data:audio/${format};base64,${audioBase64}`,
-    logId: upstream.headers.get("X-Tt-Logid") || "",
   };
   if (audioBase64.length <= 2_000_000) {
     if (ttsCache.size >= 20) ttsCache.delete(ttsCache.keys().next().value);
@@ -1536,20 +1565,6 @@ function summarizeUpstreamError(payload) {
   if (typeof payload?.message === "string") return payload.message;
   if (typeof payload?.error === "string") return payload.error;
   return "上游接口返回错误，请检查模型、额度、权限或请求参数。";
-}
-
-function createTtsErrorHint(raw) {
-  const text = String(raw || "");
-  if (/requested resource not granted|resource.*not granted|not granted/i.test(text)) {
-    return "火山语音合成资源没有授权。请检查 ARK_TTS_RESOURCE_ID 和 ARK_TTS_SPEAKER 是否是当前 Key 已开通的资源。";
-  }
-  if (/unauthorized|forbidden|invalid.*key|api.?key/i.test(text)) {
-    return "火山语音合成 Key 无效或没有权限。请检查 ARK_TTS_API_KEY 或 ARK_SPEECH_API_KEY。";
-  }
-  if (/speaker|voice/i.test(text)) {
-    return "音色参数可能不可用。请在火山语音合成控制台确认 ARK_TTS_SPEAKER。";
-  }
-  return "豆包语音合成接口返回异常。请检查 TTS Key、资源 ID、音色 ID、额度和火山控制台权限。";
 }
 
 function sanitizeMessage(error) {

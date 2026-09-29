@@ -85,9 +85,9 @@ const customLessons = [
       resultKeywords: ["9", "九", "更多", "更大", "四分之三", "3/4"],
     },
     visualType: "fraction",
-    visualLabel: "程序精准绘制",
+    visualLabel: "数学图示",
     visualTitle: "把它们都变成 12 小格",
-    visualCardTitle: "AI 生活图",
+    visualCardTitle: "生活情景图",
     visualCardHint: "需要时再画“饼干切小份”的例子。",
     imagePrompt: [
       "为低年级小学生生成一张帮助理解分数比较的生活情景图。",
@@ -95,7 +95,7 @@ const customLessons = [
       "目的：帮助孩子理解 2/3 和 3/4 的大小比较。",
       "要求：儿童教育插图风格，画面干净，主体清楚，不要复杂小字，不要真实品牌，不要错误数学符号。",
     ],
-    generatedCaption: "这张图用于生活类比；真正的分数比例以上面的程序图为准。",
+    generatedCaption: "这张图帮助理解分数大小。",
     summary: "比较 2/3 和 3/4 时，分母不一样，不能直接比分子。可以先变成同样的小份，再比较谁更多。",
     explainSummary: "孩子已经能说出“分母不同要先通分，再比较 8/12 和 9/12”。",
     nextSuggestion: "明天再练 1 道分母不同的分数比较题，并让孩子继续当小老师讲一遍。",
@@ -163,16 +163,16 @@ const customLessons = [
       resultKeywords: ["16", "十六", "十六米"],
     },
     visualType: "perimeter",
-    visualLabel: "程序精准绘制",
+    visualLabel: "数学图示",
     visualTitle: "沿外边走一整圈",
-    visualCardTitle: "AI 情景图",
+    visualCardTitle: "生活情景图",
     visualCardHint: "需要时可以画“绕小花园走一圈”的例子。",
     imagePrompt: [
       "为低年级小学生生成一张帮助理解长方形周长的生活情景图。",
       "画面：一个长方形小花园，孩子沿着外边走一整圈，长边标 5 米，短边标 3 米。",
       "要求：儿童教育插图风格，干净清楚，不要复杂小字，不要品牌。",
     ],
-    generatedCaption: "这张图帮助孩子理解“周长是一整圈”，具体算式以程序图为准。",
+    generatedCaption: "这张图帮助理解周长是一整圈。",
     summary: "长方形周长是外面一整圈的长度。长 5 米、宽 3 米，要算 5+3+5+3，所以是 16 米。",
     explainSummary: "孩子已经能说出周长是一整圈，长和宽都各有两条。",
     nextSuggestion: "下次换一个长方形尺寸，让孩子先沿图说一圈，再写算式。",
@@ -240,16 +240,16 @@ const customLessons = [
       resultKeywords: ["3:45", "三点四十五", "45", "四十五"],
     },
     visualType: "time",
-    visualLabel: "程序精准绘制",
+    visualLabel: "数学图示",
     visualTitle: "从 3:20 往后走 25 分钟",
-    visualCardTitle: "AI 情景图",
+    visualCardTitle: "生活情景图",
     visualCardHint: "需要时可以画“读书计时”的生活例子。",
     imagePrompt: [
       "为低年级小学生生成一张帮助理解经过时间的生活情景图。",
       "画面：孩子 3:20 开始读书，旁边有小钟表和 25 分钟计时提示，结束指向 3:45。",
       "要求：儿童教育插图风格，干净清楚，不要复杂小字，不要品牌。",
     ],
-    generatedCaption: "这张图帮助孩子把时间题放进生活场景，具体计算以时间线为准。",
+    generatedCaption: "这张图帮助理解经过时间。",
     summary: "从 3:20 开始，往后加 25 分钟。20+25=45，没有到 60 分，所以结束时间是 3:45。",
     explainSummary: "孩子已经能说出从开始时间往后数 25 分钟，并说明没有跨过整点。",
     nextSuggestion: "下次练一个会跨过整点的经过时间题，让孩子继续讲过程。",
@@ -317,16 +317,16 @@ const customLessons = [
       resultKeywords: ["35", "三十五", "三十五角"],
     },
     visualType: "money",
-    visualLabel: "程序精准绘制",
+    visualLabel: "数学图示",
     visualTitle: "先把元换成角，再相加",
-    visualCardTitle: "AI 生活图",
+    visualCardTitle: "生活情景图",
     visualCardHint: "需要时可以画“买文具换零钱”的生活例子。",
     imagePrompt: [
       "为低年级小学生生成一张帮助理解人民币元角换算的生活情景图。",
       "画面：孩子在文具店买铅笔，把 3 元 5 角换成很多 1 角硬币来数。",
       "要求：儿童教育插图风格，干净清楚，不要复杂小字，不要真实品牌，不要真实货币细节。",
     ],
-    generatedCaption: "这张图帮助孩子把人民币换算放进生活场景，具体换算以上面的程序图为准。",
+    generatedCaption: "这张图帮助理解人民币换算。",
     summary: "1 元等于 10 角，所以 3 元等于 30 角。3 元 5 角就是 30 角加 5 角，等于 35 角。",
     explainSummary: "孩子已经能说出先把元换成角，再把已有的角加上。",
     nextSuggestion: "下次练 2 元 8 角、4 元 6 角这类题，让孩子继续讲换算过程。",
@@ -6071,12 +6071,12 @@ function createCurriculumLesson(spec) {
     answer: createAnswerRules(spec, activeQuestion),
     visualType,
     baseVisualType: spec.baseVisualType || visualType,
-    visualLabel: "程序辅助理解",
+    visualLabel: "数学图示",
     visualTitle: createVisualTitle(spec),
-    visualCardTitle: "AI 生活图",
+    visualCardTitle: "生活情景图",
     visualCardHint: `需要时可以画一个“${spec.lesson}”的生活例子。`,
     imagePrompt: createImagePrompt({ ...spec, problem }),
-    generatedCaption: "这张图用于生活类比；精确数量关系以上面的程序图为准。",
+    generatedCaption: "这张图帮助理解生活里的数学关系。",
     summary: `${spec.node}：${spec.microSteps.join("，")}。`,
     explainSummary: `孩子能用自己的话说出「${spec.node}」的关键步骤。`,
     nextSuggestion: `下次换一道「${spec.node}」的题，让孩子继续先做再讲一遍。`,
@@ -6451,7 +6451,7 @@ function activateLessonQuestion(lesson, question, cursor = 0) {
   lesson.imagePrompt = createImagePrompt(lesson);
   lesson.generatedCaption = question.explanation
     ? `这张图对应当前题：${question.explanation}`
-    : "这张图用于生活类比；精确数量关系以上面的程序图为准。";
+    : "这张图帮助理解当前题目。";
   return true;
 }
 
@@ -7441,7 +7441,6 @@ function renderVoiceDock() {
       ${renderVoiceConfirmation()}
       ${state.showKeyboard ? renderKeyboardComposer() : ""}
       <div class="dock-actions">
-        <button class="dock-mini" data-action="camera" ${inputLocked ? "disabled" : ""}>${icon("camera")}拍照</button>
         <button class="voice-button ${state.recording ? "is-recording" : ""} ${locked ? "is-processing" : ""}" data-action="voice" aria-label="${escapeText(renderVoiceButtonAriaLabel())}" ${locked ? "disabled" : ""}>
           ${icon("mic")}
           <span>${renderVoiceButtonLabel()}</span>
@@ -7546,7 +7545,7 @@ function renderLearningVisual() {
           <p>${escapeText(lesson.visualCardHint)}</p>
         </div>
         <button class="btn btn-primary" data-action="generate-story-image" ${state.imageJob.status === "loading" ? "disabled" : ""}>
-          ${icon("image")}${state.imageJob.status === "loading" ? "正在画" : "AI 画生活例子"}
+          ${icon("image")}${state.imageJob.status === "loading" ? "正在画" : "画个生活例子"}
         </button>
       </div>
       ${renderGeneratedImage()}
@@ -7635,7 +7634,7 @@ function createActiveVisualLesson(lesson) {
       visualType,
       visualTitle: "老师讲完，马上试一题",
       visualContextKey: `${lesson?.id || "lesson"}|${remediation.id}|${remediation.attempt}|${visualType}`,
-      visualLabel: "当前讲解检测图",
+      visualLabel: "马上试一题",
     };
   }
   const visualType = getActiveVisualType(lesson);
@@ -7651,7 +7650,7 @@ function createActiveVisualLesson(lesson) {
     visualType,
     visualTitle,
     visualContextKey,
-    visualLabel: ["compare", "count", "position"].includes(visualType) ? "程序辅助理解" : lesson.visualLabel,
+    visualLabel: ["compare", "count", "position"].includes(visualType) ? "数学图示" : lesson.visualLabel,
   };
 }
 
@@ -8651,21 +8650,21 @@ function renderGeneratedImage() {
     return `
       <div class="generated-visual is-loading">
         <span class="loading-dot" aria-hidden="true"></span>
-        <p>AI 正在画生活例子。上面的图会保留精确关系，生活图只帮助孩子想象。</p>
+        <p>正在画生活例子，可以先继续看上面的数学图示。</p>
       </div>
     `;
   }
   if (state.imageJob.status === "error") {
     return `
       <div class="generated-visual is-error">
-        <strong>AI 图片暂时没画出来</strong>
-        <p>${escapeText(state.imageJob.message || "请检查 Ark 图片服务配置。")}</p>
+        <strong>生活图暂时没有画出来</strong>
+        <p>可以继续看数学图示，或稍后再试。</p>
       </div>
     `;
   }
   return `
     <div class="generated-visual">
-      <img src="${escapeAttr(state.imageJob.url)}" alt="AI 生成的理解图" loading="lazy" />
+      <img src="${escapeAttr(state.imageJob.url)}" alt="帮助理解题目的生活情景图" loading="lazy" />
       <p>${escapeText(lesson.generatedCaption)}</p>
     </div>
   `;
@@ -8775,7 +8774,7 @@ function renderParentLockView(){
   const setup=access.mode==="setup";
   const deleting=access.mode==="verify-delete";
   const title=setup?"首次设置家长 PIN":deleting?"再次验证后清除记录":"家长验证";
-  const hint=setup?"请设置4至6位数字。PIN只以加盐哈希保存在这台设备，不会发送到服务器。":deleting?"清除后不能恢复。请输入家长PIN确认这是家长操作。":"请输入家长PIN。验证后15分钟内可查看当前孩子的学习记录。";
+  const hint=setup?"请设置4至6位数字，之后进入家长区时需要验证。":deleting?"清除后不能恢复。请输入家长PIN确认这是家长操作。":"请输入家长PIN。验证后15分钟内可查看当前孩子的学习记录。";
   return `
     <main class="parent-lock-page">
       <section class="parent-lock-card" aria-labelledby="parent-lock-title">
@@ -8785,7 +8784,7 @@ function renderParentLockView(){
         <form data-form="parent-pin" autocomplete="off">
           <label>家长 PIN<input name="pin" inputmode="numeric" pattern="[0-9]{4,6}" minlength="4" maxlength="6" required autocomplete="off" aria-describedby="parent-pin-help" /></label>
           ${setup?'<label>再次输入<input name="confirmPin" inputmode="numeric" pattern="[0-9]{4,6}" minlength="4" maxlength="6" required autocomplete="off" /></label>':""}
-          <p id="parent-pin-help" class="parent-lock-help">${access.error?`<strong role="alert">${escapeText(access.error)}</strong>`:"PIN用于把孩子学习区与家长记录区分开。忘记PIN时，可清除此站点的本机数据后重新设置。"}</p>
+          <p id="parent-pin-help" class="parent-lock-help">${access.error?`<strong role="alert">${escapeText(access.error)}</strong>`:"PIN用于保护家长区，请妥善保管。"}</p>
           <button class="btn btn-primary" type="submit">${setup?"设置并进入":deleting?"确认清除":"验证并进入"}</button>
         </form>
       </section>
@@ -8844,15 +8843,14 @@ function renderParentView() {
       <section class="parent-privacy-notice" aria-labelledby="privacy-title">
         <div>
           <h2 id="privacy-title">儿童语音与学习记录说明</h2>
-          <p>孩子主动点击麦克风后，本次语音会发送给已配置的语音识别服务，用于把回答转成文字；服务端只在内存中临时保存转写所需音频，约5分钟后自动删除，不写入学习记录。</p>
-          <p>学习记录按家长账号和当前孩子档案保存在服务器，最多保留200条且只读取最近90天；记录知识点、完成情况、答题与求助次数、学习时长和响应耗时，不保存录音、原始转写或服务商密钥。</p>
-          <p>家长可以在本页清除当前孩子的学习记录，也可以在账户中心删除孩子档案。旧浏览器本机记录不会自动上传或合并。若不同意语音处理，孩子可始终使用“打字回答”。</p>
+          <p>孩子主动点击麦克风后，语音用于识别本次回答；音频不会写入学习记录，并会在短时间内自动删除。</p>
+          <p>学习记录按孩子档案保存，最多保留200条，页面显示最近90天的记录；内容包括知识点、完成情况、答题与求助次数、学习时长和响应耗时。</p>
+          <p>家长可以清除当前孩子的学习记录，也可以删除孩子档案。若不使用语音，孩子可以随时选择“打字回答”。</p>
         </div>
         <ul>
-          <li><strong>处理目的</strong><span>识别数学回答、生成自然语音反馈</span></li>
-          <li><strong>第三方处理</strong><span>由服务器当前配置的模型与语音服务处理；具体服务商留存规则以其正式协议为准</span></li>
-          <li><strong>账号同步</strong><span>新产生的学习记录仅同步到当前家长账号下所选的孩子档案；不同账号、不同孩子相互隔离</span></li>
-          <li><strong>联系方式</strong><span>请由产品运营方在正式公开前补充可核验的隐私联系渠道</span></li>
+          <li><strong>语音用途</strong><span>识别孩子的数学回答，并生成语音反馈</span></li>
+          <li><strong>记录范围</strong><span>不保存录音和原始回答文字</span></li>
+          <li><strong>档案管理</strong><span>切换孩子后，只显示该孩子的学习记录</span></li>
         </ul>
       </section>
 
@@ -8901,7 +8899,7 @@ function renderParentView() {
           <div class="metric-large">
             <span>本轮难度调整</span>
             <strong>${escapeText(difficultyLabel)}</strong>
-            <p>${difficulty.changes?.length ? escapeText(difficulty.changes.at(-1).reason) : "根据独立答对和求助情况选下一题；不因答非所问或语音不确定而调整。"}</p>
+            <p>${difficulty.changes?.length ? escapeText(difficulty.changes.at(-1).reason) : "下一题会参考独立答对和求助情况；偶尔没听清时不会改变难度。"}</p>
           </div>
         </article>
 
@@ -8915,7 +8913,7 @@ function renderParentView() {
 
         <article class="parent-card wide">
           <div class="panel-head">
-            <span>${icon("repeat")}卡住链路</span>
+            <span>${icon("repeat")}学习难点</span>
             <strong>${escapeText(renderTeachingStageLabel())}</strong>
           </div>
           ${renderParentSignals()}
@@ -8942,9 +8940,9 @@ function renderParentView() {
 
         <article class="parent-card">
           <div class="panel-head">
-            <span>${icon("image")}理解图片</span>
+            <span>${icon("image")}图示说明</span>
           </div>
-          <p class="plain-text">分数条、时间线、几何图会优先用程序精准绘制，避免 AI 图片把关系画错。生活情景图再交给 Ark 图片生成。</p>
+          <p class="plain-text">数量关系使用清晰的数学图示；生活情景图用于帮助孩子理解题意。</p>
         </article>
 
         <article class="parent-card wide">
@@ -9003,10 +9001,10 @@ function renderLearningHistory() {
     <div class="history-today"><div><strong>今天 ${LezhiHistory.duration(today.seconds)}</strong><span>目标 ${goal} 分钟 · ${today.sessions}次会话 · 语音回答${today.voiceAccepted}次 · ${today.responseAverageMs===null ? "暂无可判定回答" : `平均响应${Math.max(1,Math.round(today.responseAverageMs/1000))}秒`}</span></div><label>每日学习目标<select data-history-goal>${[5,10,15,20].map(value=>`<option value="${value}" ${value===goal ? "selected" : ""}>${value}分钟</option>`).join("")}</select></label></div>
     <div class="history-goal" role="progressbar" aria-label="今日学习时长" aria-valuemin="0" aria-valuemax="${goal*60}" aria-valuenow="${Math.min(goal*60,Math.floor(today.seconds))}"><i style="width:${Math.min(100,Math.round(today.seconds/(goal*60)*100))}%"></i></div>
     <div class="history-periods">${[7,30].map(days=>{const s=LezhiHistory.summary(days);return `<div><h3>${days===7 ? "本周摘要" : "近30天摘要"}</h3><p>${s.sessions}次学习 · ${LezhiHistory.duration(s.seconds)}</p><p>独立答对${s.independent}题 · 求助过${s.assisted}题 · 语音回答${s.voiceAccepted}次${s.responseAverageMs===null ? "" : ` · 平均响应${Math.max(1,Math.round(s.responseAverageMs/1000))}秒`}</p></div>`;}).join("")}</div>
-    <p>单次通过不代表长期掌握。记录按当前孩子档案保存，不保存录音或原始回答。语音直接采用率不代表识别准确率。</p>
+    <p>单次通过不代表长期掌握。记录按当前孩子档案保存，不保存录音或原始回答。语音回答统计仅供参考。</p>
     <h3>42个知识点状态</h3><div class="history-heatmap">${lessons.map(lesson=>{const item=trendMap.get(lesson.sourceQuestionBankId),status=item?.status || "尚未学习";return `<div class="${statusClass(status)}" title="${escapeText(`${lesson.node}：${status}`)}"><strong>${escapeText(lesson.node)}</strong><span>${escapeText(status)}</span></div>`;}).join("")}</div>
     <div class="history-filters"><label>册别<select data-history-filter="volume"><option value="">全部册别</option>${options([...new Set(rows.map(volume))].filter(Boolean).map(v=>[v,v]),filters.volume)}</select></label><label>知识点<select data-history-filter="topic"><option value="">全部知识点</option>${options([...new Map(rows.filter(r=>!filters.volume || volume(r)===filters.volume).map(r=>[r.topic,r.title]))],filters.topic)}</select></label><label>结果<select data-history-filter="outcome"><option value="">全部结果</option>${options(Object.entries(outcomes),filters.outcome)}</select></label></div>
-    <h3>跨日学习证据</h3><div class="history-trends">${LezhiHistory.trends(rows).filter(t=>filtered.some(r=>r.topic===t.topic)).map(t=>`<details><summary>${escapeText(t.title)} · ${t.status}</summary><p>隔日复测通过 ${t.delayedPassed} / ${t.delayedCount} 次${t.delayedCount ? `，通过率 ${Math.round(t.delayedPassed/t.delayedCount*100)}%` : "，尚无隔日证据"}</p><p>求助题占比：前7天 ${showRate(t.previous.help)} → 最近7天 ${showRate(t.current.help)}</p><p>语音直接采用率：前7天 ${showRate(t.previous.voice)} → 最近7天 ${showRate(t.current.voice)}</p><ol class="history-timeline">${t.history.map(r=>`<li>${new Date(r.at).toLocaleDateString("zh-CN")} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</li>`).join("")}</ol></details>`).join("") || "<p>还没有符合条件的学习记录。</p>"}</div>
+    <h3>跨日学习证据</h3><div class="history-trends">${LezhiHistory.trends(rows).filter(t=>filtered.some(r=>r.topic===t.topic)).map(t=>`<details><summary>${escapeText(t.title)} · ${t.status}</summary><p>隔日复测通过 ${t.delayedPassed} / ${t.delayedCount} 次${t.delayedCount ? `，通过率 ${Math.round(t.delayedPassed/t.delayedCount*100)}%` : "，尚无隔日证据"}</p><p>求助题占比：前7天 ${showRate(t.previous.help)} → 最近7天 ${showRate(t.current.help)}</p><p>语音回答顺利完成率：前7天 ${showRate(t.previous.voice)} → 最近7天 ${showRate(t.current.voice)}</p><ol class="history-timeline">${t.history.map(r=>`<li>${new Date(r.at).toLocaleDateString("zh-CN")} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</li>`).join("")}</ol></details>`).join("") || "<p>还没有符合条件的学习记录。</p>"}</div>
     <h3>复习安排</h3>${due.filter(r=>filtered.some(f=>f.topic===r.topic)).map(r=>`<p>${escapeText(r.title)} <button data-action="review-topic" data-topic="${escapeText(r.topic)}">${r.outcome==="review" ? "再学一遍" : r.outcome==="incomplete" ? "接着练" : "隔日检验"}</button></p>`).join("") || "<p>当前筛选下没有到期的复习。</p>"}
     <details><summary>最近学习明细（${filtered.length}次）</summary>${filtered.slice(-20).reverse().map(r=>`<p>${new Date(r.at).toLocaleDateString("zh-CN")} · ${escapeText(r.title)} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</p>`).join("")}${filtered.length>20 ? "<p>这里显示最近20次；按知识点展开上方时间线可查看该点保留的记录。</p>" : ""}</details><button data-action="clear-history">清除当前孩子学习记录</button></section>`;
 }
@@ -9014,7 +9012,7 @@ function renderLearningHistory() {
 function renderParentSignals() {
   const signals = state.parentSignals;
   if (!signals?.stuck_chain?.length) {
-    return `<p class="plain-text">目前还没有明显卡住链路。系统会记录孩子是卡在当前小台阶、前置知识，还是会做但讲不清。</p>`;
+    return `<p class="plain-text">目前还没有明显的学习难点。这里会显示孩子更需要巩固的地方，例如当前小台阶、前置知识或表达过程。</p>`;
   }
   return `
     <div class="evidence-list compact">
@@ -9291,11 +9289,6 @@ async function handleAction(event) {
     return;
   }
 
-  if (action === "camera") {
-    toastMessage("拍照入口已预留。接入真实拍照后，AI 会先识别题目再拆知识点。");
-    return;
-  }
-
   if (action === "dont-understand" || action === "cant-explain") {
     scheduleLatestHelpAction("hint");
     return;
@@ -9446,24 +9439,24 @@ async function generateStoryImage() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload.detail || payload.error || "图片生成失败");
+      throw new Error("生活图暂时没有画出来");
     }
     const url = extractImageUrl(payload);
     if (!url) throw new Error("图片服务没有返回图片地址");
     state.imageJob = { status: "done", url, message: "", lessonId: lesson.id, interactionKey };
     state.strategyIndex = Math.max(state.strategyIndex, 2);
     state.bestStrategy = lesson.strategies[2]?.label || "生活类比";
-    addEvidence("AI 生成理解图片", "AI 生成生活情景图，帮助孩子把知识点放进真实场景。", "生活类比图");
-    toastMessage("AI 生活图已生成");
+    addEvidence("生活图辅助", "用生活情景图帮助孩子理解当前知识点。", "生活类比图");
+    toastMessage("生活图已经画好");
   } catch (error) {
     state.imageJob = {
       status: "error",
       url: "",
-      message: error?.message || "图片生成失败，请检查 Ark 配置",
+      message: "生活图暂时没有画出来，请稍后再试。",
       lessonId: lesson.id,
       interactionKey,
     };
-    toastMessage("AI 图片暂时没画出来");
+    toastMessage("生活图暂时没有画出来，可以稍后再试");
   }
 
   render();
@@ -9920,7 +9913,7 @@ async function handleVoiceButton() {
     } catch (error) {
       if(["NotAllowedError","PermissionDeniedError"].includes(error.name)) {showMicrophoneFailure();return;}
       console.warn("Realtime speech recognition did not start.", error.name);
-      toastMessage("实时语音没有接通，改用短录音识别。");
+      toastMessage("我会换一种方式来听你说话。");
     }
   }
 
@@ -9933,7 +9926,7 @@ async function handleVoiceButton() {
       startBrowserSpeechRecognition();
       return;
     } catch {
-      toastMessage("浏览器语音识别没有启动，改用短录音识别。");
+      toastMessage("我会换一种方式来听你说话。");
     }
   }
 
@@ -10395,7 +10388,7 @@ async function transcribeRecording(blob, fallbackTranscript = "", audioQuality =
     const payload = await response.json().catch(() => ({}));
     if (generation !== voiceGeneration) return;
     if (!response.ok || payload.mode === "mock" || !payload.transcript) {
-      throw new Error(payload.detail || payload.message || "语音识别暂不可用");
+      throw new Error(payload.message || "暂时没有听清，请再说一次或改用打字回答。");
     }
     state.voiceStatus = "idle";
     processVoiceTranscript(payload.transcript, {
@@ -10698,7 +10691,7 @@ async function askGatewayTutor(text, inputType) {
     const payload = await response.json().catch(() => ({}));
     if (requestGeneration !== tutorGeneration) return;
     if (!response.ok || payload.mode === "mock") {
-      throw new Error(payload.detail || payload.error || "模型暂不可用");
+      throw new Error("老师暂时没有回应");
     }
     applyGatewayTutor(payload, inputType);
   } catch (error) {
@@ -10771,8 +10764,8 @@ function applyGatewayTutor(payload, inputType) {
   syncLadderProgress(payload);
   resetGeneratedVisualForTurn();
   addEvidence(
-    payload.evidenceSignal || "AI 评估",
-    payload.evidenceText || "真实模型已根据孩子回答更新学习状态。",
+    payload.evidenceSignal || "学习反馈",
+    payload.evidenceText || "已根据孩子的回答调整下一步练习。",
     inputType === "voice" ? "语音回答" : "键盘回答",
   );
   state.voiceStatus = "idle";

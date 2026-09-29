@@ -373,7 +373,7 @@ function handleFailure({ graph, point, session, atom, errorTag, inputType }) {
     aiMessage: makeRepairMessage(atom, errorTag, point, nextSession),
     currentStep: nextState === TeachingState.SPLIT_ATOM ? `拆小：${atom?.atom_name || point.point_name}` : `重讲：${atom?.atom_name || point.point_name}`,
     evidenceSignal: errorTagToChildSignal(errorTag),
-    evidenceText: `系统判断不是简单答错，而是 ${errorTag}，已切换策略。`,
+    evidenceText: `孩子当前更需要巩固 ${errorTag}，老师已换一种讲法。`,
     bestStrategy: nextState === TeachingState.SPLIT_ATOM ? "继续细拆" : "精准重讲",
     inputType,
   });

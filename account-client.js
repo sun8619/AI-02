@@ -104,7 +104,7 @@
       <section class="account-panel">
         <div class="account-identity"><span class="account-number-mark">1·2·3</span><span><strong>乐之老师</strong><small>家长账户</small></span></div>
         <h1 id="account-title">${isLogin ? "欢迎回来" : isRegister ? "创建家长账号" : "用找回码重设密码"}</h1>
-        <p class="account-lead">${isLogin ? "登录后选择孩子，学习记录会分开保存。" : isRegister ? "孩子不用注册，也不需要提供手机号或邮箱。" : "输入注册时保存的找回码，并设置新密码。"}</p>
+        <p class="account-lead">${isLogin ? "选择孩子，继续今天的学习。" : isRegister ? "创建账号，开始学习。" : "输入用户名、找回码和新密码。"}</p>
         <div class="account-tabs" role="tablist">
           <button type="button" data-account-mode="login" class="${isLogin ? "is-active" : ""}">登录</button>
           <button type="button" data-account-mode="register" class="${isRegister ? "is-active" : ""}">注册</button>
@@ -118,7 +118,6 @@
           ${state.error ? `<p class="account-error" role="alert">${escapeText(state.error)}</p>` : ""}
           <button class="btn btn-primary account-submit" type="submit" ${state.busy ? "disabled" : ""}>${state.busy ? "请稍候…" : isLogin ? "登录并选择孩子" : isRegister ? "创建账号" : "重设密码"}</button>
         </form>
-        <p class="account-note">旧浏览器中的本机学习记录不会上传，也不会合并到新账号。</p>
       </section>
     </div>`;
   }
@@ -126,7 +125,7 @@
   function renderRecoveryCode() {
     return `<div class="account-gate" role="dialog" aria-modal="true" aria-labelledby="recovery-title"><section class="account-panel recovery-panel">
       <span class="account-number-mark">安全备份</span><h1 id="recovery-title">请保存这组找回码</h1>
-      <p class="account-lead">我们不收集手机号和邮箱。忘记密码时，只能使用这组找回码；它仅显示这一次。</p>
+      <p class="account-lead">请妥善保存。忘记密码时需要使用这组找回码。</p>
       <output class="recovery-code">${escapeText(state.recoveryCode)}</output>
       <button type="button" class="btn btn-soft" data-copy-recovery>复制找回码</button>
       <label class="recovery-confirm"><input type="checkbox" data-recovery-saved> 我已经把找回码保存在安全的地方</label>
@@ -139,10 +138,10 @@
     const children = account.children || [];
     return `<div class="account-gate ${required ? "" : "is-modal"}" role="dialog" aria-modal="true" aria-labelledby="profile-title"><section class="account-panel account-manager">
       <div class="account-manager-head"><div><span class="account-number-mark">孩子档案</span><h1 id="profile-title">${required ? "先创建一个孩子档案" : "账户与孩子档案"}</h1><p>${escapeText(account.username)}</p></div>${required ? "" : `<button type="button" class="account-close" data-close-manager aria-label="关闭">×</button>`}</div>
-      <div class="child-profile-list">${children.length ? children.map((child) => `<article class="child-profile ${child.id === state.session.currentChildId ? "is-active" : ""}"><button type="button" data-select-child="${child.id}"><span class="child-avatar">${escapeText(child.name.slice(0, 1))}</span><span><strong>${escapeText(child.name)}</strong><small>${child.id === state.session.currentChildId ? "当前学习档案" : "切换到这个档案"}</small></span></button><div><button type="button" data-rename-child="${child.id}" data-name="${escapeAttr(child.name)}">改名</button><button type="button" data-delete-child="${child.id}">删除</button></div></article>`).join("") : `<p class="account-empty">还没有孩子档案。创建后，学习记录会从空白开始。</p>`}</div>
+      <div class="child-profile-list">${children.length ? children.map((child) => `<article class="child-profile ${child.id === state.session.currentChildId ? "is-active" : ""}"><button type="button" data-select-child="${child.id}"><span class="child-avatar">${escapeText(child.name.slice(0, 1))}</span><span><strong>${escapeText(child.name)}</strong><small>${child.id === state.session.currentChildId ? "当前学习档案" : "切换到这个档案"}</small></span></button><div><button type="button" data-rename-child="${child.id}" data-name="${escapeAttr(child.name)}">改名</button><button type="button" data-delete-child="${child.id}">删除</button></div></article>`).join("") : `<p class="account-empty">创建一个孩子档案后即可开始学习。</p>`}</div>
       <form data-account-form="child" class="child-create"><label>新孩子称呼<input name="name" maxlength="20" required placeholder="例如：乐乐"></label><button class="btn btn-primary" type="submit">创建档案</button></form>
       ${state.error ? `<p class="account-error" role="alert">${escapeText(state.error)}</p>` : ""}
-      <div class="account-manager-footer"><span>每个孩子的学习记录相互隔离</span><button type="button" data-account-logout>退出登录</button></div>
+      <div class="account-manager-footer"><span>学习前请确认选择了正确的孩子</span><button type="button" data-account-logout>退出登录</button></div>
     </section></div>`;
   }
 
@@ -213,7 +212,7 @@
     if (state.session?.csrfToken && options.method && options.method !== "GET") headers["X-Lezhi-CSRF"] = state.session.csrfToken;
     const response = await fetch(url, { method: options.method || "GET", headers, credentials: "same-origin", body: options.body === undefined ? undefined : JSON.stringify(options.body) });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.message || payload.detail || "请求没有完成，请稍后再试。");
+    if (!response.ok) throw new Error(payload.message || "请求没有完成，请稍后再试。");
     return payload;
   }
 

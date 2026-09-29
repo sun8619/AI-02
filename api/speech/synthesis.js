@@ -8,9 +8,9 @@ export default async function handler(request, response) {
 
   const apiKey = getSpeechApiKey("TTS");
   if (!apiKey) {
-    response.status(200).json({
-      mode: "browser-fallback",
-      message: "未配置语音合成 Key，前端会回退到浏览器朗读。",
+    response.status(503).json({
+      error: "Voice unavailable",
+      message: "老师的声音暂时不可用，可以先看文字回答。",
     });
     return;
   }
@@ -53,31 +53,41 @@ export default async function handler(request, response) {
     });
     const raw = await upstream.text();
     if (!upstream.ok) {
-      response.status(502).json({
-        error: "TTS failed",
-        detail: raw.slice(0, 500),
+      console.error("speech_synthesis_failed", {
+        status: upstream.status,
         logId: upstream.headers.get("X-Tt-Logid") || "",
+        error: raw.slice(0, 500),
+      });
+      response.status(502).json({
+        error: "Voice unavailable",
+        message: "老师的声音暂时不可用，可以先看文字回答。",
       });
       return;
     }
     const chunks = parseConcatenatedJson(raw).map((item) => item?.data).filter(Boolean);
     if (!chunks.length) {
-      response.status(502).json({
-        error: "TTS returned no audio",
-        detail: raw.slice(0, 500),
+      console.error("speech_synthesis_empty", {
         logId: upstream.headers.get("X-Tt-Logid") || "",
+        error: raw.slice(0, 500),
+      });
+      response.status(502).json({
+        error: "Voice unavailable",
+        message: "老师的声音暂时不可用，可以先看文字回答。",
       });
       return;
     }
     response.status(200).json({
-      mode: "ark-tts",
+      mode: "service",
       format,
       audioBase64: chunks.join(""),
       audioDataUrl: `data:audio/${format};base64,${chunks.join("")}`,
-      logId: upstream.headers.get("X-Tt-Logid") || "",
     });
   } catch (error) {
-    response.status(500).json({ error: "TTS request failed", detail: sanitizeMessage(error) });
+    console.error("speech_synthesis_request_failed", sanitizeMessage(error));
+    response.status(500).json({
+      error: "Voice unavailable",
+      message: "老师的声音暂时不可用，可以先看文字回答。",
+    });
   }
 }
 

@@ -20,6 +20,7 @@ run_checks() {
   npm run test:account
   npm run test:performance
   npm run test:security
+  npm run test:copy
   npx playwright install chromium
   npm run test:browser
   npm run audit:human

@@ -88,7 +88,9 @@ try {
     headers: authHeaders,
     body: JSON.stringify({ text: "x".repeat(301) }),
   });
+  const invalidPayload = await invalidText.json();
   assert(invalidText.status === 400, `long text status ${invalidText.status}`);
+  assert(!("detail" in invalidPayload) && !("hint" in invalidPayload) && !("logId" in invalidPayload), "invalid request exposed internal diagnostics");
 
   const remoteAudio = await fetch(`${base}/api/speech/transcriptions`, {
     method: "POST",
@@ -96,6 +98,36 @@ try {
     body: JSON.stringify({ audioUrl: "http://127.0.0.1/private" }),
   });
   assert(remoteAudio.status === 400, `remote audio accepted with status ${remoteAudio.status}`);
+
+  const imageUnavailable = await fetch(`${base}/api/images/generations`, {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ prompt: "画一个苹果", size: "1K" }),
+  });
+  const imageUnavailablePayload = await imageUnavailable.json();
+  assert(imageUnavailable.status === 503, `unconfigured image status ${imageUnavailable.status}`);
+  assert(!("detail" in imageUnavailablePayload) && !("hint" in imageUnavailablePayload) && !("logId" in imageUnavailablePayload), "image response exposed internal diagnostics");
+  assert(!/ARK|Key|环境变量|配置|模型|供应商|火山|日志/i.test(JSON.stringify(imageUnavailablePayload)), "image response exposed implementation wording");
+
+  const voiceUnavailable = await fetch(`${base}/api/speech/synthesis`, {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ text: "我们来学习数学" }),
+  });
+  const voiceUnavailablePayload = await voiceUnavailable.json();
+  assert(voiceUnavailable.status === 503, `unconfigured voice status ${voiceUnavailable.status}`);
+  assert(!("detail" in voiceUnavailablePayload) && !("hint" in voiceUnavailablePayload) && !("logId" in voiceUnavailablePayload), "voice response exposed internal diagnostics");
+  assert(!/ARK|Key|环境变量|配置|模型|供应商|火山|日志/i.test(JSON.stringify(voiceUnavailablePayload)), "voice response exposed implementation wording");
+
+  const speechUnavailable = await fetch(`${base}/api/speech/transcriptions`, {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ audioData: "data:audio/wav;base64,UklGRg==", mimeType: "audio/wav" }),
+  });
+  const speechUnavailablePayload = await speechUnavailable.json();
+  assert(speechUnavailable.status === 200 && speechUnavailablePayload.mode === "mock", `unconfigured speech status ${speechUnavailable.status}`);
+  assert(!("detail" in speechUnavailablePayload) && !("hint" in speechUnavailablePayload) && !("logId" in speechUnavailablePayload), "speech response exposed internal diagnostics");
+  assert(!/ARK|Key|环境变量|配置|模型|供应商|火山|日志/i.test(JSON.stringify(speechUnavailablePayload)), "speech response exposed implementation wording");
 
   const oversized = await fetch(`${base}/api/learning/turn`, {
     method: "POST",
@@ -140,7 +172,7 @@ try {
   assert(validOriginOpened, "same-origin websocket did not open");
 
   if (failures.length) throw new Error(failures.join("\n"));
-  console.log("PASS security: static allowlist, headers, cache, input limits, rate limits and websocket origin policy");
+  console.log("PASS security: static allowlist, headers, cache, input limits, safe error payloads, rate limits and websocket origin policy");
 } finally {
   if (child.exitCode === null) {
     child.kill();

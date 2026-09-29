@@ -15,6 +15,7 @@
     "test:account": "node tools/account-regression.mjs",
     "test:performance": "node tools/performance-budget.mjs",
     "test:security": "node tools/security-regression.mjs",
+    "test:copy": "node tools/user-copy-audit.mjs",
     "test:browser": "node tools/browser-regression.mjs",
     "audit:teaching": "node teaching-engine/teaching-quality-audit.js",
     "audit:scenarios": "node teaching-engine/teaching-scenario-audit.js",
