@@ -1,10 +1,9 @@
 (function(root) {
-  const key="lezhi-learning-history-v1", goalKey="lezhi-daily-goal-minutes-v1", day=86400000;
+  const day=86400000;
+  let remoteRows=null;
   function read() {
-    try {
-      const rows=JSON.parse(localStorage.getItem(key) || "[]");
-      return Array.isArray(rows) ? rows.filter(r=>r && typeof r.topic==="string" && Number.isFinite(r.at) && r.at>Date.now()-90*day).slice(-200) : [];
-    } catch { return []; }
+    if(Array.isArray(remoteRows)) return remoteRows.filter(r=>r && typeof r.topic==="string" && Number.isFinite(r.at) && r.at>Date.now()-90*day).slice(-200);
+    return [];
   }
   function record(entry) {
     // No recordings, transcripts, names, or provider credentials in persistent history.
@@ -14,7 +13,8 @@
       const rows=read(),index=sessionId ? rows.findIndex(item=>item.sessionId===sessionId) : -1;
       if(index>=0) rows[index]={...rows[index],...row,at:rows[index].at || row.at};
       else rows.push(row);
-      localStorage.setItem(key,JSON.stringify(rows.slice(-200)));
+      remoteRows=rows.slice(-200);
+      void window.LezhiAccount?.recordHistory?.(row);
       return true;
     } catch {return false;}
   }
@@ -40,11 +40,12 @@
     return {sessions:rows.length,seconds,minutes:Math.floor(seconds/60),independent:rows.reduce((sum,row)=>sum+row.independent,0),voiceAccepted:rows.reduce((sum,row)=>sum+(row.voice?.accepted||0),0),responseCount,responseAverageMs:responseCount ? Math.round(responseTotalMs/responseCount) : null};
   }
   function dailyGoal() {
-    try {const value=Number(localStorage.getItem(goalKey));return [5,10,15,20].includes(value) ? value : 10;} catch {return 10;}
+    return [5,10,15,20].includes(Number(window.LezhiAccount?.currentChild?.()?.dailyGoal)) ? Number(window.LezhiAccount.currentChild().dailyGoal) : 10;
   }
   function setDailyGoal(value) {
     const next=[5,10,15,20].includes(Number(value)) ? Number(value) : 10;
-    try {localStorage.setItem(goalKey,String(next));return next;} catch {return dailyGoal();}
+    void window.LezhiAccount?.setDailyGoal?.(next);
+    return next;
   }
   function trends(rows=read()) {
     const groups=new Map();
@@ -61,5 +62,5 @@
       return {topic,title:latest.title,volume:latest.volume || "",status,delayedCount:delayed.length,delayedPassed:delayed.filter(r=>r.outcome==="passed").length,current,previous,history};
     });
   }
-  root.LezhiHistory={read,record,summary,duration,due,today,dailyGoal,setDailyGoal,trends,clear(){try{localStorage.removeItem(key);return true;}catch{return false;}}};
+  root.LezhiHistory={read,record,summary,duration,due,today,dailyGoal,setDailyGoal,trends,setRemoteHistory(rows){remoteRows=Array.isArray(rows)?rows.slice(-200):[];},async clear(){const previous=remoteRows;remoteRows=[];const cleared=await window.LezhiAccount?.clearHistory?.();if(cleared===false){remoteRows=previous;return false;}return true;}};
 })(window);

@@ -3,6 +3,7 @@
   const showBootFailure = () => {
     if (failed) return;
     failed = true;
+    document.body?.classList.remove("account-locked");
     const root = document.getElementById("app");
     if (!root || root.children.length) return;
     root.innerHTML = `

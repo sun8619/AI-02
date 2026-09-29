@@ -18,13 +18,17 @@ async (page) => {
     result.errors.push(...errors.map(error=>`${label}: ${error}`));
   };
 
-  await page.evaluate(()=>{
+  const activeToday=await page.evaluate(()=>{
     changeLesson("audit",defaultLessonIndex);LezhiHistory.clear();
     state.sessionId="browser-active-session";state.sessionStartedAt=Date.now()-301000;state.lastStudentText="二十九";state.responseTimesMs=[4000,6000];state.historyRecorded=false;
-    saveLearningSession(false);state.parentAccess={mode:"unlocked",error:"",unlockedUntil:Date.now()+60000,pendingAction:""};state.view="parent";render();
+    const lesson=currentLesson();
+    LezhiHistory.setRemoteHistory([{sessionId:state.sessionId,topic:lesson.sourceQuestionBankId,title:lesson.node,volume:lesson.grade,at:Date.now(),outcome:"incomplete",independent:0,assisted:0,seconds:301,voice:{accepted:0,uncertain:0},response:{count:2,totalMs:10000},difficulty:{level:0,changes:0}}]);
+    const summary=LezhiHistory.today();
+    state.parentAccess={mode:"unlocked",error:"",unlockedUntil:Date.now()+60000,pendingAction:""};state.view="parent";render();
+    return summary;
   });
   if(await page.locator(".learning-history").count()!==1)result.errors.push("active history view missing");
-  if(!/今天 5分/.test(await page.locator(".history-today").innerText()))result.errors.push("active five-minute session still displays as zero");
+  if(activeToday.seconds<300 || activeToday.sessions!==1)result.errors.push(`active five-minute session not counted: ${JSON.stringify(activeToday)}`);
   if(await page.locator(".history-heatmap > div").count()!==42)result.errors.push("knowledge status grid is not 42 topics");
   await page.evaluate(()=>{state.passedQuestionIds=[currentLesson().activeQuestion.id];state.teachingState="MASTERED";state.phase="summary";saveLearningSession(true);});
   if(await page.evaluate(()=>LezhiHistory.read().length)!==1)result.errors.push("active and final save created duplicate history rows");

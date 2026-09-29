@@ -19,6 +19,7 @@ const child = spawn(process.execPath, ["server.mjs"], {
     ARK_API_KEY: "",
     ARK_ASR_API_KEY: "",
     ARK_TTS_API_KEY: "",
+    ACCOUNT_DATA_DIR: await (async()=>{const {mkdtemp}=await import("node:fs/promises");const {join}=await import("node:path");const {tmpdir}=await import("node:os");return mkdtemp(join(tmpdir(),"lezhi-security-"));})(),
     API_RATE_LIMIT_MULTIPLIER: "1",
   },
   stdio: ["ignore", "pipe", "pipe"],
@@ -44,7 +45,7 @@ try {
   }
   if (!ready) throw new Error("security test server readiness timeout");
 
-  for (const path of ["/.env", "/package.json", "/package-lock.json", "/tools/update-server.sh", "/release.json", "/teaching-engine/app.js", "/docs/README.md", "/%2e%2e/package.json"]) {
+  for (const path of ["/.env", "/package.json", "/package-lock.json", "/tools/update-server.sh", "/release.json", "/account-store.mjs", "/account-api.mjs", "/data/accounts/accounts.json", "/data/accounts/sessions.json", "/teaching-engine/app.js", "/docs/README.md", "/%2e%2e/package.json"]) {
     const response = await fetch(`${base}${path}`);
     assert(response.status === 404 || response.status === 400, `${path} exposed with status ${response.status}`);
   }
@@ -70,23 +71,35 @@ try {
   const manifest = await fetch(`${base}/manifest.webmanifest?v=1`);
   assert(manifest.status === 200, `manifest status ${manifest.status}`);
 
+  const register = await fetch(`${base}/api/auth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: base },
+    body: JSON.stringify({ username: "security_parent", password: "securitypass123", childName: "测试孩子" }),
+  });
+  const registerPayload = await register.json();
+  const authCookie = register.headers.get("set-cookie")?.split(";")[0] || "";
+  const authHeaders = { "content-type": "application/json", origin: base, cookie: authCookie, "x-lezhi-csrf": registerPayload.csrfToken };
+  assert(register.status === 201 && authCookie && registerPayload.csrfToken, "security test account registration failed");
+  const guestProtected = await fetch(`${base}/api/learning/turn`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "1" }) });
+  assert(guestProtected.status === 401, `guest protected API status ${guestProtected.status}`);
+
   const invalidText = await fetch(`${base}/api/learning/turn`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders,
     body: JSON.stringify({ text: "x".repeat(301) }),
   });
   assert(invalidText.status === 400, `long text status ${invalidText.status}`);
 
   const remoteAudio = await fetch(`${base}/api/speech/transcriptions`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders,
     body: JSON.stringify({ audioUrl: "http://127.0.0.1/private" }),
   });
   assert(remoteAudio.status === 400, `remote audio accepted with status ${remoteAudio.status}`);
 
   const oversized = await fetch(`${base}/api/learning/turn`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders,
     body: JSON.stringify({ text: "a", padding: "x".repeat(1_050_000) }),
   });
   assert(oversized.status === 413, `oversized body status ${oversized.status}`);
@@ -95,7 +108,7 @@ try {
   for (let index = 0; index < 32; index += 1) {
     const response = await fetch(`${base}/api/learning/turn`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.11" },
+      headers: { ...authHeaders, "x-forwarded-for": "203.0.113.11" },
       body: JSON.stringify({ text: "" }),
     });
     if (response.status === 429) {
@@ -106,7 +119,7 @@ try {
   assert(limited, "HTTP rate limit did not return 429");
 
   const maliciousOriginStatus = await new Promise((resolve) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/api/realtime/voice`, { origin: "https://evil.example" });
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/api/realtime/voice`, { origin: "https://evil.example", headers: { cookie: authCookie } });
     socket.once("open", () => {
       socket.close();
       resolve(101);
@@ -117,7 +130,7 @@ try {
   assert(maliciousOriginStatus === 403, `malicious websocket origin status ${maliciousOriginStatus}`);
 
   const validOriginOpened = await new Promise((resolve) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/api/realtime/voice`, { origin: base });
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/api/realtime/voice`, { origin: base, headers: { cookie: authCookie } });
     socket.once("open", () => {
       socket.close();
       resolve(true);

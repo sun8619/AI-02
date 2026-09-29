@@ -16,7 +16,7 @@ async (page) => {
     const now=Date.now(),day=86400000;
     const points=[lessons[defaultLessonIndex],lessons.find(l=>l.grade!==lessons[defaultLessonIndex].grade)];
     const rows=points.flatMap((l,i)=>[10,3,1].map((days,j)=>({topic:l.sourceQuestionBankId,title:l.node,volume:l.grade,at:now-days*day,outcome:j===1 ? "review" : "passed",independent:j===1 ? 0 : 3,assisted:j===1 ? 2 : 0,seconds:90,voice:{accepted:2,uncertain:1}})));
-    localStorage.setItem("lezhi-learning-history-v1",JSON.stringify(rows));
+    LezhiHistory.setRemoteHistory(rows);
     state.historyRecorded=true;
     return points.map(l=>({topic:l.sourceQuestionBankId,volume:l.grade}));
   });
@@ -36,7 +36,7 @@ async (page) => {
   await page.setViewportSize({width:375,height:667});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))errors.push("parent history horizontal overflow");
   await page.screenshot({path:"output/playwright/v92-parent-history.png",fullPage:true});
-  await page.getByRole("button",{name:"清除本机学习记录",exact:true}).click();
+  await page.getByRole("button",{name:"清除当前孩子学习记录",exact:true}).click();
   if(!await page.getByRole("heading",{name:"再次验证后清除记录",exact:true}).isVisible())errors.push("delete PIN verification missing");
   await page.getByLabel("家长 PIN",{exact:true}).fill("2468");
   await page.getByRole("button",{name:"确认清除",exact:true}).click();
@@ -44,5 +44,5 @@ async (page) => {
   if(remaining!==0)errors.push("history remained after verified deletion");
   await page.evaluate(()=>{localStorage.removeItem("lezhi-parent-pin-v1");state.historyFilters={};state.view="child";changeLesson("audit",defaultLessonIndex);render();});
   await page.setViewportSize({width:1433,height:738});
-  return {errors,historyFilters:3,helpToggle:true,teacherAccessible:true,fixtureNotice:"Synthetic local history only; cleared after test. Not child trial data."};
+  return {errors,historyFilters:3,helpToggle:true,teacherAccessible:true,fixtureNotice:"Synthetic account history only; cleared after test. Not child trial data."};
 }

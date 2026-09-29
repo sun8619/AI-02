@@ -6701,6 +6701,7 @@ function renderTopbar() {
         </span>
       </button>
       <div class="topbar-actions">
+        ${(state.view === "parent" || state.view === "summary") && Number(state.parentAccess?.unlockedUntil) > Date.now() ? (window.LezhiAccount?.topbarHtml?.() || "") : ""}
         ${state.view !== "child" ? `<button class="btn btn-soft" data-action="child-home">${icon("mic")}孩子学习</button>` : ""}
         <button class="btn btn-soft" data-action="parent-view">${icon("parent")}家长</button>
       </div>
@@ -6748,6 +6749,7 @@ function renderKidTopbar(lesson) {
       </button>
       ${renderKidProgressDots(lesson)}
       <div class="kid-top-actions">
+        ${window.LezhiAccount?.childBadgeHtml?.() || ""}
         <button class="kid-parent-entry" data-action="parent-view" aria-label="家长进展" title="家长进展">${icon("parent")}</button>
         <button class="kid-lesson-switch" data-action="toggle-lesson-picker" aria-expanded="${state.showLessonPicker ? "true" : "false"}">
           ${icon("book")}
@@ -8773,7 +8775,7 @@ function renderParentLockView(){
   const setup=access.mode==="setup";
   const deleting=access.mode==="verify-delete";
   const title=setup?"首次设置家长 PIN":deleting?"再次验证后清除记录":"家长验证";
-  const hint=setup?"请设置4至6位数字。PIN只以加盐哈希保存在这台设备，不会发送到服务器。":deleting?"清除后不能恢复。请输入家长PIN确认这是家长操作。":"请输入家长PIN。验证后15分钟内可查看本机学习记录。";
+  const hint=setup?"请设置4至6位数字。PIN只以加盐哈希保存在这台设备，不会发送到服务器。":deleting?"清除后不能恢复。请输入家长PIN确认这是家长操作。":"请输入家长PIN。验证后15分钟内可查看当前孩子的学习记录。";
   return `
     <main class="parent-lock-page">
       <section class="parent-lock-card" aria-labelledby="parent-lock-title">
@@ -8807,13 +8809,14 @@ async function submitParentPin(form){
     state.parentAccess={...state.parentAccess,error:"PIN不正确，请重新输入。"};render();return;
   }
   if(state.parentAccess.mode==="verify-delete"){
-    LezhiHistory.clear();
+    const cleared=await LezhiHistory.clear();
+    if(!cleared){state.parentAccess={...state.parentAccess,error:"记录暂时没有清除，请检查网络后重试。"};render();return;}
     state.historyRecorded=true;
     state.parentAccess={mode:"unlocked",error:"",unlockedUntil:Date.now()+PARENT_UNLOCK_MS,pendingAction:""};
     state.view="parent";
     scheduleParentRelock();
     render();
-    toastMessage("本机学习记录已清除");
+    toastMessage("当前孩子的学习记录已清除");
     return;
   }
   state.parentAccess={mode:"unlocked",error:"",unlockedUntil:Date.now()+PARENT_UNLOCK_MS,pendingAction:""};
@@ -8842,13 +8845,13 @@ function renderParentView() {
         <div>
           <h2 id="privacy-title">儿童语音与学习记录说明</h2>
           <p>孩子主动点击麦克风后，本次语音会发送给已配置的语音识别服务，用于把回答转成文字；服务端只在内存中临时保存转写所需音频，约5分钟后自动删除，不写入学习记录。</p>
-          <p>学习记录只保存在当前浏览器，最多保留200条且只读取最近90天；记录知识点、完成情况、答题与求助次数、学习时长和响应耗时，不保存姓名、录音、原始转写或服务商密钥。</p>
-          <p>家长可以在本页清除本机学习记录。若不同意语音处理，孩子可始终使用“打字回答”；停止使用并清除本机记录即可撤回本设备上的记录授权。</p>
+          <p>学习记录按家长账号和当前孩子档案保存在服务器，最多保留200条且只读取最近90天；记录知识点、完成情况、答题与求助次数、学习时长和响应耗时，不保存录音、原始转写或服务商密钥。</p>
+          <p>家长可以在本页清除当前孩子的学习记录，也可以在账户中心删除孩子档案。旧浏览器本机记录不会自动上传或合并。若不同意语音处理，孩子可始终使用“打字回答”。</p>
         </div>
         <ul>
           <li><strong>处理目的</strong><span>识别数学回答、生成自然语音反馈</span></li>
           <li><strong>第三方处理</strong><span>由服务器当前配置的模型与语音服务处理；具体服务商留存规则以其正式协议为准</span></li>
-          <li><strong>账号同步</strong><span>当前没有账号系统，也不跨设备同步学习记录</span></li>
+          <li><strong>账号同步</strong><span>新产生的学习记录仅同步到当前家长账号下所选的孩子档案；不同账号、不同孩子相互隔离</span></li>
           <li><strong>联系方式</strong><span>请由产品运营方在正式公开前补充可核验的隐私联系渠道</span></li>
         </ul>
       </section>
@@ -9000,12 +9003,12 @@ function renderLearningHistory() {
     <div class="history-today"><div><strong>今天 ${LezhiHistory.duration(today.seconds)}</strong><span>目标 ${goal} 分钟 · ${today.sessions}次会话 · 语音回答${today.voiceAccepted}次 · ${today.responseAverageMs===null ? "暂无可判定回答" : `平均响应${Math.max(1,Math.round(today.responseAverageMs/1000))}秒`}</span></div><label>每日学习目标<select data-history-goal>${[5,10,15,20].map(value=>`<option value="${value}" ${value===goal ? "selected" : ""}>${value}分钟</option>`).join("")}</select></label></div>
     <div class="history-goal" role="progressbar" aria-label="今日学习时长" aria-valuemin="0" aria-valuemax="${goal*60}" aria-valuenow="${Math.min(goal*60,Math.floor(today.seconds))}"><i style="width:${Math.min(100,Math.round(today.seconds/(goal*60)*100))}%"></i></div>
     <div class="history-periods">${[7,30].map(days=>{const s=LezhiHistory.summary(days);return `<div><h3>${days===7 ? "本周摘要" : "近30天摘要"}</h3><p>${s.sessions}次学习 · ${LezhiHistory.duration(s.seconds)}</p><p>独立答对${s.independent}题 · 求助过${s.assisted}题 · 语音回答${s.voiceAccepted}次${s.responseAverageMs===null ? "" : ` · 平均响应${Math.max(1,Math.round(s.responseAverageMs/1000))}秒`}</p></div>`;}).join("")}</div>
-    <p>单次通过不代表长期掌握。记录只保存在这台设备，不保存录音或原始回答。语音直接采用率不代表识别准确率。</p>
+    <p>单次通过不代表长期掌握。记录按当前孩子档案保存，不保存录音或原始回答。语音直接采用率不代表识别准确率。</p>
     <h3>42个知识点状态</h3><div class="history-heatmap">${lessons.map(lesson=>{const item=trendMap.get(lesson.sourceQuestionBankId),status=item?.status || "尚未学习";return `<div class="${statusClass(status)}" title="${escapeText(`${lesson.node}：${status}`)}"><strong>${escapeText(lesson.node)}</strong><span>${escapeText(status)}</span></div>`;}).join("")}</div>
     <div class="history-filters"><label>册别<select data-history-filter="volume"><option value="">全部册别</option>${options([...new Set(rows.map(volume))].filter(Boolean).map(v=>[v,v]),filters.volume)}</select></label><label>知识点<select data-history-filter="topic"><option value="">全部知识点</option>${options([...new Map(rows.filter(r=>!filters.volume || volume(r)===filters.volume).map(r=>[r.topic,r.title]))],filters.topic)}</select></label><label>结果<select data-history-filter="outcome"><option value="">全部结果</option>${options(Object.entries(outcomes),filters.outcome)}</select></label></div>
     <h3>跨日学习证据</h3><div class="history-trends">${LezhiHistory.trends(rows).filter(t=>filtered.some(r=>r.topic===t.topic)).map(t=>`<details><summary>${escapeText(t.title)} · ${t.status}</summary><p>隔日复测通过 ${t.delayedPassed} / ${t.delayedCount} 次${t.delayedCount ? `，通过率 ${Math.round(t.delayedPassed/t.delayedCount*100)}%` : "，尚无隔日证据"}</p><p>求助题占比：前7天 ${showRate(t.previous.help)} → 最近7天 ${showRate(t.current.help)}</p><p>语音直接采用率：前7天 ${showRate(t.previous.voice)} → 最近7天 ${showRate(t.current.voice)}</p><ol class="history-timeline">${t.history.map(r=>`<li>${new Date(r.at).toLocaleDateString("zh-CN")} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</li>`).join("")}</ol></details>`).join("") || "<p>还没有符合条件的学习记录。</p>"}</div>
     <h3>复习安排</h3>${due.filter(r=>filtered.some(f=>f.topic===r.topic)).map(r=>`<p>${escapeText(r.title)} <button data-action="review-topic" data-topic="${escapeText(r.topic)}">${r.outcome==="review" ? "再学一遍" : r.outcome==="incomplete" ? "接着练" : "隔日检验"}</button></p>`).join("") || "<p>当前筛选下没有到期的复习。</p>"}
-    <details><summary>最近学习明细（${filtered.length}次）</summary>${filtered.slice(-20).reverse().map(r=>`<p>${new Date(r.at).toLocaleDateString("zh-CN")} · ${escapeText(r.title)} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</p>`).join("")}${filtered.length>20 ? "<p>这里显示最近20次；按知识点展开上方时间线可查看该点保留的记录。</p>" : ""}</details><button data-action="clear-history">清除本机学习记录</button></section>`;
+    <details><summary>最近学习明细（${filtered.length}次）</summary>${filtered.slice(-20).reverse().map(r=>`<p>${new Date(r.at).toLocaleDateString("zh-CN")} · ${escapeText(r.title)} · ${outcomes[r.outcome] || "记录"} · 独立${r.independent}题 / 求助${r.assisted}题</p>`).join("")}${filtered.length>20 ? "<p>这里显示最近20次；按知识点展开上方时间线可查看该点保留的记录。</p>" : ""}</details><button data-action="clear-history">清除当前孩子学习记录</button></section>`;
 }
 
 function renderParentSignals() {
@@ -9186,6 +9189,12 @@ async function handleAction(event) {
 
   if (action === "coach-resume" || action === "coach-pause" || action === "coach-change") {
     handleChildInput({"coach-resume":"我准备好了","coach-pause":"先休息","coach-change":"换一道简单的"}[action], "button");
+    return;
+  }
+
+  if (action === "account-center") {
+    if (Number(state.parentAccess?.unlockedUntil) <= Date.now()) { requestParentAccess(); return; }
+    window.LezhiAccount?.openManager?.();
     return;
   }
 
@@ -12354,3 +12363,4 @@ window.LezhiDiagnostics = {
 };
 
 render();
+void window.LezhiAccount?.start?.({rerender:render});

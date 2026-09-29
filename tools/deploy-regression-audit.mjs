@@ -27,11 +27,13 @@ try {
     writeFileSync(join(packageDir,"release.json"), JSON.stringify({id:"v91-test",hashes:{"app.js":createHash("sha256").update(newCode).digest("hex")}}));
     writeFileSync(join(packageDir,"tools","release.mjs"), readFileSync(new URL("./release.mjs", import.meta.url)));
     writeFileSync(join(packageDir,"tools","server-deploy-gateway.sh"), "#!/usr/bin/env bash\nexit 0\n", {mode:0o755});
+    writeFileSync(join(packageDir,"tools","enable-account-access.mjs"), 'import {mkdir,writeFile} from "node:fs/promises";import{join}from"node:path";const action=process.argv[2],dir=process.argv[3];if(action==="apply"){await mkdir(dir,{recursive:true});await writeFile(join(dir,"manifest.json"),"[]\\n");}\n');
     const zip = spawnSync("zip", ["-qr", archive, `AI-02-${sha}`], {cwd:dir});
     assert.equal(zip.status,0,"zip fixture failed");
     const curl = [
       '#!/usr/bin/env bash',
       'for arg in "$@"; do',
+      '  if [[ "$arg" == *sunlezhi.top* ]]; then echo \'{"authenticated":false}\'; exit 0; fi',
       '  if [[ "$arg" == *127.0.0.1* ]]; then',
       '    if [ "$SCENARIO" = stale-health ]; then echo \'{"ok":true,"release":"old"}\'; else echo \'{"ok":true,"release":"v91-test"}\'; fi',
       '    exit 0',
@@ -47,6 +49,7 @@ try {
     writeFileSync(join(bin,"curl"), curl, {mode:0o755});
     writeFileSync(join(bin,"npm"), '#!/usr/bin/env bash\n[ "$SCENARIO" != preflight-failure ]\n', {mode:0o755});
     writeFileSync(join(bin,"systemctl"), '#!/usr/bin/env bash\n[ "$SCENARIO" != restart-failure ]\n', {mode:0o755});
+    writeFileSync(join(bin,"nginx"), '#!/usr/bin/env bash\nexit 0\n', {mode:0o755});
     const script = source
       .replace("APP=/opt/qibu-ai", `APP="${app}"`)
       .replace('BACKUP="/root/qibu-backups/$(date +%Y%m%d-%H%M%S)-$$"', `BACKUP="${join(dir,"backup")}"`)

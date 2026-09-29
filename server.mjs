@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { readFile, realpath } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { extname, join, normalize, relative } from "node:path";
+import { extname, isAbsolute, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { WebSocket, WebSocketServer } from "ws";
+import { AccountStore } from "./account-store.mjs";
+import { AccountApi } from "./account-api.mjs";
 import { createKnowledgeGraph } from "./teaching-engine/knowledge-model.js";
 import { allKnowledgeModules } from "./teaching-engine/generated-curriculum.js";
 import { runTeachingTurn } from "./teaching-engine/state-machine.js";
@@ -19,6 +21,13 @@ const host = process.env.HOST || "0.0.0.0";
 const teachingGraph = createKnowledgeGraph(allKnowledgeModules);
 
 await loadDotEnv();
+
+const accountDataSetting = process.env.ACCOUNT_DATA_DIR || "data/accounts";
+const accountDataDirectory = isAbsolute(accountDataSetting) ? accountDataSetting : join(root, accountDataSetting);
+const accountStore = new AccountStore(accountDataDirectory);
+await accountStore.init();
+const accountApi = new AccountApi(accountStore, { sessionTtlMs: process.env.SESSION_TTL_MS, dataDirectory: accountDataDirectory });
+await accountApi.init();
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -42,7 +51,7 @@ const activeRequests = new Map();
 const activeRealtimeByIp = new Map();
 const ttsCache = new Map();
 const ttsCacheTtlMs = 5 * 60 * 1000;
-const staticTopLevelAllowlist = new Set(["index.html", "boot.js", "app.js", "styles.css", "child-learning-stage.css", "robots.txt", "manifest.webmanifest"]);
+const staticTopLevelAllowlist = new Set(["index.html", "boot.js", "account-client.js", "app.js", "styles.css", "child-learning-stage.css", "robots.txt", "manifest.webmanifest"]);
 const staticTeachingAllowlist = new Set([
   "grade1-2-question-bank.js",
   "grade1-2-knowledge-cards.js",
@@ -89,6 +98,14 @@ const server = createServer(async (request, response) => {
   });
   try {
     const url = new URL(request.url || "/", `http://${request.headers.host}`);
+
+    if (await accountApi.handle(request, response, url, { sendJson, readJsonBody, clientKey })) return;
+
+    const protectedApi = url.pathname.startsWith("/api/") && !new Set(["/api/health", "/api/models/config"]).has(url.pathname) && !url.pathname.startsWith("/api/speech/audio/");
+    if (protectedApi && !accountApi.getSession(request)) {
+      sendJson(response, 401, { error: "Authentication required", message: "请先登录家长账号。" });
+      return;
+    }
 
     const policy = request.method === "POST" ? apiPolicies[url.pathname] : null;
     if (policy && !String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
@@ -158,7 +175,7 @@ const realtimeVoiceServer = new WebSocketServer({ noServer: true, maxPayload: 1_
 
 server.on("upgrade", (request, socket, head) => {
   const url = new URL(request.url || "/", `http://${request.headers.host}`);
-  if (url.pathname !== "/api/realtime/voice" || !isAllowedOrigin(request) || !consumeRateLimit(`ws:${clientKey(request)}`, 60_000, 10)) {
+  if (url.pathname !== "/api/realtime/voice" || !accountApi.getSession(request) || !isAllowedOrigin(request) || !consumeRateLimit(`ws:${clientKey(request)}`, 60_000, 10)) {
     socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     socket.destroy();
     return;
@@ -1453,11 +1470,11 @@ async function serveStatic(pathname, response, headOnly, versioned = false, requ
   else response.end();
 }
 
-function readJsonBody(request) {
+function readJsonBody(request, customLimit = null) {
   return new Promise((resolve, reject) => {
     let body = "";
     let settled = false;
-    const limit = Number(process.env.MAX_JSON_BODY_BYTES || 1_000_000);
+    const limit = Number(customLimit || process.env.MAX_JSON_BODY_BYTES || 1_000_000);
     const rejectOnce = (error) => {
       if (settled) return;
       settled = true;
@@ -1490,10 +1507,11 @@ function readJsonBody(request) {
   });
 }
 
-function sendJson(response, status, payload) {
+function sendJson(response, status, payload, extraHeaders = {}) {
   response.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    ...extraHeaders,
   });
   response.end(JSON.stringify(payload));
 }

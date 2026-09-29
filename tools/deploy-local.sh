@@ -17,6 +17,7 @@ fail() {
 run_checks() {
   npm ci
   npm test
+  npm run test:account
   npm run test:performance
   npm run test:security
   npx playwright install chromium

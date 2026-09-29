@@ -12,6 +12,7 @@
   "scripts": {
     "test": "node teaching-engine/product-regression-audit.js && node teaching-engine/v92-regression-audit.js && node teaching-engine/v93-regression-audit.js && node teaching-engine/v96-regression-audit.js && node teaching-engine/v97-regression-audit.js && node teaching-engine/v98-regression-audit.js && node teaching-engine/multipart-regression-audit.js && node teaching-engine/coaching-regression-audit.js && node teaching-engine/voice-lifecycle-audit.js && node teaching-engine/source-math-audit.js && node teaching-engine/runtime-integrity-audit.js && node teaching-engine/spoken-prompt-audit.js",
     "start": "node server.mjs",
+    "test:account": "node tools/account-regression.mjs",
     "test:performance": "node tools/performance-budget.mjs",
     "test:security": "node tools/security-regression.mjs",
     "test:browser": "node tools/browser-regression.mjs",

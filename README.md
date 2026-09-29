@@ -99,7 +99,16 @@ npm run deploy:status
 npm run deploy:logs -- 100
 ```
 
-`npm run deploy` 会顺序执行：安装锁定依赖、全量代码回归、浏览器回归、部署回滚演练、生成不可变发布清单、提交并推送 GitHub、通过专用 SSH 命令部署、检查 systemd 与健康接口。服务器更新会保留 `.env`、`data/`、`uploads/`、`logs/` 和 `backups/`；新版本不健康时自动恢复上一版本。
+`npm run deploy` 会顺序执行：安装锁定依赖、账户与数据隔离回归、全量代码回归、浏览器回归、部署回滚演练、生成不可变发布清单、提交并推送 GitHub、通过专用 SSH 命令部署、检查 systemd 与健康接口。服务器更新会保留 `.env`、`data/`、`uploads/`、`logs/` 和 `backups/`；新版本不健康时自动恢复上一版本。账户系统上线后，发布脚本只针对 `sunlezhi.top` 移除旧的 `Lezhi private preview` Basic Auth，先备份并通过 `nginx -t` 后才重载；失败会恢复配置。
+
+## 家长账户与孩子档案
+
+- 家长用用户名和密码自主注册，一个家长账号最多创建8个孩子档案。
+- 密码与找回码只保存 scrypt 慢哈希；登录使用 HttpOnly、SameSite=Strict 会话 Cookie，写操作同时校验同源和 CSRF 令牌。
+- 注册和找回密码后会显示一次新的找回码。没有配置手机号或邮箱找回渠道，家长必须自行妥善保存。
+- 新学习记录写入 `/opt/qibu-ai/data/accounts/`，按家长账号和当前孩子档案隔离，最多保留200条且仅读取最近90天。部署保留整个 `data/` 目录。
+- 旧版浏览器 localStorage 学习记录不会读取、上传或合并进账号。
+- 家长PIN仍是已登录设备上的二次保护，防止孩子直接查看或删除家长区数据；它不替代账号密码。
 
 默认 SSH 目标是 `ai02-prod`，可用 `AI02_SSH_TARGET` 覆盖。若有公网健康地址，可设置 `AI02_PUBLIC_HEALTH_URL`，发布完成后再做一次公网检查。密钥和服务器凭据不得提交到仓库。
 

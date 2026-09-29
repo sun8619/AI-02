@@ -13,7 +13,7 @@ const walk=async directory=>{
   return files;
 };
 if(process.argv[2]==="build") {
-  const topLevel=["index.html","boot.js","app.js","server.mjs","styles.css","child-learning-stage.css","robots.txt","manifest.webmanifest","package.json","package-lock.json"];
+  const topLevel=["index.html","boot.js","account-client.js","account-store.mjs","account-api.mjs","app.js","server.mjs","styles.css","child-learning-stage.css","robots.txt","manifest.webmanifest","package.json","package-lock.json"];
   const discovered=[...await walk("assets/"),...await walk("teaching-engine/"),...await walk("tools/")]
     .filter(path=>/\.(?:js|mjs|sh|png|jpg|jpeg|webp|avif|svg|md|csv)$/.test(path));
   const files=[...new Set([...topLevel,...discovered])].sort();
