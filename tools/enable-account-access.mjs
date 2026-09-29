@@ -43,9 +43,10 @@ for (const path of candidates) {
     const matchesHost = /\bserver_name\s+[^;]*\bsunlezhi\.top\b[^;]*;/i.test(block);
     const matchesPreview = /\bauth_basic\s+(?:"Lezhi private preview"|'Lezhi private preview'|Lezhi\s+private\s+preview)\s*;/i.test(block);
     if (matchesHost && matchesPreview) {
-      const updated = block
+      let updated = block
         .replace(/^[ \t]*auth_basic\s+(?:"Lezhi private preview"|'Lezhi private preview'|Lezhi\s+private\s+preview)\s*;[^\n]*(?:\n|$)/gim, "")
         .replace(/^[ \t]*auth_basic_user_file\s+[^;]+;[^\n]*(?:\n|$)/gim, "");
+      if (!/^[ \t]*auth_basic\s+off\s*;/im.test(updated)) updated = updated.replace(/\{/, "{\n    auth_basic off;");
       output += updated;
       changed ||= updated !== block;
     } else output += block;

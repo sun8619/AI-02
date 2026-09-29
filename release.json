@@ -1,6 +1,6 @@
 {
-  "id": "release-20260929T021637Z",
-  "builtAt": "2026-09-29T02:16:37.584Z",
+  "id": "release-20260929T022643Z",
+  "builtAt": "2026-09-29T02:26:43.811Z",
   "hashes": {
     "account-api.mjs": "6b9b571334c6c3441c69ac2f2048f0ca4d4b729e0afdc4c10b7626ffce5c807e",
     "account-client.js": "925019028e945cc8648e8cbe65955fe1d5da86f65fddc1863fd836c9d4806e86",
@@ -72,14 +72,14 @@
     "tools/account-regression.mjs": "9dbaa59e292251637ea4393817d8d98ba010cc04293cfaaa588fdd01d7bf4008",
     "tools/browser-regression.mjs": "14e6f029848332e181f2fbb2cf98dc55bcf048efcb03889ab63247dd694dee5c",
     "tools/deploy-local.sh": "89d66c2237829653161a2b7b9b47e0ef1d4943942942b7a6a71fde01e0df86ad",
-    "tools/deploy-regression-audit.mjs": "e3d3e42fadae3ea419059cdd11dae1c86d3f670f2e7a2030b27f2144acb0d465",
-    "tools/enable-account-access.mjs": "dc9a4800e740c6ce1fc89931f668174da15c391604abd8704dbf00210ae41544",
+    "tools/deploy-regression-audit.mjs": "53043d4b6ddd95a91c2294fc0b5734067b3417826c779e6644edb5ac545246c9",
+    "tools/enable-account-access.mjs": "2ab85b1116a814040ebf5aee345bc3c9150b2bc3f30c1200e7e2af4193f730d0",
     "tools/human-acceptance.mjs": "eeffb88319e6336773c839d678ed23a789ba2638ae285c4a5c2570671ee52059",
     "tools/install-deploy-access.sh": "4580016385012ccde21e22a3ee07501fb3c7c1b1d713d5a15d2a548eebd42748",
     "tools/performance-budget.mjs": "a9d9b7949db67240eca68865e8ac07943a70e4d709978787092d89494e464bd4",
     "tools/release.mjs": "8e0fae4da33151abce73e6d9f5bcca71caf249569a7afb7aa98a25556ed17df6",
     "tools/security-regression.mjs": "7618eac115d953b1b27520249b5130654b5eabb89a32f0dd7b6a583a5152ea12",
     "tools/server-deploy-gateway.sh": "6e741750fb9be88f4485860bd8a44fbda90139521df07d57d1752cf0ff877879",
-    "tools/update-server.sh": "ee036eb93c86c2822bc305d6abc3123e2d21b00feab696e45e229cde2457d5f5"
+    "tools/update-server.sh": "4cc2e48ca15e4d966aa4b6362f49f7e810d84e9aea35bd93d870997d2517fc2c"
   }
 }

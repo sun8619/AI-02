@@ -65,8 +65,26 @@ for i in {1..30}; do
     node "$APP/tools/enable-account-access.mjs" apply "$NGINX_BACKUP"
     nginx -t
     systemctl reload nginx
-    curl -fsS --max-time 10 https://sunlezhi.top/api/auth/session |
-      node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{try{const r=JSON.parse(s);process.exit(r.authenticated===false?0:1)}catch{process.exit(1)}})'
+    ACCOUNT_READY=0
+    for i in {1..30}; do
+      if curl -fsS --max-time 5 --resolve sunlezhi.top:443:127.0.0.1 https://sunlezhi.top/api/auth/session 2>/dev/null |
+        node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{try{const r=JSON.parse(s);process.exit(r.authenticated===false?0:1)}catch{process.exit(1)}})'; then
+        ACCOUNT_READY=1
+        break
+      fi
+      sleep 1
+    done
+    [ "$ACCOUNT_READY" -eq 1 ] || { echo "Account entry did not become reachable through local Nginx."; exit 1; }
+    PUBLIC_READY=0
+    for i in {1..30}; do
+      if curl -fsS --max-time 5 https://sunlezhi.top/api/auth/session 2>/dev/null |
+        node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{try{const r=JSON.parse(s);process.exit(r.authenticated===false?0:1)}catch{process.exit(1)}})'; then
+        PUBLIC_READY=1
+        break
+      fi
+      sleep 1
+    done
+    [ "$PUBLIC_READY" -eq 1 ] || { echo "Account entry did not become reachable through the public domain."; exit 1; }
     finished=1
     install -m 0755 "$APP/tools/server-deploy-gateway.sh" "$GATEWAY_PATH"
     echo "Ready: $EXPECTED ($REV). Account registration is public."

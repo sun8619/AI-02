@@ -32,13 +32,11 @@ try {
     assert.equal(zip.status,0,"zip fixture failed");
     const curl = [
       '#!/usr/bin/env bash',
-      'for arg in "$@"; do',
-      '  if [[ "$arg" == *sunlezhi.top* ]]; then echo \'{"authenticated":false}\'; exit 0; fi',
-      '  if [[ "$arg" == *127.0.0.1* ]]; then',
-      '    if [ "$SCENARIO" = stale-health ]; then echo \'{"ok":true,"release":"old"}\'; else echo \'{"ok":true,"release":"v91-test"}\'; fi',
-      '    exit 0',
-      '  fi',
-      'done',
+      'if [[ " $* " == *"api/auth/session"* ]]; then echo \'{"authenticated":false}\'; exit 0; fi',
+      'if [[ " $* " == *"127.0.0.1:4173/api/health"* ]]; then',
+      '  if [ "$SCENARIO" = stale-health ]; then echo \'{"ok":true,"release":"old"}\'; else echo \'{"ok":true,"release":"v91-test"}\'; fi',
+      '  exit 0',
+      'fi',
       '[ "$SCENARIO" != download-failure ] || exit 22',
       'while [ "$#" -gt 0 ]; do',
       '  if [ "$1" = -o ]; then cp "$ARCHIVE" "$2"; exit 0; fi',
